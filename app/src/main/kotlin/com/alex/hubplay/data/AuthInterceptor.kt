@@ -67,9 +67,10 @@ class AuthInterceptor(
                 }.getOrNull() ?: return response.alsoWipe()
 
                 runBlocking {
+                    val token = refreshed.data ?: return@runBlocking
                     tokenStore.storeTokens(
-                        access  = refreshed.accessToken  ?: return@runBlocking,
-                        refresh = refreshed.refreshToken ?: return@runBlocking,
+                        access  = token.accessToken  ?: return@runBlocking,
+                        refresh = token.refreshToken ?: return@runBlocking,
                     )
                 }
             } finally {

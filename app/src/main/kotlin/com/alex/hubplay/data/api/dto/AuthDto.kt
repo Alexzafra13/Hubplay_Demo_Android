@@ -6,11 +6,15 @@ import com.squareup.moshi.JsonClass
 /**
  * DTOs for the auth surface.
  *
- * Mirror the JSON shapes the HubPlay backend emits, with all fields
- * nullable where the spec allows it. Bodies are sent with snake_case
- * so we use @Json(name = ...) to bridge into Kotlin's idiomatic
- * camelCase.
+ * All HubPlay JSON responses follow the envelope convention
+ * `{ "data": <payload> }` (and `{ "error": { code, message } }` for
+ * error bodies, which Retrofit surfaces as HTTPException). Each
+ * response DTO here is a thin wrapper around its payload type so the
+ * call site reads `resp.data?.userCode` rather than struggling with
+ * an inline anonymous shape.
  */
+
+// ─── Requests ────────────────────────────────────────────────────────────────
 
 @JsonClass(generateAdapter = true)
 data class RefreshRequest(
@@ -18,27 +22,13 @@ data class RefreshRequest(
 )
 
 @JsonClass(generateAdapter = true)
-data class AuthTokenEnvelopeDto(
-    @Json(name = "access_token")  val accessToken:  String? = null,
-    @Json(name = "refresh_token") val refreshToken: String? = null,
-    @Json(name = "expires_at")    val expiresAt:    String? = null,
-)
-
-@JsonClass(generateAdapter = true)
 data class DeviceStartRequest(
-    // The backend accepts an empty body here — included as a field-less
-    // class so Retrofit/Moshi serialise it as `{}` rather than the
-    // confusing empty string a Unit type would produce.
-    @Json(name = "client_name") val clientName: String? = "HubPlay-Android",
-)
-
-@JsonClass(generateAdapter = true)
-data class DeviceStartResponse(
-    @Json(name = "user_code")        val userCode:        String? = null,
-    @Json(name = "device_code")      val deviceCode:      String? = null,
-    @Json(name = "verification_uri") val verificationUri: String? = null,
-    @Json(name = "interval")         val interval:        Int?    = null,  // poll seconds
-    @Json(name = "expires_in")       val expiresIn:       Int?    = null,  // total ttl seconds
+    /**
+     * Friendly label the operator sees in their session list. Backend
+     * spec calls this `device_name` (NOT `client_name`); mismatching it
+     * means the server logs the device as "Unknown".
+     */
+    @Json(name = "device_name") val deviceName: String? = "HubPlay-Android",
 )
 
 @JsonClass(generateAdapter = true)
@@ -46,17 +36,49 @@ data class DevicePollRequest(
     @Json(name = "device_code") val deviceCode: String,
 )
 
-/**
- * Same shape as [AuthTokenEnvelopeDto] when the server has approved the
- * pairing; tokens are null while still pending. Kept as its own class
- * so a future `pending=true/denied=true` field can be added without
- * touching refresh.
- */
+// ─── Response payloads ───────────────────────────────────────────────────────
+
 @JsonClass(generateAdapter = true)
-data class DevicePollResponse(
+data class AuthToken(
     @Json(name = "access_token")  val accessToken:  String? = null,
     @Json(name = "refresh_token") val refreshToken: String? = null,
     @Json(name = "expires_at")    val expiresAt:    String? = null,
-    @Json(name = "pending")       val pending:      Boolean? = null,
-    @Json(name = "denied")        val denied:       Boolean? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class DeviceStartData(
+    @Json(name = "user_code")        val userCode:        String? = null,
+    @Json(name = "device_code")      val deviceCode:      String? = null,
+    /**
+     * Where the operator should go to type the code. Backend prefers
+     * `verification_url`; `verification_uri` is the RFC 8628 alias and
+     * may be absent. Pick whichever has a value.
+     */
+    @Json(name = "verification_url") val verificationUrl: String? = null,
+    @Json(name = "verification_uri") val verificationUri: String? = null,
+    @Json(name = "expires_in")       val expiresIn:       Int?    = null,
+    val interval:                                          Int?    = null,
+)
+
+// ─── Response envelopes (always `{ data: ... }`) ────────────────────────────
+
+@JsonClass(generateAdapter = true)
+data class AuthTokenEnvelopeDto(
+    val data: AuthToken? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class DeviceStartResponse(
+    val data: DeviceStartData? = null,
+)
+
+/**
+ * /auth/device/poll returns 200 with the same shape as AuthTokenEnvelope
+ * once the operator approves. While pending the server returns 4xx with
+ * an ErrorEnvelope, which Retrofit surfaces as HttpException and we
+ * catch as "still pending."
+ */
+@JsonClass(generateAdapter = true)
+data class DevicePollResponse(
+    val data: AuthToken? = null,
 )

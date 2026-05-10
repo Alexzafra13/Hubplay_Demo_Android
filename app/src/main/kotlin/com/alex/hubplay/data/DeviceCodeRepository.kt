@@ -15,13 +15,12 @@ import kotlinx.coroutines.flow.flow
  *      and a device_code (the long secret we'll poll with).
  *   2. UI shows user_code + instructions ("Open HubPlay in your browser
  *      → Settings → Devices → Enter this code").
- *   3. POST /auth/device/poll every 2s. Returns 202 (still waiting),
- *      403 (denied / expired), or 200 with access+refresh tokens.
+ *   3. POST /auth/device/poll every 2s. While pending the server returns
+ *      400 with an ErrorEnvelope (Retrofit raises HttpException, which
+ *      we catch and treat as "still waiting"); on approval it returns
+ *      200 with the AuthToken envelope and we persist it.
  *   4. On 200 we persist tokens and serverUrl into TokenStore; the
  *      reactive AuthState flow flips and Compose navigates Home.
- *
- * The polling flow emits status updates so the UI can show
- * "Esperando aprobación…" / errors without owning the timer logic.
  */
 class DeviceCodeRepository(
     private val authApi:    AuthApi,
@@ -33,12 +32,13 @@ class DeviceCodeRepository(
         // reaches the right host. If pairing fails we'll wipe it again.
         tokenStore.storeServerUrl(serverUrl)
         val resp = authApi.deviceStart(DeviceStartRequest())
+        val data = resp.data ?: error("device/start returned no data envelope")
         return DeviceCodeStart(
-            userCode    = resp.userCode    ?: error("device/start returned no user_code"),
-            deviceCode  = resp.deviceCode  ?: error("device/start returned no device_code"),
-            verifyUrl   = resp.verificationUri ?: serverUrl,
-            intervalSec = (resp.interval ?: 2).coerceAtLeast(1),
-            expiresInSec= resp.expiresIn ?: 600,
+            userCode    = data.userCode    ?: error("device/start returned no user_code"),
+            deviceCode  = data.deviceCode  ?: error("device/start returned no device_code"),
+            verifyUrl   = data.verificationUrl ?: data.verificationUri ?: serverUrl,
+            intervalSec = (data.interval ?: 2).coerceAtLeast(1),
+            expiresInSec= data.expiresIn ?: 600,
         )
     }
 
@@ -46,6 +46,10 @@ class DeviceCodeRepository(
      * Cold flow that polls /auth/device/poll until the server returns
      * success, denial, or the code expires. Cancellable from the UI by
      * cancelling the collecting coroutine.
+     *
+     * Pending state is signalled by the server with HTTP 4xx (RFC 8628
+     * `authorization_pending` / `slow_down`), which Retrofit surfaces
+     * as a thrown HttpException — we catch it and keep polling.
      */
     fun poll(start: DeviceCodeStart): Flow<DeviceCodeStatus> = flow {
         emit(DeviceCodeStatus.Pending)
@@ -53,17 +57,21 @@ class DeviceCodeRepository(
 
         while (System.currentTimeMillis() < deadline) {
             delay(start.intervalSec * 1000L)
-            val result = runCatching {
+            val resp = runCatching {
                 authApi.devicePoll(DevicePollRequest(deviceCode = start.deviceCode))
-            }
-            val resp = result.getOrNull()
+            }.getOrNull()
+
+            // Failure means either: a transient network blip OR the
+            // server returned 4xx (still pending / slow_down). Either
+            // way the right move is to keep polling silently.
             if (resp == null) {
-                // Network blip — keep polling, don't surface every transient error.
+                emit(DeviceCodeStatus.Pending)
                 continue
             }
 
-            val access  = resp.accessToken
-            val refresh = resp.refreshToken
+            val token = resp.data
+            val access  = token?.accessToken
+            val refresh = token?.refreshToken
             if (!access.isNullOrBlank() && !refresh.isNullOrBlank()) {
                 tokenStore.storeTokens(access, refresh)
                 emit(DeviceCodeStatus.Approved)
