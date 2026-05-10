@@ -33,23 +33,27 @@ class PlayerViewModel(
         val capabilities = ClientCapabilities.probe()
 
         // Fire both calls; if either fails we surface a friendly error.
-        val item = runCatching { api.getItem(itemId) }.getOrNull()
-        val info = runCatching { api.getStreamInfo(itemId, capabilities) }.getOrNull()
+        val item = runCatching { api.getItem(itemId) }.getOrNull()?.data
+        val info = runCatching { api.getStreamInfo(itemId, capabilities) }.getOrNull()?.data
 
-        val streamUrl = info?.streamUrl
-        if (streamUrl == null) {
+        // Pick the right URL for the strategy:
+        //  - direct_play  → original file with Range; ExoPlayer extractors handle it
+        //  - direct_stream / transcode → HLS .m3u8 master playlist
+        val isDirectPlay = info?.strategy == "direct_play"
+        val streamUrl = if (isDirectPlay) info?.directUrl ?: info?.masterPlaylistUrl
+                        else              info?.masterPlaylistUrl
+
+        if (streamUrl.isNullOrBlank()) {
             _ui.value = _ui.value.copy(error = "No se pudo obtener la URL de reproducción.")
             return
         }
 
-        val isHls = info.playbackMethod != "direct_play" || streamUrl.endsWith(".m3u8")
-
         _ui.value = _ui.value.copy(
-            title         = item?.name ?: "Reproduciendo…",
+            title         = item?.title ?: "Reproduciendo…",
             startParams   = PlayerStartParams(
                 streamUrl     = streamUrl,
                 resumePosSec  = resumePosSec,
-                isHls         = isHls,
+                isHls         = !isDirectPlay,
             ),
             error         = null,
         )

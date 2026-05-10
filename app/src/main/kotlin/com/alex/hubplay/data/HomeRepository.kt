@@ -1,7 +1,7 @@
 package com.alex.hubplay.data
 
 import com.alex.hubplay.data.api.HubplayApi
-import com.alex.hubplay.data.api.dto.ContinueWatchingItemDto
+import com.alex.hubplay.data.api.dto.ContinueWatchingEntryDto
 
 /**
  * Owns reads against the home / catalogue surface.
@@ -11,45 +11,48 @@ import com.alex.hubplay.data.api.dto.ContinueWatchingItemDto
  * LiveNow) follow the same shape and will be added as new methods on
  * this class without restructuring callers.
  */
-class HomeRepository(private val api: HubplayApi) {
+class HomeRepository(
+    private val api:        HubplayApi,
+    private val tokenStore: TokenStore,
+) {
 
     suspend fun fetchContinueWatching(): List<ContinueWatchingItem> {
-        return api.getContinueWatching().map { it.toDomain() }
+        val resp = api.getContinueWatching()
+        val server = tokenStore.snapshot().serverUrl?.trimEnd('/').orEmpty()
+        return resp.data.orEmpty().map { it.toDomain(server) }
     }
 
-    private fun ContinueWatchingItemDto.toDomain(): ContinueWatchingItem {
-        val playbackPos = userData?.playbackPosition ?: 0L
-        val totalSec    = runtime ?: 0L
-        val progressPct = if (totalSec > 0) (playbackPos.toFloat() / totalSec).coerceIn(0f, 1f) else 0f
+    private fun ContinueWatchingEntryDto.toDomain(server: String): ContinueWatchingItem {
+        // Resume timestamp is on the entry directly (server convenience);
+        // user_data is a fallback for edge cases where it's missing.
+        val resumeSec = (positionSeconds ?: userData?.positionSeconds ?: 0f).toLong()
+        val totalSec  = ((runtimeMinutes ?: 0) * 60).toLong()
+        val progressPct = if (totalSec > 0) (resumeSec.toFloat() / totalSec).coerceIn(0f, 1f) else 0f
+
+        // Backend exposes image *ids*, not URLs. Construct the URL
+        // ourselves; it's authenticated so we send through OkHttp +
+        // bearer (Coil's network-okhttp engine handles that for us).
+        val imageId = backdropImageId ?: posterImageId
+        val imageUrl = imageId?.let { "$server/api/v1/images/file/$it" }
 
         return ContinueWatchingItem(
             id            = id,
-            title         = displayTitle(),
+            title         = title.orEmpty(),
             subtitle      = displaySubtitle(),
-            // Prefer the 16:9 thumb when available (movies + episodes both
-            // expose it now); fall back to backdrop, then to poster as a
-            // last resort so the card never renders empty.
-            imageUrl      = thumbUrl ?: backdropUrl ?: posterUrl,
+            imageUrl      = imageUrl,
             progressPct   = progressPct,
-            resumePosSec  = playbackPos,
+            resumePosSec  = resumeSec,
         )
     }
 
-    /** Series episode → "Severance · S2 E4". Movie → just the name. */
-    private fun ContinueWatchingItemDto.displayTitle(): String {
-        return when {
-            type == "episode" && !seriesName.isNullOrBlank() -> seriesName
-            else                                              -> name ?: "—"
-        }
-    }
-
-    private fun ContinueWatchingItemDto.displaySubtitle(): String? {
+    /** Episode → "S2 · E4". Movie/series → null. */
+    private fun ContinueWatchingEntryDto.displaySubtitle(): String? {
         if (type != "episode") return null
-        val s = seasonIndex
-        val e = episodeIndex
+        val s = seasonNumber
+        val e = episodeNumber
         return when {
-            s != null && e != null -> "S$s · E$e · ${name ?: ""}".trim('·', ' ')
-            else                   -> name
+            s != null && e != null -> "S$s · E$e"
+            else                   -> null
         }
     }
 }

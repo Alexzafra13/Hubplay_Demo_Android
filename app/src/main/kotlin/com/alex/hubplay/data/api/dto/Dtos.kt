@@ -4,73 +4,136 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 /**
- * Network-layer DTOs.
+ * Network-layer DTOs for the catalogue / home / stream endpoints.
  *
- * These mirror the JSON shape returned by the HubPlay backend and are
- * intentionally close to the wire format — string-typed timestamps, nullable
- * everywhere the spec allows it. Mapping to richer in-app types happens in
- * the repositories so the rest of the app doesn't see Json artefacts.
+ * Shape rules HubPlay's backend follows that the previous round of
+ * DTOs got wrong:
  *
- * `@JsonClass(generateAdapter = true)` triggers Moshi's KSP codegen — no
- * reflection at runtime, smaller R8 footprint, and Proguard-clean.
+ *   1. Every response body is `{ "data": <payload> }`. Each top-level
+ *      response DTO here is a thin wrapper around its payload type.
+ *   2. The "name of the thing" field is `title`, not `name`.
+ *   3. There are NO inline image URLs. Items expose `poster_image_id`
+ *      and `backdrop_image_id`; the URL is built client-side as
+ *      `{serverUrl}/api/v1/images/file/{id}`.
+ *   4. Runtime is `runtime_minutes` (int), not seconds.
+ *   5. Continue Watching's resume timestamp is `position_seconds`
+ *      (float) on the entry itself, not nested in user_data.
+ *   6. StreamInfo uses `strategy` (direct_play|direct_stream|transcode)
+ *      and exposes `master_playlist_url` + `direct_url`.
  */
 
+// ─── Item summary / detail ───────────────────────────────────────────────────
+
 @JsonClass(generateAdapter = true)
-data class ContinueWatchingItemDto(
-    val id:           String,
-    val name:         String?           = null,
-    @Json(name = "type")          val type:        String?  = null,  // movie | episode | series
-    @Json(name = "parent_id")     val parentId:    String?  = null,
-    @Json(name = "thumb_url")     val thumbUrl:    String?  = null,  // 16:9 (added in May 2026)
-    @Json(name = "backdrop_url")  val backdropUrl: String?  = null,
-    @Json(name = "poster_url")    val posterUrl:   String?  = null,
-    @Json(name = "user_data")     val userData:    UserDataDto? = null,
-    @Json(name = "series_name")   val seriesName:  String?  = null,
-    @Json(name = "season_index")  val seasonIndex: Int?     = null,
-    @Json(name = "episode_index") val episodeIndex: Int?    = null,
-    val runtime:      Long?             = null,  // seconds
+data class ItemSummaryDto(
+    val id:    String,
+    val type:  String?  = null,
+    val title: String?  = null,
+    val year:  Int?     = null,
+    val rating: Float?  = null,
+    @Json(name = "runtime_minutes")     val runtimeMinutes:   Int?    = null,
+    @Json(name = "poster_image_id")     val posterImageId:    String? = null,
+    @Json(name = "backdrop_image_id")   val backdropImageId:  String? = null,
+    @Json(name = "poster_blurhash")     val posterBlurhash:   String? = null,
+    // Series/season/episode hierarchy
+    @Json(name = "parent_id")           val parentId:         String? = null,
+    @Json(name = "season_number")       val seasonNumber:     Int?    = null,
+    @Json(name = "episode_number")      val episodeNumber:    Int?    = null,
+    @Json(name = "user_data")           val userData:         UserDataDto? = null,
 )
 
 @JsonClass(generateAdapter = true)
 data class UserDataDto(
-    val played:                Boolean? = null,
-    @Json(name = "play_count")            val playCount:        Int?  = null,
-    @Json(name = "playback_position")     val playbackPosition: Long? = null,  // seconds
-    @Json(name = "last_played_at")        val lastPlayedAt:     String? = null,
-    val favorite:              Boolean? = null,
+    val played:                                 Boolean? = null,
+    @Json(name = "position_seconds")            val positionSeconds: Float? = null,
+    @Json(name = "is_favorite")                 val isFavorite:      Boolean? = null,
 )
+
+/**
+ * Continue Watching entry = ItemSummary + the resume position. The
+ * server inlines `position_seconds` and `updated_at` here even though
+ * `user_data` would carry the same data — convenience field. Use the
+ * top-level one when present, fall back to `user_data.positionSeconds`.
+ */
+@JsonClass(generateAdapter = true)
+data class ContinueWatchingEntryDto(
+    val id:    String,
+    val type:  String?  = null,
+    val title: String?  = null,
+    val year:  Int?     = null,
+    @Json(name = "runtime_minutes")     val runtimeMinutes:   Int?    = null,
+    @Json(name = "poster_image_id")     val posterImageId:    String? = null,
+    @Json(name = "backdrop_image_id")   val backdropImageId:  String? = null,
+    @Json(name = "parent_id")           val parentId:         String? = null,
+    @Json(name = "season_number")       val seasonNumber:     Int?    = null,
+    @Json(name = "episode_number")      val episodeNumber:    Int?    = null,
+    @Json(name = "user_data")           val userData:         UserDataDto? = null,
+    /** Inlined resume position in seconds — convenience over user_data. */
+    @Json(name = "position_seconds")    val positionSeconds:  Float?  = null,
+    @Json(name = "updated_at")          val updatedAt:        String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ItemDetailDto(
+    val id:    String,
+    val type:  String?  = null,
+    val title: String?  = null,
+    val year:  Int?     = null,
+    val overview:                                String? = null,
+    val tagline:                                 String? = null,
+    @Json(name = "runtime_minutes")     val runtimeMinutes:   Int?    = null,
+    @Json(name = "poster_image_id")     val posterImageId:    String? = null,
+    @Json(name = "backdrop_image_id")   val backdropImageId:  String? = null,
+    @Json(name = "user_data")           val userData:         UserDataDto? = null,
+)
+
+// ─── Home layout ─────────────────────────────────────────────────────────────
 
 @JsonClass(generateAdapter = true)
 data class HomeLayoutDto(
-    val rails: List<HomeRailDto> = emptyList(),
+    val version:  Int = 0,
+    val sections: List<HomeSectionDto> = emptyList(),
 )
 
 @JsonClass(generateAdapter = true)
-data class HomeRailDto(
-    val type:    String,           // continueWatching | nextUp | latest | trending | liveNow
-    val visible: Boolean = true,
-    val order:   Int     = 0,
+data class HomeSectionDto(
+    val id:                       String,
+    val type:                     String,                   // continue_watching | next_up | trending | live_now | latest_in_library
+    val visible:                  Boolean = true,
+    @Json(name = "library_id")    val libraryId:   String? = null,
+    @Json(name = "library_name")  val libraryName: String? = null,
 )
 
-@JsonClass(generateAdapter = true)
-data class ItemDto(
-    val id:                String,
-    val name:              String?  = null,
-    val type:              String?  = null,
-    val overview:          String?  = null,
-    @Json(name = "thumb_url")     val thumbUrl:    String? = null,
-    @Json(name = "backdrop_url")  val backdropUrl: String? = null,
-    @Json(name = "poster_url")    val posterUrl:   String? = null,
-    val runtime:           Long?    = null,
-    @Json(name = "user_data") val userData: UserDataDto? = null,
-)
+// ─── Stream info ─────────────────────────────────────────────────────────────
 
 @JsonClass(generateAdapter = true)
 data class StreamInfoDto(
-    @Json(name = "playback_method")  val playbackMethod: String? = null,  // direct_play | direct_stream | transcode
-    @Json(name = "stream_url")       val streamUrl:      String? = null,  // absolute path the player should hit
-    @Json(name = "session_token")    val sessionToken:   String? = null,
-    @Json(name = "container")        val container:      String? = null,
-    @Json(name = "video_codec")      val videoCodec:     String? = null,
-    @Json(name = "audio_codec")      val audioCodec:     String? = null,
+    /** direct_play | direct_stream | transcode */
+    val strategy: String? = null,
+    @Json(name = "master_playlist_url") val masterPlaylistUrl: String? = null,
+    /** Set only when strategy == direct_play; serves the original file with Range support. */
+    @Json(name = "direct_url")          val directUrl:         String? = null,
+    @Json(name = "decision_reason")     val decisionReason:    String? = null,
+)
+
+// ─── Response envelopes — every endpoint wraps its body in `{ data: ... }` ──
+
+@JsonClass(generateAdapter = true)
+data class ContinueWatchingResponse(
+    val data: List<ContinueWatchingEntryDto>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class HomeLayoutResponse(
+    val data: HomeLayoutDto? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ItemDetailResponse(
+    val data: ItemDetailDto? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class StreamInfoResponse(
+    val data: StreamInfoDto? = null,
 )

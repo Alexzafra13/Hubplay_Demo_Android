@@ -84,7 +84,7 @@ class AppContainer(context: Context) {
      */
     val hubplayApi: HubplayApi = retrofit.create(HubplayApi::class.java)
 
-    val homeRepository: HomeRepository = HomeRepository(hubplayApi)
+    val homeRepository: HomeRepository = HomeRepository(hubplayApi, tokenStore)
 
     private fun loggingInterceptor() = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BASIC

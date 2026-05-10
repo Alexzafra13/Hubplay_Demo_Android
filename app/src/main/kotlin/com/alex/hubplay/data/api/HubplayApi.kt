@@ -1,40 +1,34 @@
 package com.alex.hubplay.data.api
 
-import com.alex.hubplay.data.api.dto.ContinueWatchingItemDto
-import com.alex.hubplay.data.api.dto.HomeLayoutDto
-import com.alex.hubplay.data.api.dto.ItemDto
-import com.alex.hubplay.data.api.dto.StreamInfoDto
+import com.alex.hubplay.data.api.dto.ContinueWatchingResponse
+import com.alex.hubplay.data.api.dto.HomeLayoutResponse
+import com.alex.hubplay.data.api.dto.ItemDetailResponse
+import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Path
 
 /**
- * Hand-written Retrofit interface for the endpoints the mobile UI consumes
- * today.
+ * Hand-written Retrofit interface for the catalogue / home / stream
+ * endpoints the mobile UI consumes today.
  *
- * Why hand-written and not the openapi-generator output? The generator
- * gives us *every* endpoint — useful as we expand, but at ~2900 LOC the
- * generated surface is overkill while we only need 4 calls. Maintaining a
- * focused interface here keeps the autocompletion clean and the binary
- * smaller until we genuinely need everything.
- *
- * Migration path: when we start consuming dozens of endpoints, swap this
- * for the generated `com.alex.hubplay.api.*` interfaces — call sites
- * change `repository.fetchHome()` → `homeApi.getLayout()` only.
+ * Every return type is a `…Response` envelope (the server always wraps
+ * payloads in `{ "data": ... }`). The repositories peel off the
+ * envelope and hand the UI a clean domain type.
  */
 interface HubplayApi {
 
     /** GET /api/v1/me/continue-watching — recently-played, partially-watched items. */
     @GET("me/continue-watching")
-    suspend fun getContinueWatching(): List<ContinueWatchingItemDto>
+    suspend fun getContinueWatching(): ContinueWatchingResponse
 
     /** GET /api/v1/me/home/layout — per-user rail order + visibility config. */
     @GET("me/home/layout")
-    suspend fun getHomeLayout(): HomeLayoutDto
+    suspend fun getHomeLayout(): HomeLayoutResponse
 
     /** GET /api/v1/items/{id} — single item details (for the player title bar). */
     @GET("items/{id}")
-    suspend fun getItem(@Path("id") itemId: String): ItemDto
+    suspend fun getItem(@Path("id") itemId: String): ItemDetailResponse
 
     /**
      * GET /api/v1/stream/{itemId}/info — server's playback decision for this
@@ -45,5 +39,5 @@ interface HubplayApi {
     suspend fun getStreamInfo(
         @Path("itemId") itemId: String,
         @Header("X-Hubplay-Client-Capabilities") capabilities: String,
-    ): StreamInfoDto
+    ): StreamInfoResponse
 }
