@@ -169,6 +169,11 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
 
+    // ── Material Design XML resources — needed so the Activity's
+    //     android:theme="@style/Theme.HubPlay" can inherit from
+    //     Theme.Material3.* during the splash (pre-Compose phase).
+    implementation(libs.material)
+
     // ── Compose (BOM aligns transitive Compose versions)
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)

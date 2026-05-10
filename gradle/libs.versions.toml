@@ -15,6 +15,12 @@ lifecycle          = "2.10.0"
 navigationCompose  = "2.9.8"
 datastore          = "1.2.1"
 
+# Material Design XML resources (themes the Activity needs pre-Compose).
+# Compose's material3 module covers Composables only — splash + window
+# chrome live in res/values/themes.xml and need this artifact for the
+# Theme.Material3.* parents to resolve at AAPT link time.
+material           = "1.13.0"
+
 # Compose
 composeBom         = "2026.05.00"     # latest BOM (May 2026)
 
@@ -45,6 +51,9 @@ androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle",       name = "l
 androidx-lifecycle-vm-compose  = { group = "androidx.lifecycle",       name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 androidx-navigation-compose    = { group = "androidx.navigation",      name = "navigation-compose",   version.ref = "navigationCompose" }
 androidx-datastore-preferences = { group = "androidx.datastore",       name = "datastore-preferences",version.ref = "datastore" }
+
+# Material Design (XML resources for the Activity's themes.xml)
+material                       = { group = "com.google.android.material", name = "material",          version.ref = "material" }
 
 # Compose (BOM-aligned)
 androidx-compose-bom           = { group = "androidx.compose",         name = "compose-bom",          version.ref = "composeBom" }
