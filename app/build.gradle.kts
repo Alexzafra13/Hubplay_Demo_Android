@@ -61,13 +61,38 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+}
 
-    // Pull the OpenAPI-generated sources into the main source set so the IDE
-    // resolves them and the compiler picks them up. The path matches the
-    // `outputDir` configured below.
-    sourceSets["main"].kotlin.srcDirs(
-        layout.buildDirectory.dir("generated/openapi/src/main/kotlin"),
-    )
+// ─── Wire OpenAPI-generated sources into the Kotlin compilation ──────────────
+//
+// AGP 9 deprecated `sourceSets["main"].kotlin.srcDirs(Provider<Directory>)` —
+// it can no longer tell whether the directory is generated (read-only, depends
+// on a task) or static. The replacement is the Variant API's
+// `addGeneratedSourceDirectory`, which wires the source dir AND the task
+// dependency in one go.
+//
+// Wrinkle: openapi-generator's GenerateTask exposes `outputDir` as
+// `Property<String>`, but `addGeneratedSourceDirectory` requires a
+// `DirectoryProperty`. The trivial bridge is a dummy task whose output IS
+// a DirectoryProperty pointing at the same path; we depend it on
+// `openApiGenerate` so it doesn't run until the client is actually emitted.
+abstract class OpenApiSourcesAggregator : org.gradle.api.DefaultTask() {
+    @get:org.gradle.api.tasks.OutputDirectory
+    abstract val output: org.gradle.api.file.DirectoryProperty
+}
+
+val openApiSourcesTask = tasks.register<OpenApiSourcesAggregator>("openApiSources") {
+    dependsOn("openApiGenerate")
+    output.set(layout.buildDirectory.dir("generated/openapi/src/main/kotlin"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.kotlin?.addGeneratedSourceDirectory(
+            openApiSourcesTask,
+            OpenApiSourcesAggregator::output,
+        )
+    }
 }
 
 // Kotlin compiler options live at the project level under AGP 9.
@@ -131,11 +156,9 @@ tasks.register("refreshOpenApiSpec") {
     }
 }
 
-// Make the Kotlin compiler depend on the generated client so a clean build
-// produces a working APK in one shot.
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    dependsOn("openApiGenerate")
-}
+// NOTE: no manual `dependsOn("openApiGenerate")` needed — the Variant API
+// wiring above attaches the task dependency automatically. Adding it
+// here too would be a redundant edge in the task graph.
 
 dependencies {
     // ── AndroidX core
