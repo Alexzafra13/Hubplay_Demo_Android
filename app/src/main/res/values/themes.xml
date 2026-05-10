@@ -5,8 +5,9 @@
          MaterialTheme, this only governs window chrome (status bar,
          navigation bar). DayNight follows the system setting. -->
     <style name="Theme.HubPlay" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Splash bg matches the app's --color-bg-base from globals.css
-             so the splash → first composable transition is seamless. -->
+        <!-- Splash bg matches the app's color-bg-base CSS token from
+             web/src/styles/globals.css so the splash to first
+             composable transition has no flash of pure-black. -->
         <item name="android:windowSplashScreenBackground">#07090E</item>
         <item name="android:statusBarColor" tools:targetApi="21">@android:color/transparent</item>
         <item name="android:navigationBarColor" tools:targetApi="21">@android:color/transparent</item>
