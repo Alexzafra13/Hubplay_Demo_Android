@@ -1231,7 +1231,7 @@ paths:
       responses:
         "204": { description: Renamed }
         "400": { description: Validation error }
-        "403": { description: Caller is not admin, self, or parent of the target }
+        "403": { description: "Caller is not admin, self, or parent of the target" }
 
   /users/{id}/avatar-color:
     put:
@@ -1256,7 +1256,7 @@ paths:
       responses:
         "204": { description: Updated }
         "400": { description: Hex not in palette }
-        "403": { description: Caller is not admin, self, or parent of the target }
+        "403": { description: "Caller is not admin, self, or parent of the target" }
 
   /users/{id}/pin:
     put:
@@ -1279,7 +1279,7 @@ paths:
       responses:
         "204": { description: Updated }
         "400": { description: PIN format invalid }
-        "403": { description: Caller is not admin, self, or parent of the target }
+        "403": { description: "Caller is not admin, self, or parent of the target" }
 
   /users/{id}/content-rating:
     put:
@@ -1305,7 +1305,7 @@ paths:
       responses:
         "204": { description: Updated }
         "400": { description: Unknown rating literal }
-        "403": { description: Caller is not admin, self, or parent of the target }
+        "403": { description: "Caller is not admin, self, or parent of the target" }
 
   # ─── Federation user surface ────────────────────────────────────────
   /me/peers:
@@ -2314,9 +2314,6 @@ components:
         JWT issued by `/auth/login`, `/auth/refresh`, or `/auth/device/poll`.
         Send as `Authorization: Bearer <access_token>`. Tokens expire in
         15 min by default — refresh proactively or on the first 401.
-
-  security:
-    - bearerAuth: []
 
   parameters:
     ClientCapabilitiesHeader:
