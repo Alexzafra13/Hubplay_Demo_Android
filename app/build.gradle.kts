@@ -1,4 +1,3 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.openapitools.generator.gradle.plugin.tasks.GenerateTask
 
 plugins {
@@ -42,14 +41,12 @@ android {
         }
     }
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    // NOTE: with AGP 9 + built-in Kotlin, the legacy `kotlinOptions { }`
-    // block is gone. The Kotlin compiler is configured via the top-level
-    // `kotlin { compilerOptions { … } }` extension below.
+    // NOTE: `compileOptions` and `kotlinOptions` are no longer needed
+    // here — the project-level `kotlin { jvmToolchain(17) }` below
+    // configures both Java AND Kotlin to compile with JDK 17. AGP 9 +
+    // toolchain is the modern, machine-portable way to fix the
+    // bytecode level: Gradle auto-detects an installed JDK 17 or
+    // downloads one via the foojay resolver in settings.gradle.kts.
 
     buildFeatures {
         compose    = true
@@ -95,13 +92,13 @@ androidComponents {
     }
 }
 
-// Kotlin compiler options live at the project level under AGP 9.
-// `jvmTarget` must match the `compileOptions` Java target above so
-// .class files agree on bytecode version.
+// One-line JVM toolchain — Gradle picks (or downloads via foojay) a
+// JDK 17 to compile both Java and Kotlin against. Replaces the older
+// `compileOptions { sourceCompatibility = ... }` + `kotlin { compilerOptions
+// { jvmTarget = ... } }` duo with a single declarative source of truth
+// that's also what Android Studio's "Daemon toolchain" hint asks for.
 kotlin {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
-    }
+    jvmToolchain(17)
 }
 
 // ─── OpenAPI client generation ───────────────────────────────────────────────
