@@ -1,6 +1,9 @@
 [versions]
 # Build tooling
-agp                = "9.2.0"          # Apr 2026 — requires Gradle 9.4.1+, JDK 17
+# AGP pinned to 9.1.1 because Android Studio Narwhal Feature Drop (the
+# current shipping IDE as of May 2026) caps support at 9.1.x. Bump to
+# 9.2.x once the IDE catches up — Gradle 9.4.1 already supports 9.2 too.
+agp                = "9.1.1"          # max supported by current Android Studio (May 2026)
 kotlin             = "2.3.21"         # latest stable (May 2026)
 ksp                = "2.3.7"          # KSP simplified versioning, paired with Kotlin 2.3.x
 openapiGenerator   = "7.22.0"         # Apr 2026
