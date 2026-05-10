@@ -1,3 +1,4 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.openapitools.generator.gradle.plugin.tasks.GenerateTask
 
 plugins {
@@ -46,9 +47,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // NOTE: with AGP 9 + built-in Kotlin, the legacy `kotlinOptions { }`
+    // block is gone. The Kotlin compiler is configured via the top-level
+    // `kotlin { compilerOptions { … } }` extension below.
 
     buildFeatures {
         compose    = true
@@ -67,6 +68,15 @@ android {
     sourceSets["main"].kotlin.srcDirs(
         layout.buildDirectory.dir("generated/openapi/src/main/kotlin"),
     )
+}
+
+// Kotlin compiler options live at the project level under AGP 9.
+// `jvmTarget` must match the `compileOptions` Java target above so
+// .class files agree on bytecode version.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
 }
 
 // ─── OpenAPI client generation ───────────────────────────────────────────────
