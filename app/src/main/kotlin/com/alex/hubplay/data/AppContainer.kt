@@ -55,9 +55,11 @@ class AppContainer(context: Context) {
     /**
      * The "real" client every screen consumes. Adds Bearer + auto-refresh
      * + base-URL rewrite. Long timeouts on read because /me/events SSE
-     * holds the connection open indefinitely.
+     * holds the connection open indefinitely. Exposed so Coil's
+     * SingletonImageLoader can route image fetches through the same
+     * authenticated client (otherwise /images/file/{id} returns 401).
      */
-    private val mainClient: OkHttpClient = OkHttpClient.Builder()
+    val mainOkHttp: OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(BaseUrlInterceptor(tokenStore))
         .addInterceptor(AuthInterceptor(tokenStore, refreshAuthApi))
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -67,7 +69,7 @@ class AppContainer(context: Context) {
 
     val retrofit: Retrofit = Retrofit.Builder()
         .baseUrl(PLACEHOLDER_BASE_URL)
-        .client(mainClient)
+        .client(mainOkHttp)
         .addConverterFactory(ScalarsConverterFactory.create())
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()
