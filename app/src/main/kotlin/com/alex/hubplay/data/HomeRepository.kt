@@ -30,7 +30,7 @@ class HomeRepository(
 
     suspend fun fetchLatest(limit: Int = 20): List<MediaItem> {
         val server = serverUrl()
-        return api.getLatest(limit).data?.items.orEmpty().map { it.toMedia(server) }
+        return api.getLatest(limit).data.orEmpty().map { it.toMedia(server) }
     }
 
     suspend fun fetchLiveNow(limit: Int = 10): List<MediaItem> {

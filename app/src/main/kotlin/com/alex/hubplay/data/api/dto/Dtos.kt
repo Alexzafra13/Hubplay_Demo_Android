@@ -193,13 +193,12 @@ data class LiveNowResponse(
     val data: List<LiveNowChannelDto>? = null,
 )
 
-@JsonClass(generateAdapter = true)
-data class LatestPayload(
-    val items: List<ItemSummaryDto> = emptyList(),
-    val total: Int = 0,
-)
-
+/**
+ * /items/latest returns the array directly under `data` — different
+ * shape than /me/home/trending which nests under `data.items`. Easy
+ * to get wrong when copy-pasting; verified against openapi.yaml.
+ */
 @JsonClass(generateAdapter = true)
 data class LatestResponse(
-    val data: LatestPayload? = null,
+    val data: List<ItemSummaryDto>? = null,
 )

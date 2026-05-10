@@ -26,12 +26,26 @@ import com.alex.hubplay.data.AppContainer
  * dependency graph grows past ~15 nodes we'll graduate to Hilt.
  */
 class HubplayApp : Application(), SingletonImageLoader.Factory {
-    lateinit var container: AppContainer
-        private set
+
+    /**
+     * Lazy on purpose. Coil's SingletonImageLoader factory hook
+     * (`newImageLoader`) can be invoked before `Application.onCreate()`
+     * completes — any ContentProvider in a third-party dep that
+     * triggers a Coil image load during its own initialisation will
+     * pull on the singleton factory before our `onCreate` body has
+     * run. With a `lateinit var` that races into an
+     * UninitializedPropertyAccessException at startup; with `by lazy`
+     * the container is built on first access regardless of who asks
+     * first.
+     */
+    val container: AppContainer by lazy { AppContainer(this) }
 
     override fun onCreate() {
         super.onCreate()
-        container = AppContainer(this)
+        // Touch the lazy so the construction cost happens here on the
+        // main-thread startup path (predictable) rather than later on
+        // whichever thread first reads .container.
+        container.tokenStore
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {
