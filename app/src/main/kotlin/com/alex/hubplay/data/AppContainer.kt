@@ -3,6 +3,7 @@ package com.alex.hubplay.data
 import android.content.Context
 import com.alex.hubplay.BuildConfig
 import com.alex.hubplay.api.AuthApi
+import com.alex.hubplay.data.api.HubplayApi
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.OkHttpClient
@@ -75,6 +76,15 @@ class AppContainer(context: Context) {
         authApi    = retrofit.create(AuthApi::class.java),
         tokenStore = tokenStore,
     )
+
+    /**
+     * The hand-written API surface the Home + Player screens consume
+     * today. Lives alongside the auto-generated `AuthApi` until we move
+     * everything to the generated client.
+     */
+    val hubplayApi: HubplayApi = retrofit.create(HubplayApi::class.java)
+
+    val homeRepository: HomeRepository = HomeRepository(hubplayApi)
 
     private fun loggingInterceptor() = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BASIC
