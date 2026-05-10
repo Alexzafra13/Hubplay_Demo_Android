@@ -10,12 +10,12 @@ plugins {
 
 android {
     namespace = "com.alex.hubplay"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId    = "com.alex.hubplay"
         minSdk           = 26   // Android 8.0 — covers ~95% of devices and unlocks Media3
-        targetSdk        = 35
+        targetSdk        = 36   // Android 16 (released 2026) — Play Store currency window
         versionCode      = 1
         versionName      = "0.1.0"
 
@@ -163,8 +163,9 @@ dependencies {
     // ── Concurrency
     implementation(libs.kotlinx.coroutines.android)
 
-    // ── Image loading
+    // ── Image loading (Coil 3 — group is io.coil-kt.coil3, network engine split out)
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 
     // ── Tests
     testImplementation(libs.junit)

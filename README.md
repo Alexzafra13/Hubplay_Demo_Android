@@ -8,13 +8,21 @@ Cliente Android nativo para [HubPlay](https://github.com/Alexzafra13/HubPlay_dem
 
 ## Stack
 
-- **Kotlin 2.0** + **Jetpack Compose** (Material 3, single-Activity)
-- **Media3 / ExoPlayer 1.5** para streaming HLS
-- **Retrofit 2.11** + **OkHttp 4.12** + **Moshi 1.15** (codegen vía KSP)
-- **AndroidX DataStore** para tokens (con backup desactivado)
-- **OpenAPI Generator 7.10** — el cliente Retrofit se autogenera del `openapi-cached.yaml` en cada build
+Versiones bleeding-edge (mayo 2026, todas estables):
 
-`minSdk = 26` (Android 8.0+, ~95% de devices) · `compileSdk = 35` · Java 17.
+- **Kotlin 2.3.21** + **Jetpack Compose** (Material 3, single-Activity)
+- **Compose BOM 2026.05.00** — alinea todos los artefactos de Compose
+- **Media3 / ExoPlayer 1.10.0** para streaming HLS
+- **Retrofit 2.12.0** + **OkHttp 5.3.2** + **Moshi 1.15.2** (codegen vía KSP 2.3.7)
+- **AndroidX DataStore 1.2.1** para tokens (con backup desactivado)
+- **Coil 3.4.0** para imágenes (network engine OkHttp split-out)
+- **kotlinx-coroutines 1.11.0**
+- **OpenAPI Generator 7.22.0** — el cliente Retrofit se autogenera del `openapi-cached.yaml` en cada build
+- **AGP 9.2.0** + **Gradle 9.4.1** (require JDK 17)
+
+`minSdk = 26` (Android 8.0+, ~95% de devices) · `compileSdk = 36` (Android 16) · `targetSdk = 36` · Java 17.
+
+> Cuando salga una versión nueva de cualquiera, edita `gradle/libs.versions.toml` (única fuente de verdad). El plugin `org.openapi.generator` y los artefactos de Coil-3 (`io.coil-kt.coil3:*`) son los dos sitios donde el coordinate cambió respecto a la generación anterior, ten cuidado al copiar bumps de Stack Overflow.
 
 ---
 
