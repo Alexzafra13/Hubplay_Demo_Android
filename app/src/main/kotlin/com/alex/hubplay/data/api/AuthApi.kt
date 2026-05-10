@@ -2,6 +2,7 @@ package com.alex.hubplay.data.api
 
 import com.alex.hubplay.data.api.dto.AuthTokenEnvelopeDto
 import com.alex.hubplay.data.api.dto.DevicePollRequest
+import com.alex.hubplay.data.api.dto.DevicePollResponse
 import com.alex.hubplay.data.api.dto.DeviceStartRequest
 import com.alex.hubplay.data.api.dto.DeviceStartResponse
 import com.alex.hubplay.data.api.dto.RefreshRequest
