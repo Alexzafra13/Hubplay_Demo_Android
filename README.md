@@ -8,21 +8,21 @@ Cliente Android nativo para [HubPlay](https://github.com/Alexzafra13/HubPlay_dem
 
 ## Stack
 
-Versiones bleeding-edge (mayo 2026, todas estables):
+Última generación **estable comprobada** (un peldaño por debajo de AGP 9, evitando el churn de migración a built-in Kotlin / Variant API estricta):
 
-- **Kotlin 2.3.21** + **Jetpack Compose** (Material 3, single-Activity)
-- **Compose BOM 2026.05.00** — alinea todos los artefactos de Compose
-- **Media3 / ExoPlayer 1.10.0** para streaming HLS
-- **Retrofit 2.12.0** + **OkHttp 5.3.2** + **Moshi 1.15.2** (codegen vía KSP 2.3.7)
-- **AndroidX DataStore 1.2.1** para tokens (con backup desactivado)
-- **Coil 3.4.0** para imágenes (network engine OkHttp split-out)
-- **kotlinx-coroutines 1.11.0**
-- **OpenAPI Generator 7.22.0** — el cliente Retrofit se autogenera del `openapi-cached.yaml` en cada build
-- **AGP 9.2.0** + **Gradle 9.4.1** (require JDK 17)
+- **Kotlin 2.0.21** + **Jetpack Compose** (Material 3, single-Activity)
+- **Compose BOM 2024.12.01** — alinea todos los artefactos de Compose
+- **Media3 / ExoPlayer 1.5.0** para streaming HLS
+- **Retrofit 2.12.0** + **OkHttp 5.3.2** + **Moshi 1.15.2** (codegen vía KSP 2.0.21-1.0.28)
+- **AndroidX DataStore 1.1.1** para tokens (con backup desactivado)
+- **Coil 3.0.4** para imágenes (network engine OkHttp split-out)
+- **kotlinx-coroutines 1.9.0**
+- **OpenAPI Generator 7.10.0** — el cliente Retrofit se autogenera del `openapi-cached.yaml` en cada build
+- **AGP 8.7.3** + **Gradle 8.10.2** (require JDK 17)
 
-`minSdk = 26` (Android 8.0+, ~95% de devices) · `compileSdk = 36` (Android 16) · `targetSdk = 36` · Java 17.
+`minSdk = 26` (Android 8.0+, ~95% de devices) · `compileSdk = 35` (Android 15) · `targetSdk = 35` · Java 17.
 
-> Cuando salga una versión nueva de cualquiera, edita `gradle/libs.versions.toml` (única fuente de verdad). El plugin `org.openapi.generator` y los artefactos de Coil-3 (`io.coil-kt.coil3:*`) son los dos sitios donde el coordinate cambió respecto a la generación anterior, ten cuidado al copiar bumps de Stack Overflow.
+> **Política de versiones**: este set funciona junto, comprobado. Cuando subas algo, sube **el grupo coherente**: AGP + Gradle + Kotlin + KSP + Compose BOM cambian juntos en bumps grandes. Subir una sola pieza suele romper varias otras (lo aprendí por las malas).
 
 ---
 
