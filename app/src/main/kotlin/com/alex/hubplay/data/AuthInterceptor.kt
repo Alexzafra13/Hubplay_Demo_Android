@@ -1,7 +1,7 @@
 package com.alex.hubplay.data
 
-import com.alex.hubplay.api.AuthApi
-import com.alex.hubplay.api.model.RefreshRequest
+import com.alex.hubplay.data.api.AuthApi
+import com.alex.hubplay.data.api.dto.RefreshRequest
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response

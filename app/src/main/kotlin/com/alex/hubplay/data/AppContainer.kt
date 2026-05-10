@@ -2,7 +2,7 @@ package com.alex.hubplay.data
 
 import android.content.Context
 import com.alex.hubplay.BuildConfig
-import com.alex.hubplay.api.AuthApi
+import com.alex.hubplay.data.api.AuthApi
 import com.alex.hubplay.data.api.HubplayApi
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory

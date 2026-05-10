@@ -1,8 +1,8 @@
 package com.alex.hubplay.data
 
-import com.alex.hubplay.api.AuthApi
-import com.alex.hubplay.api.model.DeviceStartRequest
-import com.alex.hubplay.api.model.DevicePollRequest
+import com.alex.hubplay.data.api.AuthApi
+import com.alex.hubplay.data.api.dto.DeviceStartRequest
+import com.alex.hubplay.data.api.dto.DevicePollRequest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
