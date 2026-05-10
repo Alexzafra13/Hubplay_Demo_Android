@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -172,7 +173,7 @@ fun HeroSection(
                         contentDescription = item.title,
                         contentScale       = ContentScale.Fit,
                         modifier           = Modifier
-                            .heightIn(80.dp)
+                            .heightIn(min = 80.dp, max = 120.dp)
                             .widthIn(max = 380.dp),
                     )
                 } else {
@@ -285,8 +286,3 @@ private fun MetaRow(item: MediaItem) {
     }
 }
 
-// ─── Tiny shim so `heightIn(80.dp)` works without importing the namespace.
-//     Keeps the imports list shorter at the cost of one alias. ────────────
-@Composable
-private fun Modifier.heightIn(min: androidx.compose.ui.unit.Dp) =
-    this.then(androidx.compose.foundation.layout.heightIn(min = min))

@@ -51,6 +51,7 @@ import com.alex.hubplay.ui.home.components.TopNav
 @Composable
 fun HomeScreen(
     viewModel:   HomeViewModel,
+    onOpenItem:  (itemId: String) -> Unit,
     onPlayItem:  (itemId: String, resumePosSec: Long) -> Unit,
     onLogOut:    () -> Unit,
 ) {
@@ -88,9 +89,14 @@ fun HomeScreen(
                         spotlight        = ui.data.hero,
                         focusedOverride  = focused,
                         onPlay           = { onPlayItem(it.id, it.resumePosSec) },
-                        onDetails        = { /* Detail screen — next sprint */ },
+                        onDetails        = { onOpenItem(it.id) },
                     )
 
+                    // Continue Watching: tap goes straight to the player
+                    // (the user has already seen the detail page when they
+                    // started this item). Everything else opens Detail
+                    // first so the user can choose Play / Add-to-list /
+                    // browse cast etc. — Plex / Netflix pattern.
                     HomeRail(
                         title     = "Continuar viendo",
                         items     = ui.data.continueWatching,
@@ -101,18 +107,20 @@ fun HomeScreen(
                         title     = "Lo último en tu librería",
                         items     = ui.data.latest,
                         onFocused = viewModel::onCardFocused,
-                        onClick   = { onPlayItem(it.id, 0L) },
+                        onClick   = { onOpenItem(it.id) },
                     )
                     HomeRail(
                         title     = "Tendencias",
                         items     = ui.data.trending,
                         onFocused = viewModel::onCardFocused,
-                        onClick   = { onPlayItem(it.id, 0L) },
+                        onClick   = { onOpenItem(it.id) },
                     )
                     HomeRail(
                         title     = "En directo ahora",
                         items     = ui.data.liveNow,
                         onFocused = viewModel::onCardFocused,
+                        // Live channels go straight to the player — there's
+                        // no detail page for a channel today.
                         onClick   = { onPlayItem(it.id, 0L) },
                     )
                     Spacer(Modifier.height(40.dp))

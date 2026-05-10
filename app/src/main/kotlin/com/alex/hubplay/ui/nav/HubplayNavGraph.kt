@@ -10,6 +10,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.alex.hubplay.data.AppContainer
+import com.alex.hubplay.ui.detail.DetailScreen
+import com.alex.hubplay.ui.detail.DetailViewModel
 import com.alex.hubplay.ui.home.HomeScreen
 import com.alex.hubplay.ui.home.HomeViewModel
 import com.alex.hubplay.ui.login.LoginScreen
@@ -29,10 +31,8 @@ fun HubplayNavGraph(
         navController     = navController,
         startDestination  = startRoute.path,
     ) {
+        // ── Login ────────────────────────────────────────────────────
         composable(Route.Login.path) {
-            // Fresh ViewModel per nav; the device-code repo it depends on
-            // is the singleton from AppContainer so an in-flight pairing
-            // session survives recomposition.
             val viewModel = viewModel<LoginViewModel>(
                 factory = LoginViewModel.factory(container.deviceCodeRepository),
             )
@@ -46,12 +46,16 @@ fun HubplayNavGraph(
             )
         }
 
+        // ── Home ─────────────────────────────────────────────────────
         composable(Route.Home.path) {
             val viewModel = viewModel<HomeViewModel>(
                 factory = HomeViewModel.factory(container.homeRepository),
             )
             HomeScreen(
                 viewModel  = viewModel,
+                onOpenItem = { itemId ->
+                    navController.navigate(Route.Detail.route(itemId))
+                },
                 onPlayItem = { itemId, resumePosSec ->
                     navController.navigate(Route.Player.route(itemId, resumePosSec))
                 },
@@ -64,6 +68,27 @@ fun HubplayNavGraph(
             )
         }
 
+        // ── Detail ───────────────────────────────────────────────────
+        composable(
+            route     = Route.Detail.path,
+            arguments = listOf(
+                navArgument(Route.Detail.ARG_ITEM_ID) { type = NavType.StringType },
+            ),
+        ) { entry ->
+            val itemId = entry.arguments?.getString(Route.Detail.ARG_ITEM_ID) ?: return@composable
+            val viewModel = viewModel<DetailViewModel>(
+                factory = DetailViewModel.factory(container.homeRepository, itemId),
+            )
+            DetailScreen(
+                viewModel = viewModel,
+                onPlay    = { id, resume ->
+                    navController.navigate(Route.Player.route(id, resume))
+                },
+                onBack    = { navController.popBackStack() },
+            )
+        }
+
+        // ── Player ───────────────────────────────────────────────────
         composable(
             route     = Route.Player.path,
             arguments = listOf(

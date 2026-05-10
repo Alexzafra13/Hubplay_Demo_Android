@@ -38,6 +38,33 @@ class HomeRepository(
         return api.getLiveNow(limit).data.orEmpty().map { it.toMedia(server) }
     }
 
+    /** Full item detail — used by the Detail screen. */
+    suspend fun fetchItemDetail(itemId: String): MediaItem {
+        val server = serverUrl()
+        val data = api.getItem(itemId).data
+            ?: error("items/$itemId returned no data envelope")
+        val resumeSec = data.userData?.positionSeconds?.toLong() ?: 0L
+        val totalSec  = ((data.runtimeMinutes ?: 0) * 60).toLong()
+        val progress  = if (totalSec > 0 && resumeSec > 0)
+            (resumeSec.toFloat() / totalSec).coerceIn(0f, 1f) else 0f
+
+        return MediaItem(
+            id           = data.id,
+            kind         = MediaKind.from(data.type),
+            title        = data.title.orEmpty(),
+            subtitle     = data.tagline,
+            posterUrl    = data.posterImageId?.let { "$server/api/v1/images/file/$it" },
+            backdropUrl  = data.backdropImageId?.let { "$server/api/v1/images/file/$it" },
+            logoUrl      = data.studioLogoUrl,
+            overview     = data.overview,
+            genres       = data.genres,
+            rating       = data.rating,
+            year         = data.year,
+            progressPct  = progress,
+            resumePosSec = resumeSec,
+        )
+    }
+
     private suspend fun serverUrl(): String =
         tokenStore.snapshot().serverUrl?.trimEnd('/').orEmpty()
 
