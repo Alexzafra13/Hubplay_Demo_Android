@@ -19,6 +19,18 @@
          (audio-only) or for download workers later. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Make the app installable on Android TV / Fire TV. The leanback
+         feature is "not required" so the same APK still installs on
+         phones and tablets that lack a TV input. -->
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+    <!-- Touchscreen "not required" so phone-less TV form factors don't
+         filter the listing out. -->
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
     <application
         android:name=".HubplayApp"
         android:allowBackup="false"
@@ -37,9 +49,19 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.HubPlay">
+            <!-- Phone / tablet launcher entry. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Android TV launcher entry — same Activity, different
+                 category so the app shows up in the TV home carousel
+                 alongside the phone/tablet shortcut. A future iteration
+                 can ship a TV-specific Activity if the focus model
+                 needs to diverge. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
     </application>

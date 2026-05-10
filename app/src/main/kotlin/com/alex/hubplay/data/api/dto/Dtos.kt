@@ -137,3 +137,65 @@ data class ItemDetailResponse(
 data class StreamInfoResponse(
     val data: StreamInfoDto? = null,
 )
+
+// ─── Home rails (trending / recommended / live-now / latest) ────────────────
+//
+// These rails come back enriched: image *URLs* (not just ids), overview,
+// genres, etc. So the hero can render rich without a follow-up
+// /items/{id} fetch when a card is focused.
+
+@JsonClass(generateAdapter = true)
+data class TrendingItemDto(
+    val id:    String,
+    val type:  String?  = null,
+    val title: String?  = null,
+    val year:  Int?     = null,
+    @Json(name = "community_rating") val communityRating: Float? = null,
+    @Json(name = "library_id")       val libraryId:       String? = null,
+    @Json(name = "play_count")       val playCount:       Int? = null,
+    @Json(name = "poster_url")       val posterUrl:       String? = null,
+    @Json(name = "backdrop_url")     val backdropUrl:     String? = null,
+    @Json(name = "logo_url")         val logoUrl:         String? = null,
+    @Json(name = "poster_blurhash")  val posterBlurhash:  String? = null,
+    val overview: String? = null,
+    val genres:   List<String> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class TrendingPayload(
+    val items: List<TrendingItemDto> = emptyList(),
+    val total: Int = 0,
+)
+
+@JsonClass(generateAdapter = true)
+data class TrendingResponse(
+    val data: TrendingPayload? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class LiveNowChannelDto(
+    val id:                              String,
+    val name:                            String?  = null,
+    val number:                          Int?     = null,
+    @Json(name = "library_id")           val libraryId:         String? = null,
+    @Json(name = "logo_url")             val logoUrl:           String? = null,
+    @Json(name = "current_program_title") val currentProgramTitle: String? = null,
+    @Json(name = "current_program_starts_at") val currentProgramStartsAt: String? = null,
+    @Json(name = "current_program_ends_at")   val currentProgramEndsAt:   String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class LiveNowResponse(
+    val data: List<LiveNowChannelDto>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class LatestPayload(
+    val items: List<ItemSummaryDto> = emptyList(),
+    val total: Int = 0,
+)
+
+@JsonClass(generateAdapter = true)
+data class LatestResponse(
+    val data: LatestPayload? = null,
+)
