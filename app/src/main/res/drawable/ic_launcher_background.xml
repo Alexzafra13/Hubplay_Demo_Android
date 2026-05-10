@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive icon background — matches the brand-mark SVG's #0d1220 so
+     the launcher icon reads as the same artwork as the web favicon. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#0B0B0E" />
+    <solid android:color="#0D1220" />
 </shape>

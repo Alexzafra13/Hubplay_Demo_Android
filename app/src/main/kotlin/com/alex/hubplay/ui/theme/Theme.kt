@@ -5,25 +5,32 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
 /**
- * App-wide theme wrapper. We only ship dark for now — this matches user
- * expectation for media apps (Plex, Jellyfin, Netflix, Prime Video all
- * default to dark and so do most TV launchers).
+ * App-wide theme wrapper.
+ *
+ * Dark only — matches what every media app does (Plex, Jellyfin, Netflix,
+ * Prime). The color tokens are the same as web/src/styles/globals.css so
+ * the apps read as the same product.
  */
 @Composable
 fun HubPlayTheme(content: @Composable () -> Unit) {
     val colors = darkColorScheme(
-        primary           = BrandPrimary,
-        onPrimary         = BrandOnPrimary,
-        primaryContainer  = BrandPrimaryDim,
-        onPrimaryContainer = BrandOnPrimary,
-        background        = SurfaceBase,
-        onBackground      = TextPrimary,
-        surface           = SurfaceCard,
-        onSurface         = TextPrimary,
-        surfaceVariant    = SurfaceElevated,
-        onSurfaceVariant  = TextSecondary,
-        outline           = Outline,
-        error             = Error,
+        primary               = Accent,
+        onPrimary             = OnAccent,
+        primaryContainer      = AccentSoft,
+        onPrimaryContainer    = AccentLight,
+        secondary             = AccentLight,
+        onSecondary           = OnAccent,
+        background            = BgBase,
+        onBackground          = TextPrimary,
+        surface               = BgCard,
+        onSurface             = TextPrimary,
+        surfaceVariant        = BgElevated,
+        onSurfaceVariant      = TextSecondary,
+        surfaceContainer      = BgSurface,
+        surfaceContainerHigh  = BgOverlay,
+        outline               = Border,
+        outlineVariant        = BorderSubtle,
+        error                 = ErrorRed,
     )
 
     MaterialTheme(

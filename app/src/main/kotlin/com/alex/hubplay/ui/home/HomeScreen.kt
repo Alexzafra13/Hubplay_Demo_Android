@@ -1,5 +1,6 @@
 package com.alex.hubplay.ui.home
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,10 +33,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.alex.hubplay.R
 import com.alex.hubplay.data.ContinueWatchingItem
 
 /**
@@ -65,11 +68,10 @@ fun HomeScreen(
                 verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(
-                    text       = "HubPlay",
-                    style      = MaterialTheme.typography.headlineMedium,
-                    color      = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
+                Image(
+                    painter            = painterResource(R.drawable.brand_wordmark),
+                    contentDescription = "HubPlay",
+                    modifier           = Modifier.height(28.dp),
                 )
                 TextButton(onClick = onLogOut) { Text("Cerrar sesión") }
             }

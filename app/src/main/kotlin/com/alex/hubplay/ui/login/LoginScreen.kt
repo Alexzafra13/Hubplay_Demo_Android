@@ -1,5 +1,6 @@
 package com.alex.hubplay.ui.login
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -61,13 +63,16 @@ fun LoginScreen(
                 modifier            = Modifier.widthIn(max = 480.dp).fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(
-                    text       = "HubPlay",
-                    style      = MaterialTheme.typography.displayMedium,
-                    color      = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
+                // Real HubPlay wordmark — same artwork as the web client
+                // (web/public/hubplay_icon.svg) ported to a vector
+                // drawable. 64dp height matches the Login wordmark size
+                // on the web's Login.tsx.
+                Image(
+                    painter            = painterResource(R.drawable.brand_wordmark),
+                    contentDescription = "HubPlay",
+                    modifier           = Modifier.height(64.dp),
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(24.dp))
 
                 when (ui.stage) {
                     LoginStage.ServerUrl -> ServerUrlForm(ui, viewModel)
