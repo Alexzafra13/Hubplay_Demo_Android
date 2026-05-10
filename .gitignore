@@ -1,0 +1,28 @@
+# Gradle
+.gradle/
+build/
+local.properties
+gradle/wrapper/gradle-wrapper.jar
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Generated OpenAPI client (regenerated on every build)
+app/build/generated/
+
+# Keystores
+*.jks
+*.keystore
+keystore.properties
+
+# Logs / coverage
+*.log
+*.hprof
+
+# OS
+Thumbs.db

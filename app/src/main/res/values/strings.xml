@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HubPlay</string>
+
+    <!-- Login -->
+    <string name="login_title">Conecta tu HubPlay</string>
+    <string name="login_subtitle">Introduce la URL de tu servidor para emparejar este dispositivo.</string>
+    <string name="login_server_label">URL del servidor</string>
+    <string name="login_server_hint">https://hubplay.duckdns.org</string>
+    <string name="login_continue">Continuar</string>
+    <string name="login_pairing_title">Empareja este dispositivo</string>
+    <string name="login_pairing_instructions">Abre HubPlay en tu navegador y escribe este código en Ajustes → Dispositivos:</string>
+    <string name="login_pairing_waiting">Esperando aprobación…</string>
+    <string name="login_error_generic">Error de conexión. Comprueba la URL y vuelve a intentarlo.</string>
+</resources>
