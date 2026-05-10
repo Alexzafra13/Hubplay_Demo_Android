@@ -2,7 +2,10 @@ import org.openapitools.generator.gradle.plugin.tasks.GenerateTask
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    // NOTE: AGP 9.0+ ships Kotlin support built-in — the
+    // `org.jetbrains.kotlin.android` plugin is no longer applied here.
+    // See https://kotl.in/gradle/agp-built-in-kotlin
+    // Compose Compiler is still a separate plugin.
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.openapi.generator)

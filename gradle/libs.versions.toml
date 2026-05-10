@@ -83,7 +83,8 @@ androidx-test-espresso-core    = { group = "androidx.test.espresso",   name = "e
 
 [plugins]
 android-application = { id = "com.android.application",       version.ref = "agp" }
-kotlin-android      = { id = "org.jetbrains.kotlin.android",  version.ref = "kotlin" }
+# Compose Compiler is separate from AGP's built-in Kotlin and pinned to the
+# Kotlin minor in `versions.kotlin` above (KGP must match Compose Compiler).
 kotlin-compose      = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp                 = { id = "com.google.devtools.ksp",       version.ref = "ksp" }
 openapi-generator   = { id = "org.openapi.generator",         version.ref = "openapiGenerator" }
