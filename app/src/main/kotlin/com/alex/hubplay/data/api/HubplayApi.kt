@@ -8,7 +8,6 @@ import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
-import retrofit2.http.Query
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Path
