@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.HomeData
+import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.MediaItem
 import kotlinx.coroutines.async
