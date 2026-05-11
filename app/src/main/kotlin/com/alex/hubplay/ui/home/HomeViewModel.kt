@@ -72,8 +72,21 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * Drops the very first focus event we see after Home loads. Compose's
+     * LazyRow auto-grants focus to its first visible item on initial
+     * composition (so a D-pad user can start scrolling), but we don't
+     * want that to override the spotlight before the user has actually
+     * navigated anywhere.
+     */
+    private var firstFocusConsumed: Boolean = false
+
     /** Called from MediaCard when it gains focus. Hero observes and crossfades. */
     fun onCardFocused(item: MediaItem?) {
+        if (!firstFocusConsumed) {
+            firstFocusConsumed = true
+            return
+        }
         _focusedItem.value = item
     }
 

@@ -10,9 +10,6 @@ import com.alex.hubplay.data.api.dto.TrendingItemDto
  * Owns reads against the home / catalogue surface and maps them into
  * UI-shaped [MediaItem] / [HomeData] objects so screens never see wire
  * DTOs.
- *
- * Each rail is a separate suspend method. The ViewModel calls them in
- * parallel via async{} so a slow rail doesn't block the rest.
  */
 class HomeRepository(
     private val api:        HubplayApi,
@@ -38,13 +35,13 @@ class HomeRepository(
         return api.getLiveNow(limit).data?.items.orEmpty().map { it.toMedia(server) }
     }
 
-    /** Full item detail — used by the Detail screen. */
     suspend fun fetchItemDetail(itemId: String): MediaItem {
         val server = serverUrl()
         val data = api.getItem(itemId).data
             ?: error("items/$itemId returned no data envelope")
-        val resumeSec = data.userData?.positionSeconds?.toLong() ?: 0L
-        val totalSec  = ((data.runtimeMinutes ?: 0) * 60).toLong()
+        val totalSec  = data.durationTicks?.let { ticksToSeconds(it) } ?: 0L
+        val resumeSec = data.userData?.progress?.positionTicks
+            ?.let { ticksToSeconds(it) } ?: 0L
         val progress  = if (totalSec > 0 && resumeSec > 0)
             (resumeSec.toFloat() / totalSec).coerceIn(0f, 1f) else 0f
 
@@ -53,12 +50,12 @@ class HomeRepository(
             kind         = MediaKind.from(data.type),
             title        = data.title.orEmpty(),
             subtitle     = data.tagline,
-            posterUrl    = data.posterImageId?.let { "$server/api/v1/images/file/$it" },
-            backdropUrl  = data.backdropImageId?.let { "$server/api/v1/images/file/$it" },
-            logoUrl      = data.studioLogoUrl,
+            posterUrl    = absolutize(data.posterUrl, server),
+            backdropUrl  = absolutize(data.backdropUrl, server),
+            logoUrl      = absolutize(data.logoUrl ?: data.studioLogoUrl, server),
             overview     = data.overview,
             genres       = data.genres,
-            rating       = data.rating,
+            rating       = data.communityRating,
             year         = data.year,
             progressPct  = progress,
             resumePosSec = resumeSec,
@@ -71,31 +68,39 @@ class HomeRepository(
     // ─── DTO → MediaItem mappers ─────────────────────────────────────────────
 
     private fun ContinueWatchingEntryDto.toMedia(server: String): MediaItem {
-        val resumeSec = (positionSeconds ?: userData?.positionSeconds ?: 0f).toLong()
-        val totalSec  = ((runtimeMinutes ?: 0) * 60).toLong()
-        val progress  = if (totalSec > 0) (resumeSec.toFloat() / totalSec).coerceIn(0f, 1f) else 0f
+        val resumeSec = positionTicks?.let { ticksToSeconds(it) } ?: 0L
+        val totalSec  = durationTicks?.let { ticksToSeconds(it) } ?: 0L
+        val progress  = userData?.progress?.percentage?.let { it / 100f }
+            ?: if (totalSec > 0) (resumeSec.toFloat() / totalSec).coerceIn(0f, 1f) else 0f
+
+        // Episodes are best displayed as "Series · S2 E4" — promote the
+        // series title when the entry carries it; movies just use their
+        // own title.
+        val displayTitle = if (type == "episode" && !seriesTitle.isNullOrBlank())
+            seriesTitle else title.orEmpty()
+        val episodeSubtitle = if (type == "episode") {
+            val s = seasonIndex; val e = episodeIndex
+            if (s != null && e != null) "S$s · E$e · ${title.orEmpty()}".trimEnd(' ', '·')
+            else                        title
+        } else null
 
         return MediaItem(
             id           = id,
             kind         = MediaKind.from(type),
-            title        = title.orEmpty(),
-            subtitle     = episodeSubtitle(),
-            posterUrl    = posterImageId?.let { "$server/api/v1/images/file/$it" },
-            backdropUrl  = backdropImageId?.let { "$server/api/v1/images/file/$it" },
-            logoUrl      = null,
+            title        = displayTitle,
+            subtitle     = episodeSubtitle,
+            // 16:9 thumb when present (movies); fall back to backdrop
+            // (per-episode still on episodes); poster as a last resort.
+            posterUrl    = absolutize(posterUrl, server),
+            backdropUrl  = absolutize(thumbUrl ?: backdropUrl ?: posterUrl, server),
+            logoUrl      = absolutize(logoUrl, server),
             overview     = null,
             genres       = emptyList(),
             rating       = null,
-            year         = year,
+            year         = seriesYear,
             progressPct  = progress,
             resumePosSec = resumeSec,
         )
-    }
-
-    private fun ContinueWatchingEntryDto.episodeSubtitle(): String? {
-        if (type != "episode") return null
-        val s = seasonNumber; val e = episodeNumber
-        return if (s != null && e != null) "S$s · E$e" else null
     }
 
     private fun ItemSummaryDto.toMedia(server: String): MediaItem = MediaItem(
@@ -103,16 +108,20 @@ class HomeRepository(
         kind         = MediaKind.from(type),
         title        = title.orEmpty(),
         subtitle     = year?.toString(),
-        posterUrl    = posterImageId?.let { "$server/api/v1/images/file/$it" },
-        backdropUrl  = backdropImageId?.let { "$server/api/v1/images/file/$it" },
-        logoUrl      = null,
-        overview     = null,
-        genres       = emptyList(),
-        rating       = rating,
+        posterUrl    = absolutize(posterUrl, server),
+        backdropUrl  = absolutize(backdropUrl ?: posterUrl, server),
+        logoUrl      = absolutize(logoUrl, server),
+        overview     = overview,
+        genres       = genres,
+        rating       = communityRating,
         year         = year,
     )
 
-    /** Trending items already carry absolute URLs + overview + genres. */
+    /**
+     * Trending items already carry absolute URLs from the server (they
+     * pass through a separate enrichment path). The other rails get
+     * relative paths and we glue the server URL on this side.
+     */
     private fun TrendingItemDto.toMedia(): MediaItem = MediaItem(
         id           = id,
         kind         = MediaKind.from(type),
@@ -128,18 +137,14 @@ class HomeRepository(
     )
 
     private fun LiveNowChannelDto.toMedia(server: String): MediaItem {
-        // Channel logo is relative ("/api/v1/channels/{id}/logo") — make
-        // it absolute against the paired server.
-        val absoluteLogo = channelLogo?.let { path ->
-            if (path.startsWith("http")) path else "$server$path"
-        }
+        val absoluteLogo = absolutize(channelLogo, server)
         return MediaItem(
             id           = channelId,
             kind         = MediaKind.LiveChannel,
             title        = channelName.orEmpty(),
             subtitle     = programTitle,
             posterUrl    = absoluteLogo,
-            backdropUrl  = absoluteLogo,   // channels have no backdrops; reuse the logo
+            backdropUrl  = absoluteLogo,
             logoUrl      = absoluteLogo,
             overview     = programTitle,
             genres       = emptyList(),
@@ -147,6 +152,21 @@ class HomeRepository(
             year         = null,
         )
     }
+
+    /**
+     * Glue a server-relative path ("/api/v1/images/file/abc") onto the
+     * paired serverUrl. Returns absolute URLs unchanged. Returns null
+     * for null input so callers can pass through directly.
+     */
+    private fun absolutize(path: String?, server: String): String? {
+        if (path.isNullOrBlank()) return null
+        if (path.startsWith("http://") || path.startsWith("https://")) return path
+        val cleanPath = if (path.startsWith("/")) path else "/$path"
+        return "$server$cleanPath"
+    }
+
+    /** .NET ticks → seconds. 10_000_000 ticks per second (100ns each). */
+    private fun ticksToSeconds(ticks: Long): Long = ticks / 10_000_000L
 }
 
 // ─── Domain types ────────────────────────────────────────────────────────────
@@ -164,11 +184,6 @@ enum class MediaKind {
     }
 }
 
-/**
- * Single domain type every Card / Hero / Detail screen consumes. Lossy
- * by design — we only carry what the UI actually renders today; richer
- * fields can be added per-screen as needed.
- */
 data class MediaItem(
     val id:           String,
     val kind:         MediaKind,
@@ -181,11 +196,10 @@ data class MediaItem(
     val genres:       List<String>,
     val rating:       Float?,
     val year:         Int?,
-    val progressPct:  Float = 0f,    // 0f..1f, only > 0 for Continue Watching
+    val progressPct:  Float = 0f,
     val resumePosSec: Long  = 0L,
 )
 
-/** Snapshot of all home rails for the ViewModel to expose to the UI. */
 data class HomeData(
     val hero:             List<MediaItem> = emptyList(),
     val continueWatching: List<MediaItem> = emptyList(),

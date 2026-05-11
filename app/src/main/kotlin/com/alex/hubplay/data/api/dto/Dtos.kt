@@ -24,71 +24,102 @@ import com.squareup.moshi.JsonClass
 
 // ─── Item summary / detail ───────────────────────────────────────────────────
 
+/**
+ * Verified against library.go::itemSummaryResponse() + enrichItemSummaries().
+ * Field shape ground truth — the openapi.yaml claims `runtime_minutes`
+ * and `poster_image_id`, but the wire actually carries `duration_ticks`
+ * (.NET ticks; 10_000_000 per second) and `poster_url` (relative path).
+ */
 @JsonClass(generateAdapter = true)
 data class ItemSummaryDto(
     val id:    String,
     val type:  String?  = null,
     val title: String?  = null,
     val year:  Int?     = null,
-    val rating: Float?  = null,
-    @Json(name = "runtime_minutes")     val runtimeMinutes:   Int?    = null,
-    @Json(name = "poster_image_id")     val posterImageId:    String? = null,
-    @Json(name = "backdrop_image_id")   val backdropImageId:  String? = null,
-    @Json(name = "poster_blurhash")     val posterBlurhash:   String? = null,
+    @Json(name = "community_rating") val communityRating: Float? = null,
+    @Json(name = "duration_ticks")   val durationTicks:   Long?  = null,
+    @Json(name = "poster_url")       val posterUrl:       String? = null,  // relative
+    @Json(name = "backdrop_url")     val backdropUrl:     String? = null,  // relative
+    @Json(name = "logo_url")         val logoUrl:         String? = null,
+    val overview:                                          String? = null,
+    val genres:                                            List<String> = emptyList(),
     // Series/season/episode hierarchy
-    @Json(name = "parent_id")           val parentId:         String? = null,
-    @Json(name = "season_number")       val seasonNumber:     Int?    = null,
-    @Json(name = "episode_number")      val episodeNumber:    Int?    = null,
-    @Json(name = "user_data")           val userData:         UserDataDto? = null,
-)
-
-@JsonClass(generateAdapter = true)
-data class UserDataDto(
-    val played:                                 Boolean? = null,
-    @Json(name = "position_seconds")            val positionSeconds: Float? = null,
-    @Json(name = "is_favorite")                 val isFavorite:      Boolean? = null,
+    @Json(name = "parent_id")        val parentId:        String? = null,
+    @Json(name = "season_number")    val seasonNumber:    Int?    = null,
+    @Json(name = "episode_number")   val episodeNumber:   Int?    = null,
+    @Json(name = "user_data")        val userData:        UserDataDto? = null,
 )
 
 /**
- * Continue Watching entry = ItemSummary + the resume position. The
- * server inlines `position_seconds` and `updated_at` here even though
- * `user_data` would carry the same data — convenience field. Use the
- * top-level one when present, fall back to `user_data.positionSeconds`.
+ * The user_data envelope every item-shaped endpoint carries. Progress
+ * is nested under `progress` to mirror the Jellyfin convention the
+ * backend follows.
+ */
+@JsonClass(generateAdapter = true)
+data class UserDataDto(
+    val played:                       Boolean? = null,
+    @Json(name = "play_count")        val playCount:    Int?      = null,
+    @Json(name = "is_favorite")       val isFavorite:   Boolean?  = null,
+    @Json(name = "last_played_at")    val lastPlayedAt: String?   = null,
+    val progress:                     ProgressDto? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ProgressDto(
+    @Json(name = "position_ticks")    val positionTicks: Long?  = null,
+    val percentage:                                       Float? = null,
+)
+
+/**
+ * /me/continue-watching response items. Ground truth in
+ * progress.go::ContinueWatching(). Different shape than ItemSummary —
+ * uses position_ticks at top level, has thumb_url for the 16:9 still
+ * on movies, and inlines title/type rather than embedding ItemSummary.
  */
 @JsonClass(generateAdapter = true)
 data class ContinueWatchingEntryDto(
     val id:    String,
     val type:  String?  = null,
     val title: String?  = null,
-    val year:  Int?     = null,
-    @Json(name = "runtime_minutes")     val runtimeMinutes:   Int?    = null,
-    @Json(name = "poster_image_id")     val posterImageId:    String? = null,
-    @Json(name = "backdrop_image_id")   val backdropImageId:  String? = null,
-    @Json(name = "parent_id")           val parentId:         String? = null,
-    @Json(name = "season_number")       val seasonNumber:     Int?    = null,
-    @Json(name = "episode_number")      val episodeNumber:    Int?    = null,
-    @Json(name = "user_data")           val userData:         UserDataDto? = null,
-    /** Inlined resume position in seconds — convenience over user_data. */
-    @Json(name = "position_seconds")    val positionSeconds:  Float?  = null,
-    @Json(name = "updated_at")          val updatedAt:        String? = null,
+    @Json(name = "position_ticks")   val positionTicks: Long?   = null,
+    @Json(name = "duration_ticks")   val durationTicks: Long?   = null,
+    @Json(name = "last_played_at")   val lastPlayedAt:  String? = null,
+    @Json(name = "parent_id")        val parentId:      String? = null,
+    /** 16:9 marketing still on movies; null on episodes (use backdrop). */
+    @Json(name = "thumb_url")        val thumbUrl:      String? = null,
+    @Json(name = "poster_url")       val posterUrl:     String? = null,
+    @Json(name = "backdrop_url")     val backdropUrl:   String? = null,
+    @Json(name = "logo_url")         val logoUrl:       String? = null,
+    /** Set on episodes — series-level art the home rail prefers. */
+    @Json(name = "series_id")        val seriesId:      String? = null,
+    @Json(name = "series_title")     val seriesTitle:   String? = null,
+    @Json(name = "series_year")      val seriesYear:    Int?    = null,
+    @Json(name = "season_index")     val seasonIndex:   Int?    = null,
+    @Json(name = "episode_index")    val episodeIndex:  Int?    = null,
+    @Json(name = "user_data")        val userData:      UserDataDto? = null,
 )
 
+/**
+ * /items/{id} response. Same envelope drift — verified against
+ * items.go::Get + the helpers it composes.
+ */
 @JsonClass(generateAdapter = true)
 data class ItemDetailDto(
     val id:    String,
     val type:  String?  = null,
     val title: String?  = null,
     val year:  Int?     = null,
-    val rating: Float?  = null,
-    val overview:                                String? = null,
-    val tagline:                                 String? = null,
-    val studio:                                  String? = null,
-    @Json(name = "studio_logo_url")     val studioLogoUrl:    String? = null,
-    val genres:                                  List<String> = emptyList(),
-    @Json(name = "runtime_minutes")     val runtimeMinutes:   Int?    = null,
-    @Json(name = "poster_image_id")     val posterImageId:    String? = null,
-    @Json(name = "backdrop_image_id")   val backdropImageId:  String? = null,
-    @Json(name = "user_data")           val userData:         UserDataDto? = null,
+    @Json(name = "community_rating") val communityRating: Float? = null,
+    val overview:                                          String? = null,
+    val tagline:                                           String? = null,
+    val studio:                                            String? = null,
+    @Json(name = "studio_logo_url")  val studioLogoUrl:   String? = null,
+    val genres:                                            List<String> = emptyList(),
+    @Json(name = "duration_ticks")   val durationTicks:   Long?    = null,
+    @Json(name = "poster_url")       val posterUrl:       String? = null,
+    @Json(name = "backdrop_url")     val backdropUrl:     String? = null,
+    @Json(name = "logo_url")         val logoUrl:         String? = null,
+    @Json(name = "user_data")        val userData:        UserDataDto? = null,
 )
 
 // ─── Home layout ─────────────────────────────────────────────────────────────
