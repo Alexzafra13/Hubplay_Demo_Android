@@ -57,44 +57,43 @@ import kotlinx.coroutines.delay
 /**
  * The big spotlight at the top of the Home screen.
  *
- * Two modes:
- *   - **Spotlight (default)**: auto-rotates through `spotlight` items
- *     every [autoRotateMs] ms. Pagination dots indicate position.
- *   - **Focused**: when a MediaCard further down the page is focused,
- *     [focusedOverride] is non-null and the hero crossfades to that
- *     item instead, pausing the auto-rotation. Releasing focus (the
- *     user scrolls back up to the hero, or onto a non-focusable area)
- *     resumes the spotlight from where it left off.
+ * Independent of what's focused below: auto-rotates through `spotlight`
+ * items every [autoRotateMs] ms with pagination dots. The previous
+ * version reacted to focus events from any card on the page — that
+ * created two UX problems:
  *
- * Trailer auto-play on focus is a future enhancement; today the hero
- * is backdrop + info + CTAs only. Trailer URLs from /items/{id}
- * (`trailer.key` + `trailer.site`) point at YouTube/Vimeo, which on
- * Android requires either an in-app WebView or kicking out to the
- * YouTube app — both worth a dedicated design pass.
+ *   1. The hero changed every time the user moved the D-pad, which
+ *      flashed and broke the visual rhythm. The web client doesn't
+ *      do this; it keeps the hero stable.
+ *   2. When the user scrolled back up to the hero from a rail, the
+ *      hero was sometimes mid-crossfade and the page felt jumpy.
+ *
+ * The right place for "show me info about THIS card" is a preview
+ * surface near the card itself (lateral panel à la Netflix) — that
+ * lives in a separate component and doesn't fight the hero for
+ * attention. The HomeViewModel still tracks `focusedItem` for that
+ * future use.
  */
 @Composable
 fun HeroSection(
     spotlight:        List<MediaItem>,
-    focusedOverride:  MediaItem?,
     onPlay:           (MediaItem) -> Unit,
     onDetails:        (MediaItem) -> Unit,
     modifier:         Modifier = Modifier,
     autoRotateMs:     Long     = 8_000L,
 ) {
-    if (spotlight.isEmpty() && focusedOverride == null) return
+    if (spotlight.isEmpty()) return
     var currentIdx by remember { mutableIntStateOf(0) }
 
-    // Auto-rotate only while no card is focused.
-    LaunchedEffect(spotlight, focusedOverride) {
-        if (focusedOverride != null || spotlight.size <= 1) return@LaunchedEffect
+    LaunchedEffect(spotlight) {
+        if (spotlight.size <= 1) return@LaunchedEffect
         while (true) {
             delay(autoRotateMs)
             currentIdx = (currentIdx + 1) % spotlight.size
         }
     }
 
-    val displayItem = focusedOverride
-        ?: spotlight.getOrNull(currentIdx.coerceAtMost(spotlight.lastIndex))
+    val displayItem = spotlight.getOrNull(currentIdx.coerceAtMost(spotlight.lastIndex))
         ?: return
 
     Box(
@@ -229,10 +228,8 @@ fun HeroSection(
             }
         }
 
-        // ── Pagination dots (right). Hidden while focus override is active
-        //     since the dots refer to the auto-rotated spotlight, not to
-        //     wherever the user is browsing. ──────────────────────────────
-        if (focusedOverride == null && spotlight.size > 1) {
+        // ── Pagination dots (right). ──────────────────────────────
+        if (spotlight.size > 1) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier

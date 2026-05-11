@@ -35,6 +35,47 @@ class HomeRepository(
         return api.getLiveNow(limit).data?.items.orEmpty().map { it.toMedia(server) }
     }
 
+    /**
+     * Per-user home layout. Returns the rail order + visibility the
+     * user configured on the web ("Personalizar inicio"). When no
+     * layout is stored the server synthesises a sensible default;
+     * either way we get a list of [HomeRailConfig] in display order.
+     */
+    suspend fun fetchHomeLayout(): List<HomeRailConfig> {
+        val data = api.getHomeLayout().data ?: return defaultHomeLayout()
+        return data.sections
+            .filter { it.visible }
+            .mapNotNull { section ->
+                HomeRailType.from(section.type)?.let { type ->
+                    HomeRailConfig(
+                        id        = section.id,
+                        type      = type,
+                        libraryId = section.libraryId,
+                        title     = railTitle(type, section.libraryName),
+                    )
+                }
+            }
+    }
+
+    private fun railTitle(type: HomeRailType, libraryName: String?): String = when (type) {
+        HomeRailType.ContinueWatching  -> "Continuar viendo"
+        HomeRailType.NextUp             -> "A continuación"
+        HomeRailType.Trending           -> "Tendencias"
+        HomeRailType.LiveNow            -> "En directo ahora"
+        HomeRailType.LatestInLibrary    -> libraryName?.let { "Lo último en $it" } ?: "Lo último"
+    }
+
+    /**
+     * Server-side fallback default — used when /me/home/layout returns
+     * a null or empty payload (cold-start user, network blip).
+     */
+    private fun defaultHomeLayout(): List<HomeRailConfig> = listOf(
+        HomeRailConfig("default-cw",       HomeRailType.ContinueWatching,   null, "Continuar viendo"),
+        HomeRailConfig("default-latest",   HomeRailType.LatestInLibrary,    null, "Lo último"),
+        HomeRailConfig("default-trending", HomeRailType.Trending,           null, "Tendencias"),
+        HomeRailConfig("default-live",     HomeRailType.LiveNow,            null, "En directo ahora"),
+    )
+
     suspend fun fetchItemDetail(itemId: String): MediaItem {
         val server = serverUrl()
         val data = api.getItem(itemId).data
@@ -206,4 +247,34 @@ data class HomeData(
     val latest:           List<MediaItem> = emptyList(),
     val trending:         List<MediaItem> = emptyList(),
     val liveNow:          List<MediaItem> = emptyList(),
+    val rails:            List<HomeRailConfig> = emptyList(),
 )
+
+/** A single rail's place in the home layout. */
+data class HomeRailConfig(
+    val id:        String,
+    val type:      HomeRailType,
+    val libraryId: String?,
+    val title:     String,
+)
+
+/**
+ * The kinds of rails the home page knows how to render. Mirrors the
+ * server's `HomeSection.type` enum but strips out the unknown values
+ * (anything new the server adds shows up as `null` in HomeRailType.from
+ * and the repo skips it — frontend-tolerant by design).
+ */
+enum class HomeRailType {
+    ContinueWatching, NextUp, Trending, LiveNow, LatestInLibrary;
+
+    companion object {
+        fun from(s: String): HomeRailType? = when (s) {
+            "continue_watching"  -> ContinueWatching
+            "next_up"            -> NextUp
+            "trending"           -> Trending
+            "live_now"           -> LiveNow
+            "latest_in_library"  -> LatestInLibrary
+            else                 -> null
+        }
+    }
+}

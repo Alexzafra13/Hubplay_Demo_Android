@@ -43,22 +43,29 @@ class HomeViewModel(
         _ui.value = _ui.value.copy(isLoading = true, error = null)
         viewModelScope.launch {
             // supervisorScope so a single rail's failure doesn't cancel
-            // the others. Each rail is wrapped in runCatching so its
-            // exception is captured locally and the rail simply renders
-            // empty — the page as a whole still paints with whichever
-            // rails came back.
+            // the others. Each rail is wrapped in safeFetch so its
+            // exception renders that rail empty without taking the
+            // page down with it.
             val data = supervisorScope {
+                val layoutDef = async {
+                    runCatching { repository.fetchHomeLayout() }
+                        .getOrElse {
+                            Log.w("HomeViewModel", "home layout fetch failed: ${it.message}")
+                            emptyList()
+                        }
+                }
                 val cw       = async { safeFetch("continueWatching") { repository.fetchContinueWatching() } }
                 val trending = async { safeFetch("trending")         { repository.fetchTrending() } }
                 val latest   = async { safeFetch("latest")           { repository.fetchLatest() } }
                 val liveNow  = async { safeFetch("liveNow")          { repository.fetchLiveNow() } }
-                listOf(cw, trending, latest, liveNow).awaitAll()
+                listOf(layoutDef, cw, trending, latest, liveNow).awaitAll()
                 HomeData(
                     hero             = trending.await().take(5),  // top 5 → hero spotlight
                     continueWatching = cw.await(),
                     latest           = latest.await(),
                     trending         = trending.await(),
                     liveNow          = liveNow.await(),
+                    rails            = layoutDef.await(),
                 )
             }
             _ui.value = HomeUiState(isLoading = false, data = data)

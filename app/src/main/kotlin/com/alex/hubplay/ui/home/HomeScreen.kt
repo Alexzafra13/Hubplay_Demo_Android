@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.alex.hubplay.data.HomeRailConfig
+import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.HeroSection
@@ -34,20 +34,17 @@ import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.home.components.TopNav
 
 /**
- * Home — the rich version.
+ * Home — rich layout matching the web client.
  *
- * Layout:
  *   [TopNav (sticky)]
- *   [Hero (rotating spotlight; focus-driven preview)]
- *   [Continuar viendo rail]
- *   [Lo último en tu librería rail]
- *   [Tendencias rail]
- *   [En directo ahora rail]
+ *   [Hero — auto-rotating Trending, INDEPENDENT of focus below]
+ *   [Rails in the order /me/home/layout returned, hidden ones skipped]
  *
- * Vertical scroll uses verticalScroll instead of LazyColumn because
- * the Hero is intentionally tall and its state (auto-rotate timer,
- * focused override) shouldn't reset when offscreen. With <10 rails the
- * perf cost is negligible.
+ * Hero stability matters: it doesn't react to which rail card is
+ * focused. The future "card focus preview" surface lives next to the
+ * card itself, not by hijacking the hero. Until that lands, the
+ * focused-item flow on the ViewModel is collected but not displayed —
+ * keeps the wiring ready without UX cost.
  */
 @Composable
 fun HomeScreen(
@@ -57,7 +54,6 @@ fun HomeScreen(
     onLogOut:    () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsState()
-    val focused by viewModel.focusedItem.collectAsState()
     var selectedTab by remember { mutableStateOf(Tab.Home) }
 
     Surface(
@@ -87,53 +83,88 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
                     HeroSection(
-                        spotlight        = ui.data.hero,
-                        focusedOverride  = focused,
-                        onPlay           = { onPlayItem(it.id, it.resumePosSec) },
-                        onDetails        = { onOpenItem(it.id) },
+                        spotlight = ui.data.hero,
+                        onPlay    = { onPlayItem(it.id, it.resumePosSec) },
+                        onDetails = { onOpenItem(it.id) },
                     )
 
-                    // Card style by rail — same convention as Plex / Apple TV:
-                    //   Continue Watching = 16:9 thumbs (you're picking up where
-                    //                       you left off, frame is the cue).
-                    //   Latest / Trending = 2:3 posters (browsing artwork).
-                    //   Live Now          = 16:9 (channel logo / live still).
-                    //
-                    // Tap intent also varies: Continue → straight to Player
-                    // with resume; everything else → Detail first; Live →
-                    // Player (no detail page for channels today).
-                    HomeRail(
-                        title     = "Continuar viendo",
-                        items     = ui.data.continueWatching,
-                        style     = CardStyle.Landscape,
-                        onFocused = viewModel::onCardFocused,
-                        onClick   = { onPlayItem(it.id, it.resumePosSec) },
-                    )
-                    HomeRail(
-                        title     = "Lo último en tu librería",
-                        items     = ui.data.latest,
-                        style     = CardStyle.Portrait,
-                        onFocused = viewModel::onCardFocused,
-                        onClick   = { onOpenItem(it.id) },
-                    )
-                    HomeRail(
-                        title     = "Tendencias",
-                        items     = ui.data.trending,
-                        style     = CardStyle.Portrait,
-                        onFocused = viewModel::onCardFocused,
-                        onClick   = { onOpenItem(it.id) },
-                    )
-                    HomeRail(
-                        title     = "En directo ahora",
-                        items     = ui.data.liveNow,
-                        style     = CardStyle.Landscape,
-                        onFocused = viewModel::onCardFocused,
-                        onClick   = { onPlayItem(it.id, 0L) },
-                    )
+                    // Render rails in the order the server (or default)
+                    // gave us. Empty rails self-hide inside HomeRail.
+                    ui.data.rails.forEach { config ->
+                        RenderRail(
+                            config     = config,
+                            data       = ui.data,
+                            onCardFocused = viewModel::onCardFocused,
+                            onOpenItem = onOpenItem,
+                            onPlayItem = onPlayItem,
+                        )
+                    }
+
                     Spacer(Modifier.height(40.dp))
                 }
             }
         }
+    }
+}
+
+/**
+ * Pick the right items + style + click intent for each rail kind.
+ *
+ *   Continue Watching / Next Up   → Landscape stills, tap = Player (resume).
+ *   Latest / Trending             → Portrait posters, tap = Detail.
+ *   Live Now                      → Landscape logos, tap = Player (no detail
+ *                                   page exists for a channel yet).
+ *
+ * `latest_in_library` rails (one per content library on the server)
+ * all share the same source today — fetchLatest returns a global mix.
+ * A future iteration can fetch per-libraryId.
+ */
+@Composable
+private fun RenderRail(
+    config:        HomeRailConfig,
+    data:          com.alex.hubplay.data.HomeData,
+    onCardFocused: (MediaItem) -> Unit,
+    onOpenItem:    (String) -> Unit,
+    onPlayItem:    (String, Long) -> Unit,
+) {
+    when (config.type) {
+        HomeRailType.ContinueWatching -> HomeRail(
+            title     = config.title,
+            items     = data.continueWatching,
+            style     = CardStyle.Landscape,
+            onFocused = onCardFocused,
+            onClick   = { onPlayItem(it.id, it.resumePosSec) },
+        )
+        HomeRailType.NextUp -> HomeRail(
+            // We don't fetch /me/next-up yet — render empty rather than
+            // breaking the layout when the user has it enabled.
+            title     = config.title,
+            items     = emptyList(),
+            style     = CardStyle.Landscape,
+            onFocused = onCardFocused,
+            onClick   = { onPlayItem(it.id, 0L) },
+        )
+        HomeRailType.Trending -> HomeRail(
+            title     = config.title,
+            items     = data.trending,
+            style     = CardStyle.Portrait,
+            onFocused = onCardFocused,
+            onClick   = { onOpenItem(it.id) },
+        )
+        HomeRailType.LatestInLibrary -> HomeRail(
+            title     = config.title,
+            items     = data.latest,
+            style     = CardStyle.Portrait,
+            onFocused = onCardFocused,
+            onClick   = { onOpenItem(it.id) },
+        )
+        HomeRailType.LiveNow -> HomeRail(
+            title     = config.title,
+            items     = data.liveNow,
+            style     = CardStyle.Landscape,
+            onFocused = onCardFocused,
+            onClick   = { onPlayItem(it.id, 0L) },
+        )
     }
 }
 
