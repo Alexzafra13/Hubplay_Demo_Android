@@ -30,12 +30,12 @@ class HomeRepository(
 
     suspend fun fetchLatest(limit: Int = 20): List<MediaItem> {
         val server = serverUrl()
-        return api.getLatest(limit).data.orEmpty().map { it.toMedia(server) }
+        return api.getLatest(limit).data?.items.orEmpty().map { it.toMedia(server) }
     }
 
     suspend fun fetchLiveNow(limit: Int = 10): List<MediaItem> {
         val server = serverUrl()
-        return api.getLiveNow(limit).data.orEmpty().map { it.toMedia(server) }
+        return api.getLiveNow(limit).data?.items.orEmpty().map { it.toMedia(server) }
     }
 
     /** Full item detail — used by the Detail screen. */
@@ -127,19 +127,26 @@ class HomeRepository(
         year         = year,
     )
 
-    private fun LiveNowChannelDto.toMedia(server: String): MediaItem = MediaItem(
-        id           = id,
-        kind         = MediaKind.LiveChannel,
-        title        = name.orEmpty(),
-        subtitle     = currentProgramTitle,
-        posterUrl    = logoUrl,
-        backdropUrl  = logoUrl,   // channels don't have backdrops; reuse the logo
-        logoUrl      = logoUrl,
-        overview     = currentProgramTitle,
-        genres       = emptyList(),
-        rating       = null,
-        year         = null,
-    )
+    private fun LiveNowChannelDto.toMedia(server: String): MediaItem {
+        // Channel logo is relative ("/api/v1/channels/{id}/logo") — make
+        // it absolute against the paired server.
+        val absoluteLogo = channelLogo?.let { path ->
+            if (path.startsWith("http")) path else "$server$path"
+        }
+        return MediaItem(
+            id           = channelId,
+            kind         = MediaKind.LiveChannel,
+            title        = channelName.orEmpty(),
+            subtitle     = programTitle,
+            posterUrl    = absoluteLogo,
+            backdropUrl  = absoluteLogo,   // channels have no backdrops; reuse the logo
+            logoUrl      = absoluteLogo,
+            overview     = programTitle,
+            genres       = emptyList(),
+            rating       = null,
+            year         = null,
+        )
+    }
 }
 
 // ─── Domain types ────────────────────────────────────────────────────────────

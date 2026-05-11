@@ -176,29 +176,50 @@ data class TrendingResponse(
     val data: TrendingPayload? = null,
 )
 
+/**
+ * Verified against the live HubPlay handler at me_home.go::LiveNow().
+ * Field names are NOT what the spec says — the backend ships its
+ * actual response shape and the openapi.yaml in the repo has drifted.
+ * When in doubt, trust the handler over the spec.
+ */
 @JsonClass(generateAdapter = true)
 data class LiveNowChannelDto(
-    val id:                              String,
-    val name:                            String?  = null,
-    val number:                          Int?     = null,
-    @Json(name = "library_id")           val libraryId:         String? = null,
-    @Json(name = "logo_url")             val logoUrl:           String? = null,
-    @Json(name = "current_program_title") val currentProgramTitle: String? = null,
-    @Json(name = "current_program_starts_at") val currentProgramStartsAt: String? = null,
-    @Json(name = "current_program_ends_at")   val currentProgramEndsAt:   String? = null,
+    @Json(name = "channel_id")     val channelId:       String,
+    @Json(name = "channel_name")   val channelName:     String?  = null,
+    @Json(name = "library_id")     val libraryId:       String?  = null,
+    @Json(name = "library_name")   val libraryName:     String?  = null,
+    @Json(name = "channel_logo")   val channelLogo:     String?  = null,  // relative path
+    @Json(name = "logo_initials")  val logoInitials:    String?  = null,  // fallback when no logo
+    @Json(name = "logo_bg")        val logoBg:          String?  = null,
+    @Json(name = "logo_fg")        val logoFg:          String?  = null,
+    @Json(name = "program_title")  val programTitle:    String?  = null,
+    @Json(name = "program_start")  val programStart:    String?  = null,
+    @Json(name = "program_end")    val programEnd:      String?  = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class LiveNowPayload(
+    val items: List<LiveNowChannelDto> = emptyList(),
+    val total: Int = 0,
 )
 
 @JsonClass(generateAdapter = true)
 data class LiveNowResponse(
-    val data: List<LiveNowChannelDto>? = null,
+    val data: LiveNowPayload? = null,
 )
 
 /**
- * /items/latest returns the array directly under `data` — different
- * shape than /me/home/trending which nests under `data.items`. Easy
- * to get wrong when copy-pasting; verified against openapi.yaml.
+ * /items/latest returns `{ data: { items, total, offset, limit } }` —
+ * verified against library.go::LatestItems(). The openapi.yaml claims
+ * `data: array` but the actual handler nests it under `items`.
  */
 @JsonClass(generateAdapter = true)
+data class LatestPayload(
+    val items: List<ItemSummaryDto> = emptyList(),
+    val total: Int = 0,
+)
+
+@JsonClass(generateAdapter = true)
 data class LatestResponse(
-    val data: List<ItemSummaryDto>? = null,
+    val data: LatestPayload? = null,
 )
