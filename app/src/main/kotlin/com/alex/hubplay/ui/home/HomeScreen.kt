@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.data.MediaItem
+import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.HeroSection
 import com.alex.hubplay.ui.home.components.HomeRail
 import com.alex.hubplay.ui.home.components.Tab
@@ -92,35 +93,41 @@ fun HomeScreen(
                         onDetails        = { onOpenItem(it.id) },
                     )
 
-                    // Continue Watching: tap goes straight to the player
-                    // (the user has already seen the detail page when they
-                    // started this item). Everything else opens Detail
-                    // first so the user can choose Play / Add-to-list /
-                    // browse cast etc. — Plex / Netflix pattern.
+                    // Card style by rail — same convention as Plex / Apple TV:
+                    //   Continue Watching = 16:9 thumbs (you're picking up where
+                    //                       you left off, frame is the cue).
+                    //   Latest / Trending = 2:3 posters (browsing artwork).
+                    //   Live Now          = 16:9 (channel logo / live still).
+                    //
+                    // Tap intent also varies: Continue → straight to Player
+                    // with resume; everything else → Detail first; Live →
+                    // Player (no detail page for channels today).
                     HomeRail(
                         title     = "Continuar viendo",
                         items     = ui.data.continueWatching,
+                        style     = CardStyle.Landscape,
                         onFocused = viewModel::onCardFocused,
                         onClick   = { onPlayItem(it.id, it.resumePosSec) },
                     )
                     HomeRail(
                         title     = "Lo último en tu librería",
                         items     = ui.data.latest,
+                        style     = CardStyle.Portrait,
                         onFocused = viewModel::onCardFocused,
                         onClick   = { onOpenItem(it.id) },
                     )
                     HomeRail(
                         title     = "Tendencias",
                         items     = ui.data.trending,
+                        style     = CardStyle.Portrait,
                         onFocused = viewModel::onCardFocused,
                         onClick   = { onOpenItem(it.id) },
                     )
                     HomeRail(
                         title     = "En directo ahora",
                         items     = ui.data.liveNow,
+                        style     = CardStyle.Landscape,
                         onFocused = viewModel::onCardFocused,
-                        // Live channels go straight to the player — there's
-                        // no detail page for a channel today.
                         onClick   = { onPlayItem(it.id, 0L) },
                     )
                     Spacer(Modifier.height(40.dp))

@@ -31,29 +31,41 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.ui.theme.Accent
 
 /**
- * 16:9 landscape card used in every home rail.
+ * Card aspect — what shape the artwork is.
  *
- * Focus behaviour mirrors Plex / Netflix / Prime on TV:
- *   - On focus the card scales 1.06×, the title brightens, and a teal
- *     accent border draws around it.
- *   - When focused it also calls back via `onFocused(item)` so the
- *     parent (HomeScreen → HeroSection) can crossfade the hero to
- *     this item's backdrop / overview.
- *   - Clicking (touch) or pressing center on a D-pad fires `onClick`.
+ *   Landscape  16:9  → episode stills (Continue Watching) and channel
+ *                       logos (Live Now). Title sits below.
+ *   Portrait   2:3   → movie / series posters. The Plex / Netflix /
+ *                       Apple TV "wall of posters" pattern. Card is
+ *                       narrower so more posters fit per row.
+ */
+enum class CardStyle(val aspect: Float, val defaultWidth: Dp) {
+    Landscape(16f / 9f, 220.dp),
+    Portrait(2f / 3f, 150.dp),
+}
+
+/**
+ * Reusable card used in every home rail.
+ *
+ * Focus behaviour mirrors Plex / Netflix / Apple TV on TV: a teal
+ * border draws around the artwork and the card scales 1.06×. Title /
+ * subtitle text colour does NOT change on focus — that read as visual
+ * noise in early testing; the border + scale is enough.
  */
 @Composable
 fun MediaCard(
     item:        MediaItem,
     onFocused:   (MediaItem) -> Unit,
     onClick:     (MediaItem) -> Unit,
-    modifier:    Modifier = Modifier,
-    width:       androidx.compose.ui.unit.Dp = 220.dp,
+    style:       CardStyle = CardStyle.Landscape,
+    modifier:    Modifier  = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -62,9 +74,17 @@ fun MediaCard(
         label = "media-card-scale",
     )
 
+    // Pick the right artwork for the aspect:
+    //   Portrait  → poster (vertical caratula)
+    //   Landscape → backdrop (16:9 still); fall back to poster if absent
+    val imageUrl = when (style) {
+        CardStyle.Portrait  -> item.posterUrl ?: item.backdropUrl
+        CardStyle.Landscape -> item.backdropUrl ?: item.posterUrl
+    }
+
     Column(
         modifier = modifier
-            .width(width)
+            .width(style.defaultWidth)
             .scale(scale)
             .onFocusChanged { state ->
                 focused = state.isFocused
@@ -75,7 +95,7 @@ fun MediaCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(16f / 9f)
+                .aspectRatio(style.aspect)
                 .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .then(
@@ -87,7 +107,7 @@ fun MediaCard(
                 ),
         ) {
             AsyncImage(
-                model              = item.backdropUrl ?: item.posterUrl,
+                model              = imageUrl,
                 contentDescription = item.title,
                 contentScale       = ContentScale.Crop,
                 modifier           = Modifier.fillMaxSize(),
@@ -106,11 +126,10 @@ fun MediaCard(
         Text(
             text       = item.title,
             style      = MaterialTheme.typography.bodyMedium,
-            color      = if (focused) MaterialTheme.colorScheme.onBackground
-                         else        MaterialTheme.colorScheme.onSurfaceVariant,
+            color      = MaterialTheme.colorScheme.onBackground,
             maxLines   = 1,
             overflow   = TextOverflow.Ellipsis,
-            fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Medium,
+            fontWeight = FontWeight.Medium,
         )
         item.subtitle?.let { sub ->
             Text(

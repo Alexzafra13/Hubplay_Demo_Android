@@ -19,6 +19,9 @@ import com.alex.hubplay.data.MediaItem
  * A titled horizontal rail. Renders nothing when empty (the Plex
  * pattern — empty rails feel like broken UI, the right thing is to
  * not render them at all).
+ *
+ * `style` decides the card aspect: pass `Portrait` for movie/series
+ * caratulas, `Landscape` for episode stills and channel logos.
  */
 @Composable
 fun HomeRail(
@@ -26,6 +29,7 @@ fun HomeRail(
     items:     List<MediaItem>,
     onFocused: (MediaItem) -> Unit,
     onClick:   (MediaItem) -> Unit,
+    style:     CardStyle = CardStyle.Landscape,
     modifier:  Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
@@ -44,6 +48,7 @@ fun HomeRail(
             items(items, key = { it.id }) { item ->
                 MediaCard(
                     item      = item,
+                    style     = style,
                     onFocused = onFocused,
                     onClick   = onClick,
                 )
