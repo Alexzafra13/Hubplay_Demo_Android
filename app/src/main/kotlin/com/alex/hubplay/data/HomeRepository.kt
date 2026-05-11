@@ -22,12 +22,41 @@ class HomeRepository(
     }
 
     suspend fun fetchTrending(limit: Int = 12): List<MediaItem> {
-        return api.getTrending(limit).data?.items.orEmpty().map { it.toMedia() }
+        val server = serverUrl()
+        return api.getTrending(limit).data?.items.orEmpty().map { it.toMedia(server) }
     }
 
-    suspend fun fetchLatest(limit: Int = 20): List<MediaItem> {
+    /**
+     * Latest items in a specific library, filtered by content type.
+     *
+     * Why both: passing `library_id` alone returns whatever was added
+     * most recently — including individual episodes when a series
+     * library got new content. The home rail wants the *series* card
+     * with a "+N nuevos episodios" hint instead, which the server
+     * synthesises when `type=series` + a single library_id are both
+     * set. Same idea for movie libraries: `type=movie` strips out
+     * orphan episodes that might exist in a mixed library.
+     */
+    suspend fun fetchLatest(
+        libraryId: String? = null,
+        type:      String? = null,
+        limit:     Int     = 20,
+    ): List<MediaItem> {
         val server = serverUrl()
-        return api.getLatest(limit).data?.items.orEmpty().map { it.toMedia(server) }
+        return api.getLatest(limit, libraryId, type)
+            .data?.items.orEmpty()
+            .map { it.toMedia(server) }
+    }
+
+    /**
+     * Library id → content_type ("movies" / "shows" / "livetv" / "mixed").
+     * The home layout rails reference libraries by id; we need the type
+     * to pick the right `type=` filter for `/items/latest`.
+     */
+    suspend fun fetchLibraries(): Map<String, String> {
+        return api.getLibraries().data.orEmpty().associate { lib ->
+            lib.id to (lib.contentType ?: "mixed")
+        }
     }
 
     suspend fun fetchLiveNow(limit: Int = 10): List<MediaItem> {
@@ -159,18 +188,19 @@ class HomeRepository(
     )
 
     /**
-     * Trending items already carry absolute URLs from the server (they
-     * pass through a separate enrichment path). The other rails get
-     * relative paths and we glue the server URL on this side.
+     * Trending items also come back with relative URLs — verified
+     * against me_home.go::Trending(). The earlier assumption that
+     * trending was "already absolute" was wrong; pass them through
+     * absolutize() like every other rail.
      */
-    private fun TrendingItemDto.toMedia(): MediaItem = MediaItem(
+    private fun TrendingItemDto.toMedia(server: String): MediaItem = MediaItem(
         id           = id,
         kind         = MediaKind.from(type),
         title        = title.orEmpty(),
         subtitle     = year?.toString(),
-        posterUrl    = posterUrl,
-        backdropUrl  = backdropUrl,
-        logoUrl      = logoUrl,
+        posterUrl    = absolutize(posterUrl, server),
+        backdropUrl  = absolutize(backdropUrl, server),
+        logoUrl      = absolutize(logoUrl, server),
         overview     = overview,
         genres       = genres,
         rating       = communityRating,
@@ -244,10 +274,16 @@ data class MediaItem(
 data class HomeData(
     val hero:             List<MediaItem> = emptyList(),
     val continueWatching: List<MediaItem> = emptyList(),
-    val latest:           List<MediaItem> = emptyList(),
     val trending:         List<MediaItem> = emptyList(),
     val liveNow:          List<MediaItem> = emptyList(),
     val rails:            List<HomeRailConfig> = emptyList(),
+    /**
+     * Per-rail latest items, keyed by HomeRailConfig.id. Each
+     * `latest_in_library` rail in the layout gets its own entry,
+     * fetched with the library_id + type=movie|series filter so the
+     * card shape matches what the user expects (no episode pollution).
+     */
+    val latestByRailId:   Map<String, List<MediaItem>> = emptyMap(),
 )
 
 /** A single rail's place in the home layout. */

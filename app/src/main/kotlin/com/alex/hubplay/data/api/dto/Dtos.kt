@@ -254,3 +254,17 @@ data class LatestPayload(
 data class LatestResponse(
     val data: LatestPayload? = null,
 )
+
+// ─── Libraries ──────────────────────────────────────────────────────────────
+
+@JsonClass(generateAdapter = true)
+data class LibraryDto(
+    val id:                          String,
+    val name:                        String? = null,
+    @Json(name = "content_type")     val contentType: String? = null,  // movies | shows | livetv | mixed
+)
+
+@JsonClass(generateAdapter = true)
+data class LibrariesResponse(
+    val data: List<LibraryDto>? = null,
+)

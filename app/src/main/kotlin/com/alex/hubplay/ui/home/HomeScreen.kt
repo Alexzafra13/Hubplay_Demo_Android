@@ -28,6 +28,7 @@ import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.ui.home.components.CardStyle
+import com.alex.hubplay.ui.home.components.FocusedItemPreview
 import com.alex.hubplay.ui.home.components.HeroSection
 import com.alex.hubplay.ui.home.components.HomeRail
 import com.alex.hubplay.ui.home.components.Tab
@@ -54,6 +55,7 @@ fun HomeScreen(
     onLogOut:    () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsState()
+    val focused by viewModel.focusedItem.collectAsState()
     var selectedTab by remember { mutableStateOf(Tab.Home) }
 
     Surface(
@@ -87,6 +89,12 @@ fun HomeScreen(
                         onPlay    = { onPlayItem(it.id, it.resumePosSec) },
                         onDetails = { onOpenItem(it.id) },
                     )
+
+                    // Lateral preview between Hero and the rails.
+                    // Collapses to 0dp when nothing is focused, so the
+                    // page layout below doesn't jump unless there's
+                    // actually something to preview.
+                    FocusedItemPreview(item = focused)
 
                     // Render rails in the order the server (or default)
                     // gave us. Empty rails self-hide inside HomeRail.
@@ -153,7 +161,11 @@ private fun RenderRail(
         )
         HomeRailType.LatestInLibrary -> HomeRail(
             title     = config.title,
-            items     = data.latest,
+            // Each library has its own filtered list — keyed by the
+            // rail config id so re-orders / new libraries on the
+            // server's "Personalizar inicio" page don't desync the
+            // mapping.
+            items     = data.latestByRailId[config.id].orEmpty(),
             style     = CardStyle.Portrait,
             onFocused = onCardFocused,
             onClick   = { onOpenItem(it.id) },

@@ -4,9 +4,11 @@ import com.alex.hubplay.data.api.dto.ContinueWatchingResponse
 import com.alex.hubplay.data.api.dto.HomeLayoutResponse
 import com.alex.hubplay.data.api.dto.ItemDetailResponse
 import com.alex.hubplay.data.api.dto.LatestResponse
+import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
+import retrofit2.http.Query
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Path
@@ -36,9 +38,24 @@ interface HubplayApi {
     @GET("me/home/trending")
     suspend fun getTrending(@Query("limit") limit: Int = 12): TrendingResponse
 
-    /** GET /api/v1/items/latest — newest items across the user's libraries. */
+    /**
+     * GET /api/v1/items/latest — newest items in a library.
+     *
+     * - When `libraryId` is set + `type=series`, the server returns
+     *   activity-aware ordering (latest series with new episodes).
+     * - Without `type`, the server mixes movies + series + episodes.
+     *   Always pass `type` so episodes don't pollute Latest rails.
+     */
     @GET("items/latest")
-    suspend fun getLatest(@Query("limit") limit: Int = 20): LatestResponse
+    suspend fun getLatest(
+        @Query("limit")      limit:     Int     = 20,
+        @Query("library_id") libraryId: String? = null,
+        @Query("type")       type:      String? = null,
+    ): LatestResponse
+
+    /** GET /api/v1/libraries — used to map library_id → content_type. */
+    @GET("libraries")
+    suspend fun getLibraries(): LibrariesResponse
 
     /** GET /api/v1/me/home/live-now — channels currently broadcasting. */
     @GET("me/home/live-now")

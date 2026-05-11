@@ -47,6 +47,10 @@ class HomeViewModel(
             // exception renders that rail empty without taking the
             // page down with it.
             val data = supervisorScope {
+                // Phase 1 — fetch the page-level dependencies in parallel.
+                // We need both `layout` (which rails to render and in
+                // what order) AND `libraries` (id → content_type) before
+                // we can fan out the per-library Latest fetches.
                 val layoutDef = async {
                     runCatching { repository.fetchHomeLayout() }
                         .getOrElse {
@@ -54,22 +58,60 @@ class HomeViewModel(
                             emptyList()
                         }
                 }
+                val librariesDef = async {
+                    runCatching { repository.fetchLibraries() }
+                        .getOrElse {
+                            Log.w("HomeViewModel", "libraries fetch failed: ${it.message}")
+                            emptyMap()
+                        }
+                }
                 val cw       = async { safeFetch("continueWatching") { repository.fetchContinueWatching() } }
                 val trending = async { safeFetch("trending")         { repository.fetchTrending() } }
-                val latest   = async { safeFetch("latest")           { repository.fetchLatest() } }
                 val liveNow  = async { safeFetch("liveNow")          { repository.fetchLiveNow() } }
-                listOf(layoutDef, cw, trending, latest, liveNow).awaitAll()
+
+                val layout    = layoutDef.await()
+                val libraries = librariesDef.await()
+
+                // Phase 2 — for each `latest_in_library` rail, fan out
+                // a fetch with the right library_id + type filter so we
+                // get the right shape of card (movies → posters of
+                // movies; shows → posters of series with new-episode
+                // counts via the activity-aware path).
+                val latestRailFetches = layout
+                    .filter { it.type == HomeRailType.LatestInLibrary }
+                    .map { config ->
+                        async {
+                            val type = libraries[config.libraryId]?.toLatestType()
+                            val items = safeFetch("latest:${config.libraryId ?: "all"}") {
+                                repository.fetchLatest(libraryId = config.libraryId, type = type)
+                            }
+                            config.id to items
+                        }
+                    }
+                val latestByRailId = latestRailFetches.awaitAll().toMap()
+
                 HomeData(
-                    hero             = trending.await().take(5),  // top 5 → hero spotlight
+                    hero             = trending.await().take(5),
                     continueWatching = cw.await(),
-                    latest           = latest.await(),
                     trending         = trending.await(),
                     liveNow          = liveNow.await(),
-                    rails            = layoutDef.await(),
+                    rails            = layout,
+                    latestByRailId   = latestByRailId,
                 )
             }
             _ui.value = HomeUiState(isLoading = false, data = data)
         }
+    }
+
+    /**
+     * Library content_type → /items/latest `type=` filter.
+     * Returns null when the type isn't useful (mixed / unknown / livetv);
+     * the handler then defaults to its own ordering.
+     */
+    private fun String.toLatestType(): String? = when (this) {
+        "movies" -> "movie"
+        "shows"  -> "series"
+        else     -> null
     }
 
     private inline fun safeFetch(label: String, block: () -> List<MediaItem>): List<MediaItem> {
@@ -82,13 +124,18 @@ class HomeViewModel(
     /**
      * Drops the very first focus event we see after Home loads. Compose's
      * LazyRow auto-grants focus to its first visible item on initial
-     * composition (so a D-pad user can start scrolling), but we don't
-     * want that to override the spotlight before the user has actually
-     * navigated anywhere.
+     * composition (so a D-pad user can start scrolling); we don't want
+     * that auto-focus to summon the lateral preview before the user
+     * has navigated anywhere.
      */
     private var firstFocusConsumed: Boolean = false
 
-    /** Called from MediaCard when it gains focus. Hero observes and crossfades. */
+    /**
+     * Called from MediaCard when it gains focus. The Home screen's
+     * FocusedItemPreview observes [focusedItem] and slides in with the
+     * item's backdrop + meta + overview. The Hero is independent and
+     * does NOT react to this signal — see HeroSection.
+     */
     fun onCardFocused(item: MediaItem?) {
         if (!firstFocusConsumed) {
             firstFocusConsumed = true
