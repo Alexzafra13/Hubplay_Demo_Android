@@ -10,14 +10,22 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.alex.hubplay.data.AppContainer
+import com.alex.hubplay.data.MediaKind
+import com.alex.hubplay.ui.catalog.CatalogScreen
+import com.alex.hubplay.ui.catalog.CatalogViewModel
+import com.alex.hubplay.ui.catalog.LiveChannelCatalogCard
+import com.alex.hubplay.ui.catalog.PortraitCatalogCard
 import com.alex.hubplay.ui.detail.DetailScreen
 import com.alex.hubplay.ui.detail.DetailViewModel
 import com.alex.hubplay.ui.home.HomeScreen
 import com.alex.hubplay.ui.home.HomeViewModel
+import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.login.LoginScreen
 import com.alex.hubplay.ui.login.LoginViewModel
 import com.alex.hubplay.ui.player.PlayerScreen
 import com.alex.hubplay.ui.player.PlayerViewModel
+import com.alex.hubplay.ui.series.SeriesScreen
+import com.alex.hubplay.ui.series.SeriesViewModel
 
 @Composable
 fun HubplayNavGraph(
@@ -46,25 +54,112 @@ fun HubplayNavGraph(
             )
         }
 
+        // Helper closures shared between Home / Movies / Series / LiveTv
+        // so each surface uses the same navigation rules.
+        val openItem: (String, MediaKind) -> Unit = { itemId, kind ->
+            val route = if (kind == MediaKind.Series)
+                Route.Series.route(itemId)
+            else
+                Route.Detail.route(itemId)
+            navController.navigate(route)
+        }
+        val playItem: (String, Long) -> Unit = { itemId, resumePosSec ->
+            navController.navigate(Route.Player.route(itemId, resumePosSec))
+        }
+        val logOut: () -> Unit = {
+            container.tokenStore.clearBlocking()
+            navController.navigate(Route.Login.path) {
+                popUpTo(Route.Home.path) { inclusive = true }
+            }
+        }
+        // Tab navigation between Home / Movies / Series / LiveTv. Uses
+        // singleTop + restoreState so jumping back to a tab keeps its
+        // scroll position and pulls don't pile up in the back stack.
+        val navigateToTab: (Tab) -> Unit = { tab ->
+            val target = when (tab) {
+                Tab.Home   -> Route.Home.path
+                Tab.Movies -> Route.Movies.path
+                Tab.Series -> Route.SeriesList.path
+                Tab.LiveTv -> Route.LiveTv.path
+            }
+            navController.navigate(target) {
+                popUpTo(Route.Home.path) {
+                    saveState = true
+                    inclusive = false
+                }
+                launchSingleTop = true
+                restoreState    = true
+            }
+        }
+
         // ── Home ─────────────────────────────────────────────────────
         composable(Route.Home.path) {
             val viewModel = viewModel<HomeViewModel>(
                 factory = HomeViewModel.factory(container.homeRepository),
             )
             HomeScreen(
-                viewModel  = viewModel,
-                onOpenItem = { itemId ->
-                    navController.navigate(Route.Detail.route(itemId))
-                },
-                onPlayItem = { itemId, resumePosSec ->
-                    navController.navigate(Route.Player.route(itemId, resumePosSec))
-                },
-                onLogOut   = {
-                    container.tokenStore.clearBlocking()
-                    navController.navigate(Route.Login.path) {
-                        popUpTo(Route.Home.path) { inclusive = true }
-                    }
-                },
+                viewModel       = viewModel,
+                onOpenItem      = openItem,
+                onPlayItem      = playItem,
+                onNavigateToTab = navigateToTab,
+                onLogOut        = logOut,
+            )
+        }
+
+        // ── Movies catalog ───────────────────────────────────────────
+        composable(Route.Movies.path) {
+            val vm = viewModel<CatalogViewModel>(
+                factory = CatalogViewModel.factory(container.homeRepository, CatalogViewModel.Source.Movies),
+            )
+            val ui by vm.ui.collectAsState()
+            CatalogScreen(
+                selectedTab   = Tab.Movies,
+                title         = "Películas",
+                items         = ui.items,
+                isLoading     = ui.isLoading,
+                error         = ui.error,
+                onRetry       = vm::load,
+                onTabSelected = navigateToTab,
+                onLogOut      = logOut,
+                cardContent   = { item -> PortraitCatalogCard(item, openItem) },
+            )
+        }
+
+        // ── Series catalog ───────────────────────────────────────────
+        composable(Route.SeriesList.path) {
+            val vm = viewModel<CatalogViewModel>(
+                factory = CatalogViewModel.factory(container.homeRepository, CatalogViewModel.Source.Series),
+            )
+            val ui by vm.ui.collectAsState()
+            CatalogScreen(
+                selectedTab   = Tab.Series,
+                title         = "Series",
+                items         = ui.items,
+                isLoading     = ui.isLoading,
+                error         = ui.error,
+                onRetry       = vm::load,
+                onTabSelected = navigateToTab,
+                onLogOut      = logOut,
+                cardContent   = { item -> PortraitCatalogCard(item, openItem) },
+            )
+        }
+
+        // ── Live TV catalog ──────────────────────────────────────────
+        composable(Route.LiveTv.path) {
+            val vm = viewModel<CatalogViewModel>(
+                factory = CatalogViewModel.factory(container.homeRepository, CatalogViewModel.Source.LiveTv),
+            )
+            val ui by vm.ui.collectAsState()
+            CatalogScreen(
+                selectedTab   = Tab.LiveTv,
+                title         = "TV en vivo",
+                items         = ui.items,
+                isLoading     = ui.isLoading,
+                error         = ui.error,
+                onRetry       = vm::load,
+                onTabSelected = navigateToTab,
+                onLogOut      = logOut,
+                cardContent   = { item -> LiveChannelCatalogCard(item) { id -> playItem(id, 0L) } },
             )
         }
 
@@ -85,6 +180,26 @@ fun HubplayNavGraph(
                     navController.navigate(Route.Player.route(id, resume))
                 },
                 onBack    = { navController.popBackStack() },
+            )
+        }
+
+        // ── Series ───────────────────────────────────────────────────
+        composable(
+            route     = Route.Series.path,
+            arguments = listOf(
+                navArgument(Route.Series.ARG_SERIES_ID) { type = NavType.StringType },
+            ),
+        ) { entry ->
+            val seriesId  = entry.arguments?.getString(Route.Series.ARG_SERIES_ID) ?: return@composable
+            val viewModel = viewModel<SeriesViewModel>(
+                factory = SeriesViewModel.factory(container.homeRepository, seriesId),
+            )
+            SeriesScreen(
+                viewModel     = viewModel,
+                onPlayEpisode = { id, resume ->
+                    navController.navigate(Route.Player.route(id, resume))
+                },
+                onBack        = { navController.popBackStack() },
             )
         }
 

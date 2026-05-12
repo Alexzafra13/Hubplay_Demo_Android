@@ -40,6 +40,13 @@ coroutines         = "1.9.0"
 # ─── Image loading ──────────────────────────────────────────────────────────
 coil               = "3.0.4"          # Coil 3 stable (group is io.coil-kt.coil3)
 
+# ─── YouTube embed (trailer in series hero) ─────────────────────────────────
+# Dropped the android-youtube-player wrapper in favour of a plain WebView
+# embedding the same iframe the web client uses — the wrapper's
+# onStateChange callbacks never fired on Android TV WebViews, so the
+# watchdog always tripped. WebView gives us mediaPlaybackRequiresUserGesture
+# control directly, which is enough to make autoplay-muted work.
+
 # ─── Tests ──────────────────────────────────────────────────────────────────
 junit              = "4.13.2"
 androidxTestExt    = "1.2.1"

@@ -28,7 +28,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.activity.compose.BackHandler
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.player.HubplayPlayer
@@ -70,6 +72,13 @@ fun PlayerScreen(
         onDispose { player.release() }
     }
 
+    // Hardware Back key — the PlayerView with useController=true
+    // swallows D-pad key events for its internal controls, so the
+    // floating IconButton below never receives D-pad focus. BackHandler
+    // intercepts the remote's Back button at the Activity level and
+    // takes us out of the player even while the controls are hidden.
+    BackHandler(onBack = onBack)
+
     Box(
         modifier         = Modifier.fillMaxSize().background(Color.Black),
         contentAlignment = Alignment.Center,
@@ -81,12 +90,27 @@ fun PlayerScreen(
                     this.player = player.exoPlayer
                     useController = true
                     setKeepContentOnPlayerReset(true)
+                    // FIT keeps the stream's native aspect ratio (no
+                    // crop, no stretch). Some IPTV streams come with
+                    // odd SAR / non-standard resolutions and any zoom
+                    // mode would crop the picture — defaulting to FIT
+                    // shows it as the broadcaster intended, with bars
+                    // when the source aspect doesn't match the screen.
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    // Show the play/pause/seek bar from the first frame
+                    // so users on a TV remote always see the affordance
+                    // — auto-hide is good on phones with touch, bad on
+                    // a 10ft viewing distance.
+                    controllerShowTimeoutMs = 4_000
+                    controllerAutoShow      = true
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                 }
             },
         )
 
-        // Top-left back button overlay. Sits above the player surface
-        // so the user always has an exit even while controls are hidden.
+        // Top-left back button overlay. Useful when running with a
+        // touchscreen / mouse where there's no hardware Back; on a TV
+        // remote the BackHandler above does the actual job.
         IconButton(
             onClick  = onBack,
             modifier = Modifier.align(Alignment.TopStart).padding(8.dp),

@@ -1,5 +1,6 @@
 package com.alex.hubplay.ui.player
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 /**
  * Resolves the playback decision for an item: hits /items/{id} for the
@@ -31,35 +33,85 @@ class PlayerViewModel(
 
     private suspend fun resolve() {
         val capabilities = ClientCapabilities.probe()
+        Log.d(TAG, "resolve itemId=$itemId resume=$resumePosSec caps=$capabilities")
 
-        // Fire both calls; if either fails we surface a friendly error.
-        val item = runCatching { api.getItem(itemId) }.getOrNull()?.data
-        val info = runCatching { api.getStreamInfo(itemId, capabilities) }.getOrNull()?.data
+        // Fetch the title-bar metadata. Non-fatal: 404 here is expected
+        // when the id is actually a TV channel (channels live in a
+        // different table than items).
+        val itemResult = runCatching { api.getItem(itemId).data }
+        val item = itemResult.getOrNull()
 
-        // Pick the right URL for the strategy:
-        //  - direct_play  → original file with Range; ExoPlayer extractors handle it
-        //  - direct_stream / transcode → HLS .m3u8 master playlist
-        val isDirectPlay = info?.strategy == "direct_play"
-        val streamUrl = if (isDirectPlay) info?.directUrl ?: info?.masterPlaylistUrl
-                        else              info?.masterPlaylistUrl
+        // Try the item path first. Channel ids 404 here; we use the
+        // HTTP code below to decide whether to fall back to channel
+        // playback or surface an error.
+        val infoResult = runCatching { api.getStreamInfo(itemId, capabilities).data }
+        val info       = infoResult.getOrNull()
+        val infoErr    = infoResult.exceptionOrNull()
+        val infoCode   = (infoErr as? HttpException)?.code()
 
-        if (streamUrl.isNullOrBlank()) {
-            _ui.value = _ui.value.copy(error = "No se pudo obtener la URL de reproducción.")
+        if (info != null) {
+            // ── Item path (movies / episodes) ─────────────────────────────
+            // The server returns only the playback method — the client
+            // builds the URLs itself (mirrors web's usePlayback.ts):
+            //   direct_play   → /stream/{id}/direct       (progressive, Range)
+            //   direct_stream → /stream/{id}/master.m3u8  (HLS remux)
+            //   transcode     → /stream/{id}/master.m3u8  (HLS transcoded)
+            val isDirectPlay = info.method == "direct_play"
+            val streamUrl    = if (isDirectPlay) "/api/v1/stream/$itemId/direct"
+                               else              "/api/v1/stream/$itemId/master.m3u8"
+            Log.d(TAG, "item path method=${info.method} container=${info.container} → $streamUrl")
+
+            _ui.value = _ui.value.copy(
+                title       = item?.title ?: "Reproduciendo…",
+                startParams = PlayerStartParams(
+                    streamUrl    = streamUrl,
+                    resumePosSec = resumePosSec,
+                    isHls        = !isDirectPlay,
+                ),
+                error       = null,
+            )
             return
         }
 
-        _ui.value = _ui.value.copy(
-            title         = item?.title ?: "Reproduciendo…",
-            startParams   = PlayerStartParams(
-                streamUrl     = streamUrl,
-                resumePosSec  = resumePosSec,
-                isHls         = !isDirectPlay,
-            ),
-            error         = null,
-        )
+        // /stream/{id}/info returned 404 → the id is most likely a
+        // TV channel. Channels expose their stream via
+        // `/api/v1/channels/{id}/stream` (HLS transmuxed by the server,
+        // ground truth in iptv_channels.go::toChannelDTO). Same fallback
+        // the web client effectively does — it never hits /stream/info
+        // for channels because the LiveTV view holds the stream_url on
+        // the channel object.
+        if (infoCode == 404) {
+            Log.d(TAG, "channel fallback for $itemId (item 404 + stream-info 404)")
+            _ui.value = _ui.value.copy(
+                title       = item?.title ?: "Canal en vivo",
+                startParams = PlayerStartParams(
+                    streamUrl    = "/api/v1/channels/$itemId/stream",
+                    resumePosSec = 0L,           // live can't resume
+                    isHls        = true,
+                ),
+                error       = null,
+            )
+            return
+        }
+
+        // Any other failure — surface the real reason rather than the
+        // old "could not get the URL" black box.
+        val msg = when {
+            infoErr != null -> "Error pidiendo /stream/$itemId/info: ${describe(infoErr)}"
+            else            -> "El server devolvió /stream/$itemId/info sin envelope `data`."
+        }
+        Log.e(TAG, "resolve failed: $msg", infoErr)
+        _ui.value = _ui.value.copy(title = item?.title, error = msg)
+    }
+
+    private fun describe(t: Throwable): String = when (t) {
+        is HttpException -> "HTTP ${t.code()} ${t.message()}"
+        else             -> "${t.javaClass.simpleName}: ${t.message ?: "sin mensaje"}"
     }
 
     companion object {
+        private const val TAG = "PlayerViewModel"
+
         fun factory(api: HubplayApi, itemId: String, resumePosSec: Long) =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

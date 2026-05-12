@@ -1,7 +1,10 @@
 package com.alex.hubplay.ui.home.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountCircle
@@ -34,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -113,11 +119,27 @@ fun TopNav(
 
 @Composable
 private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit) {
+    // D-pad focus visual: subtle scale + Accent border so a TV user
+    // can see which tab the remote is hovering over. The selected
+    // background (AccentSoft) stays independent so the user can tell
+    // "which tab is active" vs "which tab the cursor is on".
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue   = if (focused) 1.06f else 1.0f,
+        animationSpec = tween(180),
+        label         = "nav-tab-scale",
+    )
     Box(
         modifier = Modifier
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .scale(scale)
+            .clip(RoundedCornerShape(8.dp))
+            .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onClick)
             .background(if (selected) AccentSoft else Color.Transparent)
+            .then(
+                if (focused) Modifier.border(2.dp, Accent, RoundedCornerShape(8.dp))
+                else Modifier,
+            )
             .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
         Text(

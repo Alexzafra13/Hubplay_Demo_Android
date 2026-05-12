@@ -2,11 +2,13 @@ package com.alex.hubplay.ui.home.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,11 +37,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -204,8 +209,23 @@ fun HeroSection(
                     Spacer(Modifier.height(20.dp))
                 } ?: Spacer(Modifier.height(20.dp))
 
-                // CTAs
+                // CTAs — TV focus visuals (border + scale) mirror MediaCard.
+                // No FocusRequester here: HomeRail's LazyRow grabs initial
+                // focus by default, and HomeViewModel's firstFocusConsumed
+                // absorbs that event. Users reach the Hero via D-pad up.
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    var playFocused by remember { mutableStateOf(false) }
+                    var detailsFocused by remember { mutableStateOf(false) }
+                    val playScale by animateFloatAsState(
+                        targetValue   = if (playFocused) 1.06f else 1.0f,
+                        animationSpec = tween(180),
+                        label         = "hero-play-scale",
+                    )
+                    val detailsScale by animateFloatAsState(
+                        targetValue   = if (detailsFocused) 1.06f else 1.0f,
+                        animationSpec = tween(180),
+                        label         = "hero-details-scale",
+                    )
                     Button(
                         onClick = { onPlay(item) },
                         shape   = RoundedCornerShape(10.dp),
@@ -213,6 +233,14 @@ fun HeroSection(
                             containerColor = Color.White,
                             contentColor   = OnAccent,
                         ),
+                        modifier = Modifier
+                            .onFocusChanged { playFocused = it.isFocused }
+                            .scale(playScale)
+                            .then(
+                                if (playFocused)
+                                    Modifier.border(2.dp, Accent, RoundedCornerShape(10.dp))
+                                else Modifier,
+                            ),
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
@@ -221,6 +249,14 @@ fun HeroSection(
                     OutlinedButton(
                         onClick = { onDetails(item) },
                         shape   = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .onFocusChanged { detailsFocused = it.isFocused }
+                            .scale(detailsScale)
+                            .then(
+                                if (detailsFocused)
+                                    Modifier.border(2.dp, Accent, RoundedCornerShape(10.dp))
+                                else Modifier,
+                            ),
                     ) {
                         Text("Ver detalles")
                     }

@@ -27,10 +27,12 @@ import androidx.compose.ui.unit.dp
 import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.MediaItem
+import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.home.components.CardStyle
-import com.alex.hubplay.ui.home.components.FocusedItemPreview
+import com.alex.hubplay.ui.home.components.FocusedHero
 import com.alex.hubplay.ui.home.components.HeroSection
 import com.alex.hubplay.ui.home.components.HomeRail
+import com.alex.hubplay.ui.home.components.LiveNowRail
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.home.components.TopNav
 
@@ -49,14 +51,14 @@ import com.alex.hubplay.ui.home.components.TopNav
  */
 @Composable
 fun HomeScreen(
-    viewModel:   HomeViewModel,
-    onOpenItem:  (itemId: String) -> Unit,
-    onPlayItem:  (itemId: String, resumePosSec: Long) -> Unit,
-    onLogOut:    () -> Unit,
+    viewModel:       HomeViewModel,
+    onOpenItem:      (itemId: String, kind: MediaKind) -> Unit,
+    onPlayItem:      (itemId: String, resumePosSec: Long) -> Unit,
+    onNavigateToTab: (Tab) -> Unit,
+    onLogOut:        () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsState()
     val focused by viewModel.focusedItem.collectAsState()
-    var selectedTab by remember { mutableStateOf(Tab.Home) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -65,8 +67,8 @@ fun HomeScreen(
         Column(modifier = Modifier.fillMaxSize()) {
 
             TopNav(
-                selectedTab    = selectedTab,
-                onTabSelected  = { selectedTab = it },
+                selectedTab    = Tab.Home,
+                onTabSelected  = onNavigateToTab,
                 onSearch       = { /* Search modal — next sprint */ },
                 onLogOut       = onLogOut,
             )
@@ -84,17 +86,29 @@ fun HomeScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
-                    HeroSection(
-                        spotlight = ui.data.hero,
-                        onPlay    = { onPlayItem(it.id, it.resumePosSec) },
-                        onDetails = { onOpenItem(it.id) },
-                    )
-
-                    // Lateral preview between Hero and the rails.
-                    // Collapses to 0dp when nothing is focused, so the
-                    // page layout below doesn't jump unless there's
-                    // actually something to preview.
-                    FocusedItemPreview(item = focused)
+                    // The Hero band is one of two presentations:
+                    //   - HeroSection (rotating spotlight) when no card
+                    //     on the page is focused.
+                    //   - FocusedHero (backdrop + info panel) when the
+                    //     user is navigating cards — same idea as
+                    //     Netflix's home preview.
+                    // Crossfade swaps them in place so the band height
+                    // stays constant and the rails below never jump.
+                    androidx.compose.animation.Crossfade(
+                        targetState   = focused,
+                        animationSpec = androidx.compose.animation.core.tween(450),
+                        label         = "home-hero-crossfade",
+                    ) { focusedItem ->
+                        if (focusedItem != null) {
+                            FocusedHero(item = focusedItem)
+                        } else {
+                            HeroSection(
+                                spotlight = ui.data.hero,
+                                onPlay    = { onPlayItem(it.id, it.resumePosSec) },
+                                onDetails = { onOpenItem(it.id, it.kind) },
+                            )
+                        }
+                    }
 
                     // Render rails in the order the server (or default)
                     // gave us. Empty rails self-hide inside HomeRail.
@@ -132,7 +146,7 @@ private fun RenderRail(
     config:        HomeRailConfig,
     data:          com.alex.hubplay.data.HomeData,
     onCardFocused: (MediaItem) -> Unit,
-    onOpenItem:    (String) -> Unit,
+    onOpenItem:    (String, MediaKind) -> Unit,
     onPlayItem:    (String, Long) -> Unit,
 ) {
     when (config.type) {
@@ -144,10 +158,8 @@ private fun RenderRail(
             onClick   = { onPlayItem(it.id, it.resumePosSec) },
         )
         HomeRailType.NextUp -> HomeRail(
-            // We don't fetch /me/next-up yet — render empty rather than
-            // breaking the layout when the user has it enabled.
             title     = config.title,
-            items     = emptyList(),
+            items     = data.nextUp,
             style     = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick   = { onPlayItem(it.id, 0L) },
@@ -157,7 +169,7 @@ private fun RenderRail(
             items     = data.trending,
             style     = CardStyle.Portrait,
             onFocused = onCardFocused,
-            onClick   = { onOpenItem(it.id) },
+            onClick   = { onOpenItem(it.id, it.kind) },
         )
         HomeRailType.LatestInLibrary -> HomeRail(
             title     = config.title,
@@ -168,12 +180,11 @@ private fun RenderRail(
             items     = data.latestByRailId[config.id].orEmpty(),
             style     = CardStyle.Portrait,
             onFocused = onCardFocused,
-            onClick   = { onOpenItem(it.id) },
+            onClick   = { onOpenItem(it.id, it.kind) },
         )
-        HomeRailType.LiveNow -> HomeRail(
+        HomeRailType.LiveNow -> LiveNowRail(
             title     = config.title,
             items     = data.liveNow,
-            style     = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick   = { onPlayItem(it.id, 0L) },
         )

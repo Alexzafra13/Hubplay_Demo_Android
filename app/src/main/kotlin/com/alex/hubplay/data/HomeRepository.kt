@@ -4,6 +4,7 @@ import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.dto.ContinueWatchingEntryDto
 import com.alex.hubplay.data.api.dto.ItemSummaryDto
 import com.alex.hubplay.data.api.dto.LiveNowChannelDto
+import com.alex.hubplay.data.api.dto.NextUpItemDto
 import com.alex.hubplay.data.api.dto.TrendingItemDto
 
 /**
@@ -105,6 +106,44 @@ class HomeRepository(
         HomeRailConfig("default-live",     HomeRailType.LiveNow,            null, "En directo ahora"),
     )
 
+    /**
+     * /items/{id}/children — seasons of a series, or episodes of a season.
+     * The list comes back in scanner order; SeriesScreen filters by type
+     * and sorts by season_number / episode_number itself.
+     */
+    suspend fun fetchChildren(parentId: String): List<MediaItem> {
+        val server = serverUrl()
+        return api.getChildren(parentId).data.orEmpty().map { it.toMedia(server) }
+    }
+
+    /** /me/next-up — queued episodes across every series. */
+    suspend fun fetchNextUp(): List<MediaItem> {
+        return api.getNextUp().data.orEmpty().map { it.toMedia() }
+    }
+
+    /**
+     * /items?type=movie|series — full catalogue listing for the
+     * dedicated Movies / Series screens. Defaults: 60 items per page
+     * ordered by added_at desc (newest first), which matches the
+     * default the web client uses on /movies and /series.
+     */
+    suspend fun fetchCatalogue(
+        type:      String,
+        limit:     Int     = 60,
+        offset:    Int     = 0,
+        sortBy:    String  = "added_at",
+        sortOrder: String  = "desc",
+    ): List<MediaItem> {
+        val server = serverUrl()
+        return api.listItems(
+            type      = type,
+            limit     = limit,
+            offset    = offset,
+            sortBy    = sortBy,
+            sortOrder = sortOrder,
+        ).data?.items.orEmpty().map { it.toMedia(server) }
+    }
+
     suspend fun fetchItemDetail(itemId: String): MediaItem {
         val server = serverUrl()
         val data = api.getItem(itemId).data
@@ -114,6 +153,11 @@ class HomeRepository(
             ?.let { ticksToSeconds(it) } ?: 0L
         val progress  = if (totalSec > 0 && resumeSec > 0)
             (resumeSec.toFloat() / totalSec).coerceIn(0f, 1f) else 0f
+
+        android.util.Log.d(
+            "HomeRepository",
+            "fetchItemDetail($itemId) type=${data.type} trailer=${data.trailer} title=${data.title}",
+        )
 
         return MediaItem(
             id           = data.id,
@@ -129,6 +173,8 @@ class HomeRepository(
             year         = data.year,
             progressPct  = progress,
             resumePosSec = resumeSec,
+            trailerKey   = data.trailer?.key,
+            trailerSite  = data.trailer?.site,
         )
     }
 
@@ -170,22 +216,92 @@ class HomeRepository(
             year         = seriesYear,
             progressPct  = progress,
             resumePosSec = resumeSec,
+            seriesId     = seriesId,
+            parentId     = parentId,
+            seasonNumber = seasonIndex,
+            episodeNumber = episodeIndex,
+            durationSec  = totalSec,
         )
     }
 
-    private fun ItemSummaryDto.toMedia(server: String): MediaItem = MediaItem(
-        id           = id,
-        kind         = MediaKind.from(type),
-        title        = title.orEmpty(),
-        subtitle     = year?.toString(),
-        posterUrl    = absolutize(posterUrl, server),
-        backdropUrl  = absolutize(backdropUrl ?: posterUrl, server),
-        logoUrl      = absolutize(logoUrl, server),
-        overview     = overview,
-        genres       = genres,
-        rating       = communityRating,
-        year         = year,
-    )
+    /**
+     * /me/next-up entries are sparse — no overview, no images — but they
+     * carry the episode id + series_id we need to play and to match in
+     * the resume resolver. SeriesScreen tops up the missing fields via
+     * children when it needs to render rich episode cards.
+     */
+    private fun NextUpItemDto.toMedia(): MediaItem {
+        val totalSec  = durationTicks?.let { ticksToSeconds(it) } ?: 0L
+        val episodeLabel = buildString {
+            val s = seasonNumber; val e = episodeNumber
+            if (s != null && e != null) append("S$s · E$e")
+            if (!episodeTitle.isNullOrBlank()) {
+                if (isNotEmpty()) append(" · ")
+                append(episodeTitle)
+            }
+        }.ifBlank { null }
+
+        return MediaItem(
+            id           = id,
+            kind         = MediaKind.Episode,
+            title        = seriesTitle.orEmpty(),
+            subtitle     = episodeLabel,
+            posterUrl    = null,
+            backdropUrl  = null,
+            logoUrl      = null,
+            overview     = null,
+            genres       = emptyList(),
+            rating       = null,
+            year         = null,
+            progressPct  = 0f,
+            resumePosSec = 0L,
+            seriesId     = seriesId,
+            parentId     = null,
+            seasonNumber = seasonNumber,
+            episodeNumber = episodeNumber,
+            durationSec  = totalSec,
+        )
+    }
+
+    private fun ItemSummaryDto.toMedia(server: String): MediaItem {
+        val kindFromType = MediaKind.from(type)
+        // For episodes inside a season's children, the more useful subtitle
+        // is "S2 · E4" rather than the year (which is the series year).
+        val sub = when {
+            kindFromType == MediaKind.Episode && episodeNumber != null ->
+                buildString {
+                    seasonNumber?.let { append("S$it · ") }
+                    append("E$episodeNumber")
+                }
+            kindFromType == MediaKind.Season && seasonNumber != null ->
+                "Temporada $seasonNumber"
+            else -> year?.toString()
+        }
+        val totalSec = durationTicks?.let { ticksToSeconds(it) } ?: 0L
+        val resumeSec = userData?.progress?.positionTicks?.let { ticksToSeconds(it) } ?: 0L
+        val progressPct = if (totalSec > 0 && resumeSec > 0)
+            (resumeSec.toFloat() / totalSec).coerceIn(0f, 1f) else 0f
+
+        return MediaItem(
+            id            = id,
+            kind          = kindFromType,
+            title         = title.orEmpty(),
+            subtitle      = sub,
+            posterUrl     = absolutize(posterUrl, server),
+            backdropUrl   = absolutize(backdropUrl ?: posterUrl, server),
+            logoUrl       = absolutize(logoUrl, server),
+            overview      = overview,
+            genres        = genres,
+            rating        = communityRating,
+            year          = year,
+            progressPct   = progressPct,
+            resumePosSec  = resumeSec,
+            parentId      = parentId,
+            seasonNumber  = seasonNumber,
+            episodeNumber = episodeNumber,
+            durationSec   = totalSec,
+        )
+    }
 
     /**
      * Trending items also come back with relative URLs — verified
@@ -221,6 +337,9 @@ class HomeRepository(
             genres       = emptyList(),
             rating       = null,
             year         = null,
+            logoInitials = logoInitials,
+            logoBg       = logoBg,
+            logoFg       = logoFg,
         )
     }
 
@@ -269,11 +388,37 @@ data class MediaItem(
     val year:         Int?,
     val progressPct:  Float = 0f,
     val resumePosSec: Long  = 0L,
+    /**
+     * Series / season / episode hierarchy. Set on items that participate
+     * in a series. The Series resume resolver matches by these.
+     */
+    val seriesId:     String? = null,
+    val parentId:     String? = null,
+    val seasonNumber: Int?    = null,
+    val episodeNumber: Int?   = null,
+    val durationSec:  Long    = 0L,
+    /**
+     * YouTube/Vimeo trailer pair when the server has picked one for
+     * this item. Set on /items/{id} responses only (Home / Trending
+     * rails do not include it to keep payloads small).
+     */
+    val trailerKey:   String? = null,
+    val trailerSite:  String? = null,
+    /**
+     * Channel placeholder. Set on LiveNow rail items when the channel
+     * has no logo (or as a fallback for when the logo fetch fails) so
+     * the card can render an initials-on-coloured-circle avatar à la
+     * Plex / Jellyfin instead of an empty grey rectangle.
+     */
+    val logoInitials: String? = null,
+    val logoBg:       String? = null,
+    val logoFg:       String? = null,
 )
 
 data class HomeData(
     val hero:             List<MediaItem> = emptyList(),
     val continueWatching: List<MediaItem> = emptyList(),
+    val nextUp:           List<MediaItem> = emptyList(),
     val trending:         List<MediaItem> = emptyList(),
     val liveNow:          List<MediaItem> = emptyList(),
     val rails:            List<HomeRailConfig> = emptyList(),

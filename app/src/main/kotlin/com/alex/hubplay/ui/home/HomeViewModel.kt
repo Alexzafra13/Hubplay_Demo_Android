@@ -67,6 +67,7 @@ class HomeViewModel(
                         }
                 }
                 val cw       = async { safeFetch("continueWatching") { repository.fetchContinueWatching() } }
+                val nextUp   = async { safeFetch("nextUp")           { repository.fetchNextUp() } }
                 val trending = async { safeFetch("trending")         { repository.fetchTrending() } }
                 val liveNow  = async { safeFetch("liveNow")          { repository.fetchLiveNow() } }
 
@@ -94,6 +95,7 @@ class HomeViewModel(
                 HomeData(
                     hero             = trending.await().take(5),
                     continueWatching = cw.await(),
+                    nextUp           = nextUp.await(),
                     trending         = trending.await(),
                     liveNow          = liveNow.await(),
                     rails            = layout,

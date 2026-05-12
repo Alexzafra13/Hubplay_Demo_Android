@@ -16,8 +16,8 @@ android {
         applicationId    = "com.alex.hubplay"
         minSdk           = 26   // Android 8.0 — covers ~95% of devices and unlocks Media3
         targetSdk        = 35
-        versionCode      = 1
-        versionName      = "0.1.0"
+        versionCode      = 3
+        versionName      = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -176,6 +176,12 @@ dependencies {
     // ── Image loading (Coil 3 — group is io.coil-kt.coil3, network engine split out)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    // NOTE: HeroTrailerView used to depend on Pierfrancesco Soffritti's
+    // android-youtube-player wrapper but its onStateChange callbacks
+    // never fired reliably on Android TV WebViews (issue: lib expects
+    // enableAutomaticInitialization to be set BEFORE the view is added
+    // to the layout, which AndroidView doesn't allow). Replaced with a
+    // plain WebView embedding the same iframe the web client uses.
 
     // ── Tests
     testImplementation(libs.junit)

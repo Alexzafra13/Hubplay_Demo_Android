@@ -9,13 +9,22 @@ package com.alex.hubplay.ui.nav
  * sites can't misformat them.
  */
 sealed class Route(val path: String) {
-    data object Login : Route("login")
-    data object Home  : Route("home")
+    data object Login   : Route("login")
+    data object Home    : Route("home")
+    data object Movies  : Route("movies")
+    data object SeriesList : Route("series-list")
+    data object LiveTv  : Route("live-tv")
 
-    /** Item detail / browse-then-play surface. */
+    /** Item detail / browse-then-play surface (movies). */
     data object Detail : Route("detail/{itemId}") {
         const val ARG_ITEM_ID = "itemId"
         fun route(itemId: String): String = "detail/$itemId"
+    }
+
+    /** Series detail — seasons + episodes + resume resolver. */
+    data object Series : Route("series/{seriesId}") {
+        const val ARG_SERIES_ID = "seriesId"
+        fun route(seriesId: String): String = "series/$seriesId"
     }
 
     data object Player : Route("player/{itemId}?resume={resumePosSec}") {

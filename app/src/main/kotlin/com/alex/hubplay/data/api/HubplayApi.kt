@@ -1,17 +1,20 @@
 package com.alex.hubplay.data.api
 
+import com.alex.hubplay.data.api.dto.ChildrenResponse
 import com.alex.hubplay.data.api.dto.ContinueWatchingResponse
 import com.alex.hubplay.data.api.dto.HomeLayoutResponse
 import com.alex.hubplay.data.api.dto.ItemDetailResponse
 import com.alex.hubplay.data.api.dto.LatestResponse
 import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
+import com.alex.hubplay.data.api.dto.NextUpResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Path
 import retrofit2.http.Query
+
 
 /**
  * Hand-written Retrofit interface for the catalogue / home / stream
@@ -52,6 +55,22 @@ interface HubplayApi {
         @Query("type")       type:      String? = null,
     ): LatestResponse
 
+    /**
+     * GET /api/v1/items — full catalogue listing with filters, sort
+     * and pagination. Used by the dedicated /movies and /series
+     * screens; same response shape as `/items/latest`. Pass `type` to
+     * narrow to a single content kind and `sort_by` (e.g. "title",
+     * "added_at", "year", "community_rating") to control ordering.
+     */
+    @GET("items")
+    suspend fun listItems(
+        @Query("type")       type:      String? = null,
+        @Query("limit")      limit:     Int     = 60,
+        @Query("offset")     offset:    Int     = 0,
+        @Query("sort_by")    sortBy:    String? = null,
+        @Query("sort_order") sortOrder: String? = null,
+    ): LatestResponse
+
     /** GET /api/v1/libraries — used to map library_id → content_type. */
     @GET("libraries")
     suspend fun getLibraries(): LibrariesResponse
@@ -65,6 +84,27 @@ interface HubplayApi {
     /** GET /api/v1/items/{id} */
     @GET("items/{id}")
     suspend fun getItem(@Path("id") itemId: String): ItemDetailResponse
+
+    /**
+     * GET /api/v1/items/{id}/children
+     *
+     * For a series  → returns seasons (type=season, season_number set).
+     * For a season  → returns episodes (type=episode, episode_number set).
+     * For anything else → empty (or 404).
+     */
+    @GET("items/{id}/children")
+    suspend fun getChildren(@Path("id") itemId: String): ChildrenResponse
+
+    /**
+     * GET /api/v1/me/next-up
+     *
+     * The user's queued episodes across every series. Used both for the
+     * Home "Next Up" rail and as input to the Series resume resolver
+     * (matching `series_id` to find which episode plays when the user
+     * hits Reproducir on a series detail page).
+     */
+    @GET("me/next-up")
+    suspend fun getNextUp(): NextUpResponse
 
     /**
      * GET /api/v1/stream/{itemId}/info — server's playback decision for this

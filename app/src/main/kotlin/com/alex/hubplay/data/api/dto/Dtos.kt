@@ -119,7 +119,20 @@ data class ItemDetailDto(
     @Json(name = "poster_url")       val posterUrl:       String? = null,
     @Json(name = "backdrop_url")     val backdropUrl:     String? = null,
     @Json(name = "logo_url")         val logoUrl:         String? = null,
+    /** Set only when scanner found an embeddable trailer (YouTube/Vimeo). */
+    val trailer:                                           TrailerDto? = null,
     @Json(name = "user_data")        val userData:        UserDataDto? = null,
+)
+
+/**
+ * Trailer ref carried on /items/{id} for items that have a TMDb-picked
+ * trailer. `site` is "YouTube" or "Vimeo" (the picker on the Go side
+ * filters anything else); `key` is the platform-specific video id.
+ */
+@JsonClass(generateAdapter = true)
+data class TrailerDto(
+    val key:  String,
+    val site: String,
 )
 
 // ─── Home layout ─────────────────────────────────────────────────────────────
@@ -140,15 +153,29 @@ data class HomeSectionDto(
 )
 
 // ─── Stream info ─────────────────────────────────────────────────────────────
+//
+// Ground truth: internal/api/handlers/stream.go::Info() writes
+//   { "data": {
+//     "item_id":     ...,
+//     "method":      "direct_play" | "direct_stream" | "transcode",
+//     "video_codec": "h264", "audio_codec": "aac", "container": "mp4",
+//     "profiles":    ["1080p","720p",...]
+//   } }
+//
+// It does NOT include `strategy`, `master_playlist_url` or `direct_url` —
+// despite what openapi.yaml claims (drift). The client constructs the URLs
+// itself (matching web/src/pages/itemDetail/usePlayback.ts), so we only
+// need the method to pick the right path.
 
 @JsonClass(generateAdapter = true)
 data class StreamInfoDto(
     /** direct_play | direct_stream | transcode */
-    val strategy: String? = null,
-    @Json(name = "master_playlist_url") val masterPlaylistUrl: String? = null,
-    /** Set only when strategy == direct_play; serves the original file with Range support. */
-    @Json(name = "direct_url")          val directUrl:         String? = null,
-    @Json(name = "decision_reason")     val decisionReason:    String? = null,
+    val method: String? = null,
+    @Json(name = "item_id")     val itemId:     String? = null,
+    @Json(name = "video_codec") val videoCodec: String? = null,
+    @Json(name = "audio_codec") val audioCodec: String? = null,
+    val container: String? = null,
+    val profiles:  List<String> = emptyList(),
 )
 
 // ─── Response envelopes — every endpoint wraps its body in `{ data: ... }` ──
@@ -253,6 +280,40 @@ data class LatestPayload(
 @JsonClass(generateAdapter = true)
 data class LatestResponse(
     val data: LatestPayload? = null,
+)
+
+// ─── Series children + Next-Up ──────────────────────────────────────────────
+//
+// /items/{id}/children — verified against items.go::Children(). Returns the
+// raw itemSummaryResponse() shape with backdrop_url / poster_url folded in.
+//   - For a series: `type=season`, `season_number` set, `parent_id=seriesId`.
+//   - For a season: `type=episode`, `episode_number` set, `parent_id=seasonId`.
+// Reusing ItemSummaryDto since it already carries the fields we need.
+
+@JsonClass(generateAdapter = true)
+data class ChildrenResponse(
+    val data: List<ItemSummaryDto>? = null,
+)
+
+/**
+ * /me/next-up entry — verified against progress.go::NextUp(). Carries
+ * series_id so the resume resolver can match by series without needing
+ * a follow-up /items/{episodeId} fetch.
+ */
+@JsonClass(generateAdapter = true)
+data class NextUpItemDto(
+    val id: String,
+    @Json(name = "episode_title")  val episodeTitle:  String? = null,
+    @Json(name = "season_number")  val seasonNumber:  Int? = null,
+    @Json(name = "episode_number") val episodeNumber: Int? = null,
+    @Json(name = "duration_ticks") val durationTicks: Long? = null,
+    @Json(name = "series_title")   val seriesTitle:   String? = null,
+    @Json(name = "series_id")      val seriesId:      String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class NextUpResponse(
+    val data: List<NextUpItemDto>? = null,
 )
 
 // ─── Libraries ──────────────────────────────────────────────────────────────
