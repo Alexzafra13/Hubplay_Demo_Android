@@ -12,25 +12,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Drives the Películas / Series / TV en vivo screens.
+ * Drives the Películas / Series screens.
  *
  * Each [Source] maps to a different repository call:
- *   - Movies  → /items?type=movie ordered by added_at desc
- *   - Series  → /items?type=series ordered by added_at desc
- *   - LiveTv  → /me/home/live-now (every channel currently airing
- *               something; backend already returns the placeholder
- *               initials/colours per channel)
+ *   - Movies → /items?type=movie ordered by added_at desc
+ *   - Series → /items?type=series ordered by added_at desc
  *
- * Keeping the three flavours behind a single ViewModel saves three
- * almost-identical files — the only thing that varies is the fetch
- * call and the label.
+ * LiveTv used to live here too but now has its own screen
+ * ([com.alex.hubplay.ui.livetv.LiveTvScreen]) — it needs EPG + favourites
+ * + filter chips, which don't fit the generic catalog shell.
  */
 class CatalogViewModel(
     private val repository: HomeRepository,
     private val source:     Source,
 ) : ViewModel() {
 
-    enum class Source { Movies, Series, LiveTv }
+    enum class Source { Movies, Series }
 
     private val _ui = MutableStateFlow(CatalogUiState(isLoading = true))
     val ui: StateFlow<CatalogUiState> = _ui.asStateFlow()
@@ -44,7 +41,6 @@ class CatalogViewModel(
                 when (source) {
                     Source.Movies -> repository.fetchCatalogue(type = "movie", limit = 120)
                     Source.Series -> repository.fetchCatalogue(type = "series", limit = 120)
-                    Source.LiveTv -> repository.fetchLiveNow(limit = 120)
                 }
             }
             result

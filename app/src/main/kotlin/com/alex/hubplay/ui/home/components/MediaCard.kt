@@ -117,11 +117,12 @@ private class PanelTrapezoidShape(private val bottomSlantDp: androidx.compose.ui
  */
 @Composable
 fun MediaCard(
-    item:        MediaItem,
-    onFocused:   (MediaItem) -> Unit,
-    onClick:     (MediaItem) -> Unit,
-    style:       CardStyle = CardStyle.Landscape,
-    modifier:    Modifier  = Modifier,
+    item:           MediaItem,
+    onFocused:      (MediaItem) -> Unit,
+    onClick:        (MediaItem) -> Unit,
+    style:          CardStyle = CardStyle.Landscape,
+    expandOnFocus:  Boolean   = true,
+    modifier:       Modifier  = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -130,7 +131,11 @@ fun MediaCard(
         label         = "media-card-scale",
     )
 
-    val canExpand    = style == CardStyle.Portrait
+    // Catalog grids (Movies / Series / Live TV) opt out of the panel
+    // expansion — there the focus highlight + scale is enough, and the
+    // expansion would just push neighbour cards around inside a static
+    // grid. Home rails keep the default behaviour.
+    val canExpand    = expandOnFocus && style == CardStyle.Portrait
 
     // 2s hover-to-expand delay (Netflix Web pattern). Navigating
     // between cards reads as "the rail slides under me"; only when

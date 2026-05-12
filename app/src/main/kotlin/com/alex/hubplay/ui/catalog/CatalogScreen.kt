@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.home.components.CardStyle
-import com.alex.hubplay.ui.home.components.LiveChannelCard
 import com.alex.hubplay.ui.home.components.MediaCard
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.home.components.TopNav
@@ -77,10 +76,14 @@ fun CatalogScreen(
                 error != null && items.isEmpty() -> ErrorBanner(message = error, onRetry = onRetry)
                 items.isEmpty() -> EmptyBanner()
                 else -> LazyVerticalGrid(
-                    columns               = GridCells.Adaptive(minSize = 170.dp),
-                    contentPadding        = PaddingValues(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 40.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalArrangement   = Arrangement.spacedBy(20.dp),
+                    // Slot ~160dp matches the Portrait card's 150dp footprint
+                    // closely, so most of the visual "air" between cards
+                    // comes from the explicit horizontal spacing — not
+                    // from the slot being wider than its content.
+                    columns               = GridCells.Adaptive(minSize = 160.dp),
+                    contentPadding        = PaddingValues(start = 32.dp, end = 32.dp, top = 12.dp, bottom = 40.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement   = Arrangement.spacedBy(14.dp),
                     modifier              = Modifier.fillMaxSize(),
                 ) {
                     items(items, key = { it.id }) { item ->
@@ -141,21 +144,11 @@ fun PortraitCatalogCard(
     onOpen:     (String, MediaKind) -> Unit,
 ) {
     MediaCard(
-        item      = item,
-        style     = CardStyle.Portrait,
-        onFocused = { /* no focus preview on catalog screens */ },
-        onClick   = { onOpen(it.id, it.kind) },
+        item          = item,
+        style         = CardStyle.Portrait,
+        expandOnFocus = false,
+        onFocused     = { /* no focus preview on catalog screens */ },
+        onClick       = { onOpen(it.id, it.kind) },
     )
 }
 
-@Composable
-fun LiveChannelCatalogCard(
-    item:    MediaItem,
-    onPlay:  (String) -> Unit,
-) {
-    LiveChannelCard(
-        item      = item,
-        onFocused = { /* no focus preview on catalog screens */ },
-        onClick   = { onPlay(it.id) },
-    )
-}

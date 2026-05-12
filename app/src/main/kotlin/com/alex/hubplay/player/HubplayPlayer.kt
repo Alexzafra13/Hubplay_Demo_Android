@@ -5,7 +5,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -13,6 +14,7 @@ import com.alex.hubplay.data.AuthState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import okhttp3.OkHttpClient
 
 /**
  * Thin wrapper around ExoPlayer that knows how to play HubPlay streams.
@@ -34,23 +36,46 @@ import kotlinx.coroutines.flow.update
 class HubplayPlayer(
     context: Context,
     private val authState: AuthState,
+    /**
+     * The same [OkHttpClient] the rest of the app uses — its
+     * AuthInterceptor refreshes the JWT on 401 and replays the failed
+     * request. Routing ExoPlayer's HTTP through this client makes
+     * long live-streams survive token expiry (HLS sessions
+     * previously froze after ~30 min when the bearer expired and the
+     * DefaultHttpDataSource had no path to refresh it).
+     */
+    okHttpClient: OkHttpClient,
 ) {
-    private val httpFactory = DefaultHttpDataSource.Factory()
-        .setAllowCrossProtocolRedirects(true)
+    private val httpFactory = OkHttpDataSource.Factory(okHttpClient)
         .setUserAgent("HubPlay-Android/0.1.0")
-        .also { factory ->
-            authState.accessToken?.let { token ->
-                factory.setDefaultRequestProperties(
-                    mapOf("Authorization" to "Bearer $token"),
-                )
-            }
-        }
 
     private val mediaSourceFactory = DefaultMediaSourceFactory(context)
         .setDataSourceFactory(httpFactory)
 
+    /**
+     * Aggressive buffer config tuned for fast channel switching on
+     * live IPTV. Defaults:  minBuffer 50 s, bufferForPlayback 2.5 s,
+     * bufferForPlaybackAfterRebuffer 5 s — those are great for VOD
+     * over flaky mobile networks but they mean ~3-5 s of black screen
+     * every time the user D-pads UP / DOWN.
+     *
+     * Trade-off: on a poor network this triggers more rebuffers; on
+     * a TV box hard-wired or on solid Wi-Fi it makes zap feel close
+     * to satellite-receiver responsive.
+     */
+    private val loadControl = DefaultLoadControl.Builder()
+        .setBufferDurationsMs(
+            /* minBufferMs                  = */ 2_000,
+            /* maxBufferMs                  = */ 15_000,
+            /* bufferForPlaybackMs          = */ 500,
+            /* bufferForPlaybackAfterRebufferMs = */ 1_500,
+        )
+        .setPrioritizeTimeOverSizeThresholds(true)
+        .build()
+
     val exoPlayer: ExoPlayer = ExoPlayer.Builder(context)
         .setMediaSourceFactory(mediaSourceFactory)
+        .setLoadControl(loadControl)
         .build()
 
     private val _state = MutableStateFlow(PlayerState())
@@ -89,7 +114,13 @@ class HubplayPlayer(
         val absoluteUrl = absolutize(streamUrl)
         val mediaItem = MediaItem.fromUri(absoluteUrl)
         val source = if (isHls) {
-            HlsMediaSource.Factory(httpFactory).createMediaSource(mediaItem)
+            HlsMediaSource.Factory(httpFactory)
+                // Don't wait for every renditions' media playlist to
+                // be fetched before kicking off playback. Cuts the
+                // start-up latency dramatically on multi-variant
+                // HLS manifests.
+                .setAllowChunklessPreparation(true)
+                .createMediaSource(mediaItem)
         } else {
             mediaSourceFactory.createMediaSource(mediaItem)
         }

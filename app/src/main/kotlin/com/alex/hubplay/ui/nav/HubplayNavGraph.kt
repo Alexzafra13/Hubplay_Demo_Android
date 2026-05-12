@@ -13,13 +13,14 @@ import com.alex.hubplay.data.AppContainer
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.catalog.CatalogScreen
 import com.alex.hubplay.ui.catalog.CatalogViewModel
-import com.alex.hubplay.ui.catalog.LiveChannelCatalogCard
 import com.alex.hubplay.ui.catalog.PortraitCatalogCard
 import com.alex.hubplay.ui.detail.DetailScreen
 import com.alex.hubplay.ui.detail.DetailViewModel
 import com.alex.hubplay.ui.home.HomeScreen
 import com.alex.hubplay.ui.home.HomeViewModel
 import com.alex.hubplay.ui.home.components.Tab
+import com.alex.hubplay.ui.livetv.LiveTvScreen
+import com.alex.hubplay.ui.livetv.LiveTvViewModel
 import com.alex.hubplay.ui.login.LoginScreen
 import com.alex.hubplay.ui.login.LoginViewModel
 import com.alex.hubplay.ui.player.PlayerScreen
@@ -144,22 +145,18 @@ fun HubplayNavGraph(
             )
         }
 
-        // ── Live TV catalog ──────────────────────────────────────────
+        // ── Live TV (custom screen — not a Catalog flavour) ──────────
         composable(Route.LiveTv.path) {
-            val vm = viewModel<CatalogViewModel>(
-                factory = CatalogViewModel.factory(container.homeRepository, CatalogViewModel.Source.LiveTv),
+            val vm = viewModel<LiveTvViewModel>(
+                factory = LiveTvViewModel.factory(container.liveTvRepository),
             )
-            val ui by vm.ui.collectAsState()
-            CatalogScreen(
-                selectedTab   = Tab.LiveTv,
-                title         = "TV en vivo",
-                items         = ui.items,
-                isLoading     = ui.isLoading,
-                error         = ui.error,
-                onRetry       = vm::load,
+            LiveTvScreen(
+                viewModel     = vm,
+                authState     = authState,
+                okHttpClient  = container.mainOkHttp,
+                onPlayChannel = { channelId -> playItem(channelId, 0L) },
                 onTabSelected = navigateToTab,
                 onLogOut      = logOut,
-                cardContent   = { item -> LiveChannelCatalogCard(item) { id -> playItem(id, 0L) } },
             )
         }
 
@@ -217,12 +214,18 @@ fun HubplayNavGraph(
             val itemId       = entry.arguments?.getString(Route.Player.ARG_ITEM_ID) ?: return@composable
             val resumePosSec = entry.arguments?.getLong(Route.Player.ARG_RESUME) ?: 0L
             val viewModel    = viewModel<PlayerViewModel>(
-                factory = PlayerViewModel.factory(container.hubplayApi, itemId, resumePosSec),
+                factory = PlayerViewModel.factory(
+                    api          = container.hubplayApi,
+                    liveTvRepo   = container.liveTvRepository,
+                    itemId       = itemId,
+                    resumePosSec = resumePosSec,
+                ),
             )
             PlayerScreen(
-                viewModel = viewModel,
-                authState = authState,
-                onBack    = { navController.popBackStack() },
+                viewModel    = viewModel,
+                authState    = authState,
+                okHttpClient = container.mainOkHttp,
+                onBack       = { navController.popBackStack() },
             )
         }
     }

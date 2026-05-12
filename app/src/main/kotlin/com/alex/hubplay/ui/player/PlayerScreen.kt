@@ -1,6 +1,7 @@
 package com.alex.hubplay.ui.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,10 +22,19 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,34 +45,43 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.player.HubplayPlayer
+import kotlinx.coroutines.delay
+import okhttp3.OkHttpClient
+import java.time.Instant
 
 /**
- * Full-screen player. Hosts an Android [PlayerView] inside Compose via
- * AndroidView (the official interop path — Media3 doesn't yet ship a
- * pure-Compose PlayerView replacement, though `media3-ui-compose` adds
- * incremental Composables we can adopt later).
+ * Two-state chrome model for the live mode:
  *
- * Lifecycle:
- *   - The player is constructed on first composition and released in
- *     onDispose. Rotations + Compose recompositions don't re-create it
- *     because we use `remember` keyed on nothing.
- *   - When the resolution from the ViewModel arrives, LaunchedEffect
- *     calls `player.play(...)`.
+ *  - **Hidden**  — only the video.
+ *  - **Visible** — top + bottom dim overlays, channel + programme info.
+ *                  Auto-collapses to Hidden after [AUTO_HIDE_MS] of no
+ *                  input.
+ *
+ * D-pad UP/DOWN performs an *instant zap* to the previous/next channel
+ * (the chrome briefly reappears so the user sees the new channel
+ * name). BACK exits the chrome first, then the player.
  */
+private enum class ChromeState { Hidden, Visible }
+
+private const val AUTO_HIDE_MS = 4_500L
+
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
-    viewModel: PlayerViewModel,
-    authState: AuthState,
-    onBack: () -> Unit,
+    viewModel:    PlayerViewModel,
+    authState:    AuthState,
+    okHttpClient: OkHttpClient,
+    onBack:       () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsState()
     val context = LocalContext.current
 
-    val player = remember { HubplayPlayer(context, authState) }
+    val player = remember { HubplayPlayer(context, authState, okHttpClient) }
     val playerState by player.state.collectAsState()
 
-    // Kick off playback the moment the resolution arrives.
+    // Re-play whenever startParams changes — covers both the first
+    // resolve AND surfChannel switching to a new channel without
+    // tearing down the ExoPlayer.
     LaunchedEffect(ui.startParams) {
         ui.startParams?.let {
             player.play(it.streamUrl, it.resumePosSec, it.isHls)
@@ -72,12 +92,7 @@ fun PlayerScreen(
         onDispose { player.release() }
     }
 
-    // Hardware Back key — the PlayerView with useController=true
-    // swallows D-pad key events for its internal controls, so the
-    // floating IconButton below never receives D-pad focus. BackHandler
-    // intercepts the remote's Back button at the Activity level and
-    // takes us out of the player even while the controls are hidden.
-    BackHandler(onBack = onBack)
+    val isLive = ui.mode == PlayerMode.Live
 
     Box(
         modifier         = Modifier.fillMaxSize().background(Color.Black),
@@ -88,43 +103,46 @@ fun PlayerScreen(
             factory  = { ctx ->
                 PlayerView(ctx).apply {
                     this.player = player.exoPlayer
-                    useController = true
                     setKeepContentOnPlayerReset(true)
-                    // FIT keeps the stream's native aspect ratio (no
-                    // crop, no stretch). Some IPTV streams come with
-                    // odd SAR / non-standard resolutions and any zoom
-                    // mode would crop the picture — defaulting to FIT
-                    // shows it as the broadcaster intended, with bars
-                    // when the source aspect doesn't match the screen.
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    // Show the play/pause/seek bar from the first frame
-                    // so users on a TV remote always see the affordance
-                    // — auto-hide is good on phones with touch, bad on
-                    // a 10ft viewing distance.
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                    useController = !isLive
                     controllerShowTimeoutMs = 4_000
                     controllerAutoShow      = true
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                 }
+            },
+            update = { view ->
+                view.useController = !isLive
+                if (isLive) view.hideController()
             },
         )
 
-        // Top-left back button overlay. Useful when running with a
-        // touchscreen / mouse where there's no hardware Back; on a TV
-        // remote the BackHandler above does the actual job.
-        IconButton(
-            onClick  = onBack,
-            modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Volver",
-                tint = Color.White,
+        if (isLive) {
+            LiveLayer(
+                viewModel = viewModel,
+                onBack    = onBack,
             )
+        } else {
+            // VOD fallback back button (Media3 chrome handles the rest).
+            IconButton(
+                onClick  = onBack,
+                modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+            ) {
+                Icon(
+                    imageVector       = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Volver",
+                    tint              = Color.White,
+                )
+            }
+            BackHandler(onBack = onBack)
         }
 
-        // Loading state — covers the empty PlayerView until the first
-        // frame paints, so the user doesn't stare at black.
-        if (playerState.isBuffering || ui.startParams == null) {
+        // Loading overlay.
+        //  - VOD: centered spinner with the title.
+        //  - Live: nothing. The PlayerView itself shows a small
+        //    buffering wheel in the centre when needed; an extra
+        //    overlay near the clock badge just cluttered the corner.
+        if ((playerState.isBuffering || ui.startParams == null) && !isLive) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
@@ -139,15 +157,111 @@ fun PlayerScreen(
             }
         }
 
-        // Hard error surface (e.g. /stream/info returned no URL).
         ui.error?.let { err ->
             Text(
-                text     = err,
-                color    = MaterialTheme.colorScheme.error,
-                style    = MaterialTheme.typography.bodyLarge,
+                text      = err,
+                color     = MaterialTheme.colorScheme.error,
+                style     = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(24.dp).align(Alignment.Center),
+                modifier  = Modifier.padding(24.dp).align(Alignment.Center),
             )
         }
+    }
+}
+
+/**
+ * Live-mode overlay + input layer. Lives inside the PlayerScreen as a
+ * separate Composable so the shared elements (buffering / error) stay
+ * mode-agnostic in the parent.
+ *
+ * Owns:
+ *  - The chrome Hidden/Visible state machine + the auto-hide timer
+ *  - D-pad key handling:
+ *      UP/DOWN  → instant zap (previous / next channel)
+ *      OK       → toggle chrome visibility
+ *  - The BackHandler that "peels" the chrome off before exiting the
+ *    player
+ */
+@Composable
+private fun LiveLayer(
+    viewModel: PlayerViewModel,
+    onBack:    () -> Unit,
+) {
+    val ui by viewModel.ui.collectAsState()
+
+    var chromeState by remember { mutableStateOf(ChromeState.Visible) }
+    var lastInteractionAt by remember { mutableStateOf(System.currentTimeMillis()) }
+    fun touch() {
+        lastInteractionAt = System.currentTimeMillis()
+    }
+
+    LaunchedEffect(lastInteractionAt, chromeState) {
+        if (chromeState == ChromeState.Hidden) return@LaunchedEffect
+        val target = lastInteractionAt + AUTO_HIDE_MS
+        val wait = (target - System.currentTimeMillis()).coerceAtLeast(0L)
+        delay(wait)
+        if (System.currentTimeMillis() >= lastInteractionAt + AUTO_HIDE_MS) {
+            chromeState = ChromeState.Hidden
+        }
+    }
+
+    BackHandler(enabled = chromeState != ChromeState.Hidden) {
+        chromeState = ChromeState.Hidden
+        touch()
+    }
+
+    val keyFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        runCatching { keyFocus.requestFocus() }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(keyFocus)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                touch()
+                when (event.key) {
+                    Key.DirectionUp -> {
+                        viewModel.surfChannel(-1)
+                        chromeState = ChromeState.Visible
+                        true
+                    }
+                    Key.DirectionDown -> {
+                        viewModel.surfChannel(+1)
+                        chromeState = ChromeState.Visible
+                        true
+                    }
+                    Key.DirectionLeft -> {
+                        viewModel.toggleFavorite()
+                        chromeState = ChromeState.Visible
+                        true
+                    }
+                    Key.DirectionCenter,
+                    Key.Enter,
+                    Key.NumPadEnter -> {
+                        chromeState = if (chromeState == ChromeState.Hidden)
+                            ChromeState.Visible
+                        else
+                            ChromeState.Hidden
+                        true
+                    }
+                    else -> false
+                }
+            },
+    ) {
+        LivePlayerChrome(
+            visible           = chromeState != ChromeState.Hidden,
+            channel           = ui.liveChannel,
+            title             = ui.title,
+            nowProgram        = ui.nowProgram(),
+            nextProgram       = ui.nextProgram(),
+            nowInstant        = Instant.ofEpochMilli(ui.nowEpoch),
+            channelPosition   = ui.currentChannelPosition,
+            totalChannels     = ui.libraryChannels.size,
+            isFavorite        = ui.isCurrentChannelFavorite,
+        )
     }
 }

@@ -88,6 +88,8 @@ class AppContainer(context: Context) {
 
     val homeRepository: HomeRepository = HomeRepository(hubplayApi, tokenStore)
 
+    val liveTvRepository: LiveTvRepository = LiveTvRepository(hubplayApi, tokenStore)
+
     private fun loggingInterceptor() = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BASIC
     }

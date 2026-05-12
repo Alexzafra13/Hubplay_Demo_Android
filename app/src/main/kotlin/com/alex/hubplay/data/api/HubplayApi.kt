@@ -1,7 +1,13 @@
 package com.alex.hubplay.data.api
 
+import com.alex.hubplay.data.api.dto.BulkScheduleRequest
+import com.alex.hubplay.data.api.dto.BulkScheduleResponse
+import com.alex.hubplay.data.api.dto.ChannelsResponse
 import com.alex.hubplay.data.api.dto.ChildrenResponse
 import com.alex.hubplay.data.api.dto.ContinueWatchingResponse
+import com.alex.hubplay.data.api.dto.FavoriteIdsResponse
+import com.alex.hubplay.data.api.dto.FavoriteToggleResponse
+import com.alex.hubplay.data.api.dto.GroupsResponse
 import com.alex.hubplay.data.api.dto.HomeLayoutResponse
 import com.alex.hubplay.data.api.dto.ItemDetailResponse
 import com.alex.hubplay.data.api.dto.LatestResponse
@@ -10,8 +16,13 @@ import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.NextUpResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
+import com.alex.hubplay.data.api.dto.WatchBeaconResponse
+import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -116,4 +127,46 @@ interface HubplayApi {
         @Path("itemId") itemId: String,
         @Header("X-Hubplay-Client-Capabilities") capabilities: String,
     ): StreamInfoResponse
+
+    // ─── IPTV: channels + EPG + favorites ───────────────────────────────────
+
+    /** GET /api/v1/libraries/{id}/channels — every channel in an IPTV library. */
+    @GET("libraries/{id}/channels")
+    suspend fun listChannels(
+        @Path("id") libraryId: String,
+        @Query("active") active: Boolean = true,
+    ): ChannelsResponse
+
+    /** GET /api/v1/libraries/{id}/channels/groups — group_name strings for filter chips. */
+    @GET("libraries/{id}/channels/groups")
+    suspend fun listChannelGroups(@Path("id") libraryId: String): GroupsResponse
+
+    /**
+     * POST /api/v1/channels/schedule — EPG for many channels in one round-trip.
+     *
+     * Backend caps at 5_000 channels per request and is happy with either
+     * RFC3339 timestamps or relative-hours integers in `from`/`to`. We use
+     * the integer form for simplicity; see [BulkScheduleRequest] docs.
+     *
+     * POST (vs the GET sibling) avoids 414 query-string length errors on
+     * libraries with hundreds of channels.
+     */
+    @POST("channels/schedule")
+    suspend fun bulkSchedule(@Body body: BulkScheduleRequest): BulkScheduleResponse
+
+    /** GET /api/v1/favorites/channels/ids — light payload to hydrate the favorites set. */
+    @GET("favorites/channels/ids")
+    suspend fun listFavoriteChannelIds(): FavoriteIdsResponse
+
+    /** PUT /api/v1/favorites/channels/{channelId} — idempotent add. */
+    @PUT("favorites/channels/{channelId}")
+    suspend fun addFavoriteChannel(@Path("channelId") channelId: String): FavoriteToggleResponse
+
+    /** DELETE /api/v1/favorites/channels/{channelId} — idempotent remove. */
+    @DELETE("favorites/channels/{channelId}")
+    suspend fun removeFavoriteChannel(@Path("channelId") channelId: String): FavoriteToggleResponse
+
+    /** POST /api/v1/channels/{channelId}/watch — beacon (records last-watched). */
+    @POST("channels/{channelId}/watch")
+    suspend fun recordChannelWatch(@Path("channelId") channelId: String): WatchBeaconResponse
 }

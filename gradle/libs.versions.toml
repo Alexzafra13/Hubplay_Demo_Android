@@ -84,10 +84,16 @@ moshi-kotlin                   = { group = "com.squareup.moshi",       name = "m
 moshi-kotlin-codegen           = { group = "com.squareup.moshi",       name = "moshi-kotlin-codegen", version.ref = "moshi" }
 
 # Media3 / ExoPlayer (HLS playback)
+# media3-datasource-okhttp routes ExoPlayer HTTP through OkHttp so the
+# same AuthInterceptor used by Retrofit (with auto-refresh on 401)
+# also covers HLS segment fetches. Without it, the JWT baked into the
+# DefaultHttpDataSource headers expires mid-stream and live channels
+# freeze after ~30 min idle.
 media3-exoplayer               = { group = "androidx.media3",          name = "media3-exoplayer",     version.ref = "media3" }
 media3-exoplayer-hls           = { group = "androidx.media3",          name = "media3-exoplayer-hls", version.ref = "media3" }
 media3-ui                      = { group = "androidx.media3",          name = "media3-ui",            version.ref = "media3" }
 media3-session                 = { group = "androidx.media3",          name = "media3-session",       version.ref = "media3" }
+media3-datasource-okhttp       = { group = "androidx.media3",          name = "media3-datasource-okhttp", version.ref = "media3" }
 
 # Concurrency
 kotlinx-coroutines-android     = { group = "org.jetbrains.kotlinx",    name = "kotlinx-coroutines-android", version.ref = "coroutines" }

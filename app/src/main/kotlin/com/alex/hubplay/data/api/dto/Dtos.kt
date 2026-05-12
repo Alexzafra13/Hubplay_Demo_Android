@@ -329,3 +329,107 @@ data class LibraryDto(
 data class LibrariesResponse(
     val data: List<LibraryDto>? = null,
 )
+
+// ─── IPTV: channels, groups, schedule, favorites ────────────────────────────
+//
+// Ground truth: internal/api/handlers/iptv_dto.go::channelDTO,
+// iptv_channels.go (ListChannels / Groups / BulkSchedule) and
+// iptv_favorites.go (ListFavoriteIDs / Add / Remove / RecordChannelWatch).
+//
+// Notes on wire shape:
+//   - All endpoints respond `{ data: ... }`.
+//   - `logo_url` is a server-relative path; absolutize with serverUrl.
+//   - `stream_url` is also a server-relative path. List endpoints set it;
+//     the detail endpoint omits it (clients build it themselves).
+//   - `bulk_schedule` response data is `{ "<channelId>": [program, ...], ... }`
+//     — a map, not an array. Programs may be empty for channels with no EPG.
+
+@JsonClass(generateAdapter = true)
+data class ChannelDto(
+    val id:                                String,
+    val name:                              String,
+    val number:                            Int     = 0,
+    val group:                             String? = null,
+    @Json(name = "group_name")             val groupName:     String? = null,
+    val category:                          String? = null,
+    @Json(name = "logo_url")               val logoUrl:       String? = null,
+    @Json(name = "logo_initials")          val logoInitials:  String? = null,
+    @Json(name = "logo_bg")                val logoBg:        String? = null,
+    @Json(name = "logo_fg")                val logoFg:        String? = null,
+    @Json(name = "stream_url")             val streamUrl:     String? = null,
+    @Json(name = "library_id")             val libraryId:     String? = null,
+    @Json(name = "tvg_id")                 val tvgId:         String? = null,
+    val language:                          String? = null,
+    val country:                           String? = null,
+    @Json(name = "is_active")              val isActive:      Boolean = true,
+    @Json(name = "health_status")          val healthStatus:  String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChannelsResponse(
+    val data: List<ChannelDto>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class GroupsResponse(
+    /** Plain list of group_name strings as they appear in the M3U. */
+    val data: List<String>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class EPGProgramDto(
+    val id:                                String? = null,
+    val title:                             String? = null,
+    val description:                       String? = null,
+    val category:                          String? = null,
+    @Json(name = "icon_url")               val iconUrl:    String? = null,
+    /** RFC3339 timestamps (Go time.Time marshals to RFC3339 by default). */
+    @Json(name = "start_time")             val startTime:  String? = null,
+    @Json(name = "end_time")               val endTime:    String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class BulkScheduleRequest(
+    val channels: List<String>,
+    /**
+     * Either RFC3339 timestamps or bare integers as "hours relative to now"
+     * (negative for past). Empty falls back to backend default ±window
+     * (-2h .. +24h). We send "-1" / "6" so the response carries `now - 1h`
+     * to `now + 6h` — enough for "now and next" plus a small margin.
+     */
+    val from: String? = null,
+    val to:   String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class BulkScheduleResponse(
+    /** channelId → programs (sorted by start_time ascending on the server). */
+    val data: Map<String, List<EPGProgramDto>>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class FavoriteIdsResponse(
+    val data: List<String>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class FavoriteTogglePayload(
+    @Json(name = "channel_id")  val channelId:  String,
+    @Json(name = "is_favorite") val isFavorite: Boolean = false,
+)
+
+@JsonClass(generateAdapter = true)
+data class FavoriteToggleResponse(
+    val data: FavoriteTogglePayload? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class WatchBeaconPayload(
+    @Json(name = "channel_id")      val channelId:     String,
+    @Json(name = "last_watched_at") val lastWatchedAt: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class WatchBeaconResponse(
+    val data: WatchBeaconPayload? = null,
+)
