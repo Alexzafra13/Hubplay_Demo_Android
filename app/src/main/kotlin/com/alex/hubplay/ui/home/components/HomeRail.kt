@@ -3,11 +3,11 @@ package com.alex.hubplay.ui.home.components
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,7 +30,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,31 +41,39 @@ import kotlinx.coroutines.launch
 private val RailContentPadding = 24.dp
 
 /**
- * Hover dwell required before the spotlight expands. Long enough that
- * a fast D-pad scan reads as plain navigation, short enough that a
- * deliberate stop feels snappy.
+ * Hover dwell required before the spotlight commits to a new focused
+ * card. While the dwell hasn't elapsed, navigating is just navigating
+ * — focus border moves between compact cards but the spotlight stays
+ * anchored on the last settled card. Only a deliberate stop (no nav
+ * for [SPOTLIGHT_OPEN_DELAY_MS]) promotes the focused card into the
+ * spotlight target and triggers the slot widening + content slide.
  */
 private const val SPOTLIGHT_OPEN_DELAY_MS = 800L
 
 /**
  * A titled horizontal rail.
  *
- * Compact cards always; the focused card's slot widens to
- * [SpotlightDims.totalWidth] when the spotlight is open, pushing the
- * next poster to the right (never covering it). The spotlight overlay
- * lives at viewport position [RailContentPadding] and stays mounted
- * while focus is anywhere inside the rail — only its content slides
- * (left/right depending on D-pad direction). No collapse-and-re-expand
- * jitter.
+ * State model:
+ *   - [focusedIndex] is the card the LazyRow currently has focus on.
+ *     Updates the instant a card calls onFocused. Drives the focus
+ *     border + scale on compact cards and the rail-level "focus has
+ *     left this rail" detection.
+ *   - `spotlightTargetIndex` is a DEBOUNCED version of focusedIndex.
+ *     It only catches up to focusedIndex once the user has dwelled on
+ *     the same card for [SPOTLIGHT_OPEN_DELAY_MS]. Drives the slot
+ *     widening, the spotlight overlay's content and the auto-scroll.
  *
- * Three animations run in lockstep on every focus change:
- *   1. Old focused slot width: 475 → 150 (tween SPOTLIGHT_ANIM_MS)
- *   2. New focused slot width: 150 → 475 (tween SPOTLIGHT_ANIM_MS)
- *   3. Auto-scroll by precise delta so the new focused's left edge
- *      lands at viewport position RailContentPadding.
+ * Why two indices: fast D-pad sweeps shouldn't toggle the spotlight
+ * on every card under the cursor — that's how you get jittering
+ * panels and pósters that "stay behind" because the slot animations
+ * never settle. Decoupling the immediate focus signal from the
+ * spotlight commit means rapid nav reads as plain compact-card
+ * navigation, and only deliberate stops promote a card to the
+ * spotlight.
  *
- * Landscape rails (Continue Watching, Next Up) skip the spotlight
- * — their 16:9 stills already read as a preview.
+ * Landscape rails (Continue Watching, Next Up, Live Now) skip the
+ * spotlight entirely — their 16:9 footprint already reads as a
+ * preview.
  */
 @Composable
 fun HomeRail(
@@ -83,39 +90,51 @@ fun HomeRail(
     val scope     = rememberCoroutineScope()
     val canSpotlight = style == CardStyle.Portrait
 
-    var focusedIndex   by remember { mutableStateOf<Int?>(null) }
-    var lastFocusedIdx by remember { mutableIntStateOf(-1) }
-    var spotlightOpen  by remember { mutableStateOf(false) }
-    var slideDirection by remember { mutableIntStateOf(0) }
+    var focusedIndex         by remember { mutableStateOf<Int?>(null) }
+    var spotlightTargetIndex by remember { mutableStateOf<Int?>(null) }
+    var lastSpotlightIdx     by remember { mutableIntStateOf(-1) }
+    var slideDirection       by remember { mutableIntStateOf(0) }
 
-    // Hover delay: first focus inside the rail waits the open delay
-    // before showing the spotlight. Once open, focus changes within
-    // the rail keep it mounted (only its content slides). Focus
-    // leaving the rail closes it via the LazyRow's onFocusChanged.
+    // Dwell debounce: any change in focusedIndex restarts the timer.
+    // After SPOTLIGHT_OPEN_DELAY_MS of stability, spotlightTargetIndex
+    // catches up. Focus leaving the rail (focusedIndex = null) closes
+    // the spotlight immediately so it doesn't linger when the user
+    // moves to another rail.
     LaunchedEffect(focusedIndex, canSpotlight) {
         if (!canSpotlight) {
-            spotlightOpen = false
+            spotlightTargetIndex = null
             return@LaunchedEffect
         }
-        when {
-            focusedIndex == null -> spotlightOpen = false
-            !spotlightOpen       -> {
-                delay(SPOTLIGHT_OPEN_DELAY_MS)
-                if (focusedIndex != null) spotlightOpen = true
+        val current = focusedIndex
+        if (current == null) {
+            spotlightTargetIndex = null
+            lastSpotlightIdx     = -1
+            return@LaunchedEffect
+        }
+        delay(SPOTLIGHT_OPEN_DELAY_MS)
+        // Recheck — focusedIndex could have changed during the delay,
+        // in which case a newer LaunchedEffect instance will handle it
+        // and this one becomes a no-op when cancelled. The explicit
+        // recheck guards against the race where the delay completes
+        // exactly as focus moves elsewhere.
+        if (focusedIndex == current) {
+            val prev = lastSpotlightIdx
+            slideDirection = when {
+                prev < 0          -> 0
+                current > prev    -> 1
+                current < prev    -> -1
+                else              -> 0
             }
+            spotlightTargetIndex = current
+            lastSpotlightIdx     = current
         }
     }
 
-    // Auto-scroll on every focus change while the spotlight is open.
-    // We compute the delta from the focused card's CURRENT visible
-    // offset to the rail's viewport start so the wider slot lines up
-    // perfectly with the spotlight overlay above it. animateScrollBy
-    // (not animateScrollToItem, which no-ops when the item is already
-    // "visible enough" — exactly the case here, since the focused card
-    // sits under the spotlight).
-    LaunchedEffect(focusedIndex, spotlightOpen) {
-        val target = focusedIndex
-        if (!spotlightOpen || target == null) return@LaunchedEffect
+    // Auto-scroll the focused (= spotlight target) slot to the same
+    // x-position the spotlight overlay sits at, so the wider slot and
+    // the overlay align to the pixel.
+    LaunchedEffect(spotlightTargetIndex) {
+        val target = spotlightTargetIndex ?: return@LaunchedEffect
         scrollFocusedToStart(scope, listState, target)
     }
 
@@ -128,9 +147,12 @@ fun HomeRail(
             modifier   = Modifier.padding(horizontal = RailContentPadding, vertical = 8.dp),
         )
 
-        // Box wraps the LazyRow + spotlight overlay. clipToBounds on
-        // the LazyRow stops mid-animation slivers of the previously-
-        // focused card from poking past the rail's left edge.
+        // No clipToBounds on the LazyRow: vertical clipping would
+        // crop the focused card's 1.06 scale animation at the top
+        // (the "se ve cortado de arriba" the user spotted on
+        // Continuar viendo). Mid-collapse slivers in the leading
+        // padding are masked by the dedicated leading-mask Box below
+        // — they only matter while the spotlight is open anyway.
         Box(modifier = Modifier.fillMaxWidth()) {
             LazyRow(
                 state                 = listState,
@@ -138,22 +160,19 @@ fun HomeRail(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier              = Modifier
                     .fillMaxWidth()
-                    .clipToBounds()
                     .onFocusChanged { focusState ->
                         // hasFocus stays true while ANY descendant card
                         // is focused. Goes false the instant D-pad
                         // up/down moves to a different rail. That's
-                        // the signal to close the spotlight and reset
-                        // direction tracking so the next visit starts
-                        // with a clean fade-in.
+                        // the signal to clear focusedIndex which in
+                        // turn closes the spotlight.
                         if (!focusState.hasFocus) {
-                            focusedIndex   = null
-                            lastFocusedIdx = -1
+                            focusedIndex = null
                         }
                     },
             ) {
                 itemsIndexed(items, key = { _, it -> it.id }) { index, item ->
-                    val isActiveSlot = canSpotlight && spotlightOpen && index == focusedIndex
+                    val isActiveSlot = canSpotlight && index == spotlightTargetIndex
                     val slotWidth by animateDpAsState(
                         targetValue   = if (isActiveSlot) SpotlightDims.totalWidth else style.defaultWidth,
                         animationSpec = tween(SPOTLIGHT_ANIM_MS),
@@ -166,14 +185,7 @@ fun HomeRail(
                         slotWidth   = slotWidth,
                         hideContent = isActiveSlot,
                         onFocused   = { focusedItem ->
-                            slideDirection = when {
-                                lastFocusedIdx < 0     -> 0
-                                index > lastFocusedIdx -> 1
-                                index < lastFocusedIdx -> -1
-                                else                   -> 0
-                            }
-                            lastFocusedIdx = index
-                            focusedIndex   = index
+                            focusedIndex = index
                             onFocused(focusedItem)
                         },
                         onClick     = onClick,
@@ -181,27 +193,25 @@ fun HomeRail(
                 }
             }
 
-            // Spotlight overlay at viewport position RailContentPadding
-            // — exactly where auto-scroll keeps the focused card's
-            // left edge. The wider slot reserves the space underneath
-            // so this overlay never covers any unfocused card.
+            // Spotlight overlay — driven by the DEBOUNCED target, not
+            // the immediate focus. Stays anchored to the last settled
+            // card during fast D-pad sweeps; only a dwell promotes a
+            // new card into it.
             if (canSpotlight) {
                 val spotlightAlpha by animateFloatAsState(
-                    targetValue   = if (spotlightOpen && focusedIndex != null) 1f else 0f,
+                    targetValue   = if (spotlightTargetIndex != null) 1f else 0f,
                     animationSpec = tween(SPOTLIGHT_ANIM_MS),
                     label         = "spotlight-alpha",
                 )
-                val current = focusedIndex?.let { items.getOrNull(it) }
+                val current = spotlightTargetIndex?.let { items.getOrNull(it) }
                 if (spotlightAlpha > 0.01f && current != null) {
-                    // Leading mask: hides any mid-animation sliver of
-                    // the previously-focused card peeking through the
-                    // 0..RailContentPadding strip on the left.
-                    // clipToBounds on the LazyRow stops content past
-                    // the rail's bounds, but x=0..24 IS within bounds
-                    // (it's the leading content padding area), so
-                    // collapsing cards can still show there for a
-                    // frame or two. This mask paints the rail's own
-                    // background on top.
+                    // Leading mask: covers the 0..RailContentPadding
+                    // strip so any mid-animation card sliver gets
+                    // hidden behind the rail's own background colour.
+                    // Height matches the spotlight; the title strips
+                    // below sit beyond it but the next card's strip
+                    // is far enough right that it doesn't read as a
+                    // peeking artefact.
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
@@ -246,7 +256,6 @@ fun LiveNowRail(
 ) {
     if (items.isEmpty()) return
     val listState = rememberLazyListState()
-    val scope     = rememberCoroutineScope()
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text       = title,
@@ -260,15 +269,10 @@ fun LiveNowRail(
             contentPadding        = PaddingValues(horizontal = RailContentPadding),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            itemsIndexed(items, key = { _, it -> it.id }) { index, item ->
+            itemsIndexed(items, key = { _, it -> it.id }) { _, item ->
                 LiveChannelCard(
                     item      = item,
-                    onFocused = { focusedItem ->
-                        onFocused(focusedItem)
-                        scope.launch {
-                            scrollFocusedToStart(scope, listState, index)
-                        }
-                    },
+                    onFocused = onFocused,
                     onClick   = onClick,
                 )
             }
@@ -286,11 +290,6 @@ fun LiveNowRail(
  * animateScrollToItem treats the call as a no-op when the item is
  * already "visible enough" — which it always is for the focused card
  * sitting under the spotlight.
- *
- * Earlier this used `viewportStartOffset` (which is 0 for a LazyRow,
- * not `beforeContentPadding`). That landed the focused slot at x=0
- * while the spotlight was at x=24, producing the visible 24dp
- * misalignment the user flagged.
  */
 private fun scrollFocusedToStart(
     scope:     CoroutineScope,
