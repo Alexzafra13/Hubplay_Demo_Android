@@ -29,7 +29,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.data.MediaItem
@@ -38,6 +44,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val RailContentPadding = 24.dp
+
+/**
+ * Width of the soft alpha fade applied to both ends of every rail.
+ * Cards leaving the viewport (because the focused one was auto-
+ * scrolled to the start) feather into transparency instead of being
+ * sliced sharply at the rail's edge — the polish trick Plex / Apple
+ * TV / Disney+ all use to hide the seam between visible and clipped
+ * content.
+ */
+private val EdgeFadeWidth = 48.dp
 
 /**
  * Hover dwell required before the spotlight opens for the focused
@@ -123,11 +139,15 @@ fun HomeRail(
         }
     }
 
-    // Auto-scroll the focused (= spotlight target) slot to the same
-    // x-position the spotlight overlay sits at, so the wider slot and
-    // the overlay align to the pixel.
-    LaunchedEffect(spotlightTargetIndex) {
-        val target = spotlightTargetIndex ?: return@LaunchedEffect
+    // Auto-scroll: focused card always sits at the start of the
+    // viewport (just past beforeContentPadding). Triggers on EVERY
+    // focus change, not just when the spotlight commits, so cards
+    // never sit at "second position" while focused — moving forward
+    // pushes the previous card off the left edge (where the
+    // [horizontalEdgeFade] feathers it out) and the next compact
+    // poster slides in from the right.
+    LaunchedEffect(focusedIndex) {
+        val target = focusedIndex ?: return@LaunchedEffect
         scrollFocusedToStart(scope, listState, target)
     }
 
@@ -153,6 +173,7 @@ fun HomeRail(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier              = Modifier
                     .fillMaxWidth()
+                    .horizontalEdgeFade()
                     .onFocusChanged { focusState ->
                         // hasFocus stays true while ANY descendant card
                         // is focused. Goes false the instant D-pad
@@ -254,6 +275,14 @@ fun LiveNowRail(
 ) {
     if (items.isEmpty()) return
     val listState = rememberLazyListState()
+    val scope     = rememberCoroutineScope()
+    var focusedIndex by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(focusedIndex) {
+        val target = focusedIndex ?: return@LaunchedEffect
+        scrollFocusedToStart(scope, listState, target)
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text       = title,
@@ -266,17 +295,52 @@ fun LiveNowRail(
             state                 = listState,
             contentPadding        = PaddingValues(horizontal = RailContentPadding),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier              = Modifier
+                .fillMaxWidth()
+                .horizontalEdgeFade()
+                .onFocusChanged { focusState ->
+                    if (!focusState.hasFocus) focusedIndex = null
+                },
         ) {
-            itemsIndexed(items, key = { _, it -> it.id }) { _, item ->
+            itemsIndexed(items, key = { _, it -> it.id }) { index, item ->
                 LiveChannelCard(
                     item      = item,
-                    onFocused = onFocused,
+                    onFocused = { focusedItem ->
+                        focusedIndex = index
+                        onFocused(focusedItem)
+                    },
                     onClick   = onClick,
                 )
             }
         }
     }
 }
+
+/**
+ * Soft alpha fade on both horizontal ends of the rail. Uses
+ * BlendMode.DstIn against an offscreen layer so the gradient
+ * actually erases the rendered content's alpha (instead of just
+ * painting a colour on top, which would leave a visible band over
+ * the rail's background). Standard "fading edge" recipe.
+ */
+private fun Modifier.horizontalEdgeFade(): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val fadePx = EdgeFadeWidth.toPx().coerceAtMost(size.width / 2f)
+        if (fadePx <= 0f) return@drawWithContent
+        val leftStop  = fadePx / size.width
+        val rightStop = 1f - leftStop
+        drawRect(
+            brush = Brush.horizontalGradient(
+                0f        to Color.Transparent,
+                leftStop  to Color.Black,
+                rightStop to Color.Black,
+                1f        to Color.Transparent,
+            ),
+            blendMode = BlendMode.DstIn,
+        )
+    }
 
 /**
  * Animate scroll so [index]'s left edge lands exactly at
