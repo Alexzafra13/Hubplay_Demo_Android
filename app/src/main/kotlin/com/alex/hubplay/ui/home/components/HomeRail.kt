@@ -22,7 +22,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -41,12 +40,19 @@ import kotlinx.coroutines.launch
 private val RailContentPadding = 24.dp
 
 /**
- * Hover dwell required before the spotlight commits to a new focused
- * card. While the dwell hasn't elapsed, navigating is just navigating
- * — focus border moves between compact cards but the spotlight stays
- * anchored on the last settled card. Only a deliberate stop (no nav
- * for [SPOTLIGHT_OPEN_DELAY_MS]) promotes the focused card into the
- * spotlight target and triggers the slot widening + content slide.
+ * Hover dwell required before the spotlight opens for the focused
+ * card. ANY focus change (incl. moving between cards while open)
+ * closes the spotlight immediately and restarts this timer; only a
+ * deliberate stop of [SPOTLIGHT_OPEN_DELAY_MS] re-opens it on the
+ * new focused card.
+ *
+ * That close-on-navigate / open-on-dwell rule is what the user kept
+ * asking for: rapid D-pad sweeps stay as plain compact navigation
+ * (no spotlight ever appears), and the visual artifacts of trying
+ * to slide a wide slot from one position to another (películas
+ * detrás, huecos al moverse atrás) are gone by construction —
+ * there's no in-flight slide to be inconsistent with the focused
+ * card's position.
  */
 private const val SPOTLIGHT_OPEN_DELAY_MS = 800L
 
@@ -92,41 +98,28 @@ fun HomeRail(
 
     var focusedIndex         by remember { mutableStateOf<Int?>(null) }
     var spotlightTargetIndex by remember { mutableStateOf<Int?>(null) }
-    var lastSpotlightIdx     by remember { mutableIntStateOf(-1) }
-    var slideDirection       by remember { mutableIntStateOf(0) }
 
-    // Dwell debounce: any change in focusedIndex restarts the timer.
-    // After SPOTLIGHT_OPEN_DELAY_MS of stability, spotlightTargetIndex
-    // catches up. Focus leaving the rail (focusedIndex = null) closes
-    // the spotlight immediately so it doesn't linger when the user
-    // moves to another rail.
+    // Close-on-navigate / open-on-dwell. The instant focusedIndex
+    // changes we drop spotlightTargetIndex back to null (slot
+    // collapses, overlay fades) and start a fresh timer. The new
+    // focused card only "wins" the spotlight if the user actually
+    // dwells on it for SPOTLIGHT_OPEN_DELAY_MS. Rapid D-pad sweeps
+    // never see a spotlight at all — there's no in-flight slide to
+    // get out of sync with the row layout.
     LaunchedEffect(focusedIndex, canSpotlight) {
         if (!canSpotlight) {
             spotlightTargetIndex = null
             return@LaunchedEffect
         }
         val current = focusedIndex
-        if (current == null) {
-            spotlightTargetIndex = null
-            lastSpotlightIdx     = -1
-            return@LaunchedEffect
-        }
+        // Always reset on any focus event so the close animation
+        // kicks in immediately when the user navigates with the
+        // spotlight open.
+        spotlightTargetIndex = null
+        if (current == null) return@LaunchedEffect
         delay(SPOTLIGHT_OPEN_DELAY_MS)
-        // Recheck — focusedIndex could have changed during the delay,
-        // in which case a newer LaunchedEffect instance will handle it
-        // and this one becomes a no-op when cancelled. The explicit
-        // recheck guards against the race where the delay completes
-        // exactly as focus moves elsewhere.
         if (focusedIndex == current) {
-            val prev = lastSpotlightIdx
-            slideDirection = when {
-                prev < 0          -> 0
-                current > prev    -> 1
-                current < prev    -> -1
-                else              -> 0
-            }
             spotlightTargetIndex = current
-            lastSpotlightIdx     = current
         }
     }
 
@@ -226,10 +219,15 @@ fun HomeRail(
                             .padding(start = RailContentPadding)
                             .alpha(spotlightAlpha),
                     ) {
+                        // Direction = 0 → AnimatedContent inside
+                        // RailSpotlight does a pure fade, no slide.
+                        // We never slide between cards anymore: the
+                        // spotlight closes on every nav and reopens
+                        // on dwell, so each open is a fresh reveal.
                         RailSpotlight(
                             state = SpotlightState(
                                 item      = current,
-                                direction = slideDirection,
+                                direction = 0,
                             ),
                         )
                     }
