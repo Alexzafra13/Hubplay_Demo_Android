@@ -8,11 +8,16 @@ import com.alex.hubplay.data.HomeData
 import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.MediaItem
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 
@@ -28,6 +33,7 @@ import kotlinx.coroutines.supervisorScope
  *     card the user (D-pad) is currently focused on. It defaults to
  *     null so the Hero falls back to its auto-rotating spotlight.
  */
+@OptIn(FlowPreview::class)
 class HomeViewModel(
     private val repository: HomeRepository,
 ) : ViewModel() {
@@ -38,7 +44,25 @@ class HomeViewModel(
     private val _focusedItem = MutableStateFlow<MediaItem?>(null)
     val focusedItem: StateFlow<MediaItem?> = _focusedItem.asStateFlow()
 
-    init { refresh() }
+    /**
+     * Raw focus events from rail cards. Debounced before reaching
+     * [_focusedItem] so that quick D-pad navigation across cards
+     * doesn't repaint the FocusedHero on every step — only a deliberate
+     * pause (>= [FOCUS_DEBOUNCE_MS]) commits the new selection. This is
+     * the "hover delay" the user asked for; matches how Netflix /
+     * Apple TV billboards settle on a card.
+     */
+    private val focusBus = MutableSharedFlow<MediaItem?>(
+        replay = 0, extraBufferCapacity = 16,
+    )
+
+    init {
+        refresh()
+        focusBus
+            .debounce(FOCUS_DEBOUNCE_MS)
+            .onEach { _focusedItem.value = it }
+            .launchIn(viewModelScope)
+    }
 
     fun refresh() {
         _ui.value = _ui.value.copy(isLoading = true, error = null)
@@ -144,10 +168,17 @@ class HomeViewModel(
             firstFocusConsumed = true
             return
         }
-        _focusedItem.value = item
+        focusBus.tryEmit(item)
     }
 
     companion object {
+        /**
+         * Hover dwell required before the FocusedHero crossfades to
+         * the focused card. Long enough that fast D-pad scans don't
+         * trigger it; short enough that deliberate stops feel snappy.
+         */
+        private const val FOCUS_DEBOUNCE_MS = 800L
+
         fun factory(repository: HomeRepository) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {

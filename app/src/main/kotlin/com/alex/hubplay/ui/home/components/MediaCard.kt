@@ -24,7 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
@@ -54,29 +53,22 @@ enum class CardStyle(val aspect: Float, val defaultWidth: Dp) {
 /**
  * Compact poster card used in every home rail and catalog grid.
  *
- *   - Default state: poster + focus border / scale.
+ *   - Default state: poster + title underneath.
  *   - Focused state: same poster, slightly scaled up, accent border.
  *
- * The expanded "info panel" preview that used to live inside this
- * component now lives at the rail level ([RailSpotlight]) so it stays
- * mounted across navigation — no collapse-and-re-expand jitter when
- * the user steps between cards. See HomeRail for the wiring.
- *
- * @param hideForSpotlight  When the rail's spotlight overlay is
- *                          covering this exact card, render the poster
- *                          invisible (alpha 0) so the spotlight's
- *                          backdrop doesn't fight a duplicated image
- *                          underneath. The card stays focusable and
- *                          keeps its layout footprint.
+ * Cards never expand inline. The "rich preview" (backdrop, year,
+ * rating, overview) lives in the FocusedHero billboard at the top of
+ * the home screen, which the ViewModel updates with a hover debounce
+ * — quick D-pad scans don't repaint, deliberate stops do. That keeps
+ * the rail row uncovered no matter where the user navigates.
  */
 @Composable
 fun MediaCard(
-    item:              MediaItem,
-    onFocused:         (MediaItem) -> Unit,
-    onClick:           (MediaItem) -> Unit,
-    style:             CardStyle = CardStyle.Landscape,
-    hideForSpotlight:  Boolean   = false,
-    modifier:          Modifier  = Modifier,
+    item:      MediaItem,
+    onFocused: (MediaItem) -> Unit,
+    onClick:   (MediaItem) -> Unit,
+    style:     CardStyle = CardStyle.Landscape,
+    modifier:  Modifier  = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -100,7 +92,6 @@ fun MediaCard(
 
     Column(
         modifier = modifier
-            .alpha(if (hideForSpotlight) 0f else 1f)
             .scale(scale)
             .onFocusChanged { state ->
                 focused = state.isFocused
