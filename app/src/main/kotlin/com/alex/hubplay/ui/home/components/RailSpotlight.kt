@@ -41,31 +41,32 @@ import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.ui.theme.Accent
 
 /**
- * Pixel dimensions for the spotlight rendered BELOW a Portrait rail.
+ * Pixel dimensions for the in-rail spotlight. Match the original
+ * Netflix-on-web look the user signed off on: 225dp tall (= portrait
+ * card height), 475dp wide (315 backdrop + 240 panel - 80 overlap).
  *
- * Position changed vs. the older overlay version: the spotlight no
- * longer sits on top of the row, so it never covers neighbouring
- * cards. It is laid out in its own slot underneath the LazyRow with
- * an AnimatedVisibility wrapper that pushes the next rail down when
- * it appears. Compact dimensions keep that vertical jump small.
+ * The focused card's slot in the LazyRow widens to [totalWidth] so
+ * neighbouring cards get pushed to the right instead of being
+ * covered. The spotlight overlay then renders ON TOP of that wider
+ * slot, perfectly fitting it.
  */
 object SpotlightDims {
-    val height: Dp        = 135.dp                 // 16:9 backdrop dictates this
-    val backdropWidth: Dp = 240.dp                 // 240 / 135 ≈ 16:9
-    val panelWidth: Dp    = 300.dp                 // info column
-    val panelOverlap: Dp  = 50.dp                  // panel sits over the right side of backdrop
-    val panelSlant: Dp    = 36.dp                  // diagonal cut on the panel's left edge
-    val totalWidth: Dp    = backdropWidth + (panelWidth - panelOverlap)
+    val height: Dp        = 225.dp
+    val backdropWidth: Dp = 315.dp
+    val panelWidth: Dp    = 240.dp
+    val panelOverlap: Dp  = 80.dp
+    val panelSlant: Dp    = 56.dp
+    val totalWidth: Dp    = backdropWidth + (panelWidth - panelOverlap)   // 475dp
 }
 
-/** Tween shared with [HomeRail]'s slide animation. */
+/** Tween shared with [HomeRail]'s slot-width and scroll animations. */
 const val SPOTLIGHT_ANIM_MS = 320
 
 /**
  * Trapezoid clip for the spotlight's info panel: top edge full width,
- * bottom edge inset by [bottomSlantDp] on the LEFT. Same diagonal cut
- * the previous in-card panel used, scaled down to match the new
- * compact spotlight height.
+ * bottom edge inset by [bottomSlantDp] on the LEFT. Diagonal cut so
+ * the boundary between backdrop and white panel never reads as a
+ * clean vertical line.
  */
 private class PanelTrapezoidShape(private val bottomSlantDp: Dp) : Shape {
     override fun createOutline(
@@ -86,18 +87,20 @@ private class PanelTrapezoidShape(private val bottomSlantDp: Dp) : Shape {
 }
 
 /**
- * Persistent expanded preview rendered UNDER the focused rail's row
- * (not on top of it). Mounted once per rail; only its content swaps
- * via [AnimatedContent] (slide left/right depending on navigation
- * direction). The HomeRail wraps it in an AnimatedVisibility that
- * expands/shrinks the row vertically — so when nothing is focused,
- * the spotlight occupies zero space and the rails below sit flush
- * with the cards.
+ * Persistent spotlight overlay for a Portrait rail. Rendered ABOVE
+ * the LazyRow at a fixed viewport position (the leftmost focused
+ * slot, after the rail's leading content padding).
  *
- * @param state  Current focus snapshot. `direction` tells the slide
- *               which way to push old/new content; +1 = navigated
- *               forward (right), -1 = navigated backward (left), 0 =
- *               first appearance (no slide, just a fade).
+ * Mounted once per rail. Only the inner content swaps via
+ * [AnimatedContent] — old item slides left/right, new item slides
+ * in from the opposite side. The spotlight itself never collapses
+ * while focus stays inside the rail; it only fades in/out via the
+ * caller's AnimatedVisibility on entry/exit.
+ *
+ * @param state  Item + navigation direction. `direction` = +1 means
+ *               the user pressed RIGHT (new content slides in from
+ *               the right), -1 means LEFT, 0 means first reveal
+ *               (pure fade).
  */
 @Composable
 fun RailSpotlight(
@@ -123,11 +126,6 @@ data class SpotlightState(
     val direction: Int,
 )
 
-/**
- * Slide horizontally based on [direction], with a short crossfade so
- * the swap reads as smooth rather than mechanical. `0` (first reveal)
- * gets a pure fade — there is no "previous content" to push aside.
- */
 private fun AnimatedContentTransitionScope<SpotlightState>.spotlightTransition(
     direction: Int,
 ) = when {
@@ -193,10 +191,10 @@ private fun SpotlightCard(item: MediaItem) {
                     .width(SpotlightDims.panelWidth)
                     .fillMaxHeight()
                     .padding(
-                        start  = SpotlightDims.panelSlant + 14.dp,
-                        end    = 16.dp,
-                        top    = 12.dp,
-                        bottom = 12.dp,
+                        start  = SpotlightDims.panelSlant + 16.dp,
+                        end    = 18.dp,
+                        top    = 18.dp,
+                        bottom = 18.dp,
                     ),
             )
         }
@@ -214,13 +212,13 @@ private fun SpotlightInfoPanel(item: MediaItem, modifier: Modifier = Modifier) {
     ) {
         Text(
             text       = item.title,
-            style      = MaterialTheme.typography.titleSmall,
+            style      = MaterialTheme.typography.titleMedium,
             color      = panelTextPrimary,
             fontWeight = FontWeight.SemiBold,
-            maxLines   = 1,
+            maxLines   = 2,
             overflow   = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(6.dp))
         Row(
             verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -228,7 +226,7 @@ private fun SpotlightInfoPanel(item: MediaItem, modifier: Modifier = Modifier) {
             item.rating?.let {
                 Text(
                     text       = "★ ${"%.1f".format(it)}",
-                    style      = MaterialTheme.typography.labelSmall,
+                    style      = MaterialTheme.typography.labelMedium,
                     color      = Accent,
                     fontWeight = FontWeight.SemiBold,
                     maxLines   = 1,
@@ -237,17 +235,17 @@ private fun SpotlightInfoPanel(item: MediaItem, modifier: Modifier = Modifier) {
             item.year?.let {
                 Text(
                     text     = it.toString(),
-                    style    = MaterialTheme.typography.labelSmall,
+                    style    = MaterialTheme.typography.labelMedium,
                     color    = panelTextSecondary,
                     maxLines = 1,
                 )
             }
             item.genres.firstOrNull()?.let { g ->
-                Text("·", style = MaterialTheme.typography.labelSmall,
+                Text("·", style = MaterialTheme.typography.labelMedium,
                      color = panelTextSecondary)
                 Text(
                     text     = g,
-                    style    = MaterialTheme.typography.labelSmall,
+                    style    = MaterialTheme.typography.labelMedium,
                     color    = panelTextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -255,12 +253,12 @@ private fun SpotlightInfoPanel(item: MediaItem, modifier: Modifier = Modifier) {
             }
         }
         if (!item.overview.isNullOrBlank()) {
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
                 text     = item.overview,
                 style    = MaterialTheme.typography.bodySmall,
                 color    = panelTextSecondary,
-                maxLines = 3,
+                maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
             )
         }

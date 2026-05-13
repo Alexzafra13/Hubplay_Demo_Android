@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
@@ -42,8 +43,7 @@ import com.alex.hubplay.ui.theme.Accent
  *
  *   Landscape  16:9  → episode stills (Continue Watching) and channel
  *                       logos (Live Now). Title sits below.
- *   Portrait   2:3   → movie / series posters. The Plex / Netflix /
- *                       Apple TV "wall of posters" pattern.
+ *   Portrait   2:3   → movie / series posters.
  */
 enum class CardStyle(val aspect: Float, val defaultWidth: Dp) {
     Landscape(16f / 9f, 220.dp),
@@ -51,36 +51,39 @@ enum class CardStyle(val aspect: Float, val defaultWidth: Dp) {
 }
 
 /**
- * Compact poster card used in every home rail and catalog grid.
+ * Card used in every home rail and catalog grid.
  *
- *   - Default state: poster + title underneath.
- *   - Focused state: same poster, slightly scaled up, accent border.
+ *   - Default: poster of [defaultWidth] inside a slot of [defaultWidth].
+ *   - When focused inside a Portrait rail with the spotlight open:
+ *     the rail expands this card's [slotWidth] to [SpotlightDims.totalWidth]
+ *     and sets [hideContent] = true so the spotlight overlay can sit on
+ *     top of an empty wider slot. That is how the rail "pushes" the
+ *     next poster to the right when the spotlight opens.
  *
- * Cards never expand inline. The "rich preview" (backdrop, year,
- * rating, overview) lives in the FocusedHero billboard at the top of
- * the home screen, which the ViewModel updates with a hover debounce
- * — quick D-pad scans don't repaint, deliberate stops do. That keeps
- * the rail row uncovered no matter where the user navigates.
+ * The card itself never decides whether to show the spotlight — the
+ * parent rail owns that state and just hands us a slot width plus a
+ * hide flag. Keeps animations centrally coordinated.
  */
 @Composable
 fun MediaCard(
-    item:      MediaItem,
-    onFocused: (MediaItem) -> Unit,
-    onClick:   (MediaItem) -> Unit,
-    style:     CardStyle = CardStyle.Landscape,
-    modifier:  Modifier  = Modifier,
+    item:         MediaItem,
+    onFocused:    (MediaItem) -> Unit,
+    onClick:      (MediaItem) -> Unit,
+    style:        CardStyle = CardStyle.Landscape,
+    slotWidth:    Dp        = style.defaultWidth,
+    hideContent:  Boolean   = false,
+    modifier:     Modifier  = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue   = if (focused) 1.06f else 1.0f,
+        targetValue   = if (focused && !hideContent) 1.06f else 1.0f,
         animationSpec = tween(durationMillis = 180),
         label         = "media-card-scale",
     )
 
-    val cardWidth  = style.defaultWidth
     val cardHeight = when (style) {
-        CardStyle.Portrait  -> cardWidth * 1.5f                  // 225dp
-        CardStyle.Landscape -> cardWidth * (9f / 16f)            // ~124dp
+        CardStyle.Portrait  -> style.defaultWidth * 1.5f                  // 225dp
+        CardStyle.Landscape -> style.defaultWidth * (9f / 16f)            // ~124dp
     }
 
     val imageUrl = when (style) {
@@ -90,8 +93,13 @@ fun MediaCard(
 
     val interactionSource = remember { MutableInteractionSource() }
 
+    // Outer Column owns the animated slot width. Compact poster + title
+    // strip render at defaultWidth inside this slot, left-aligned, so
+    // when the slot widens for the spotlight there's empty room on the
+    // right where the spotlight overlay lands.
     Column(
         modifier = modifier
+            .width(slotWidth)
             .scale(scale)
             .onFocusChanged { state ->
                 focused = state.isFocused
@@ -99,19 +107,20 @@ fun MediaCard(
             }
             .clickable(
                 interactionSource = interactionSource,
-                indication        = null,   // no system-grey focus overlay
+                indication        = null,
                 onClick           = { onClick(item) },
             ),
         horizontalAlignment = Alignment.Start,
     ) {
         Box(
             modifier = Modifier
-                .width(cardWidth)
+                .width(style.defaultWidth)
                 .height(cardHeight)
                 .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .alpha(if (hideContent) 0f else 1f)
                 .then(
-                    if (focused) Modifier.border(
+                    if (focused && !hideContent) Modifier.border(
                         width = 2.dp,
                         color = Accent,
                         shape = RoundedCornerShape(10.dp),
@@ -137,7 +146,11 @@ fun MediaCard(
         }
 
         Spacer(Modifier.height(8.dp))
-        Column(modifier = Modifier.width(cardWidth)) {
+        Column(
+            modifier = Modifier
+                .width(style.defaultWidth)
+                .alpha(if (hideContent) 0f else 1f),
+        ) {
             Text(
                 text       = item.title,
                 style      = MaterialTheme.typography.bodyMedium,
