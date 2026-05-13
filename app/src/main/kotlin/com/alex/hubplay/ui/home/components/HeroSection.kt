@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -36,20 +37,27 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -58,37 +66,53 @@ import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.BgBase
 import com.alex.hubplay.ui.theme.OnAccent
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+/**
+ * Tween for vertical snap-scrolling between page sections. Matches
+ * [HomeRail]'s value so the page never feels like one component is
+ * pulling against another.
+ */
+private const val SECTION_SNAP_ANIM_MS = 350
 
 /**
  * The big spotlight at the top of the Home screen.
  *
- * Independent of what's focused below: auto-rotates through `spotlight`
- * items every [autoRotateMs] ms with pagination dots. The previous
- * version reacted to focus events from any card on the page — that
- * created two UX problems:
+ * It is the FIRST page section: occupies the full viewport (via
+ * [sectionMinHeight]) so that when the Hero is focused, no rail
+ * peeks at the bottom of the screen. Pressing D-pad Down moves
+ * focus to the first rail, which snaps the parent vertical-scroll
+ * past the Hero entirely. Pressing Up from a rail brings focus
+ * back to the Hero's Play button and animates the scroll back to
+ * the top.
  *
- *   1. The hero changed every time the user moved the D-pad, which
- *      flashed and broke the visual rhythm. The web client doesn't
- *      do this; it keeps the hero stable.
- *   2. When the user scrolled back up to the hero from a rail, the
- *      hero was sometimes mid-crossfade and the page felt jumpy.
+ * Auto-rotates through `spotlight` items every [autoRotateMs] ms
+ * with pagination dots. Independent of which card is focused
+ * elsewhere on the page — the per-card focus preview surface lives
+ * separately (today: none; future: a side panel that doesn't fight
+ * the Hero for focus targets).
  *
- * The right place for "show me info about THIS card" is a preview
- * surface near the card itself (lateral panel à la Netflix) — that
- * lives in a separate component and doesn't fight the hero for
- * attention. The HomeViewModel still tracks `focusedItem` for that
- * future use.
+ * The Play button uses a [FocusRequester] so the initial focus
+ * lands here rather than on the first rail's auto-focused card.
+ * Without this the LazyRow grabs initial focus, the rail's
+ * snap-on-focus fires, and the user sees rail 1 instead of the
+ * Hero on app start.
  */
 @Composable
 fun HeroSection(
     spotlight:        List<MediaItem>,
     onPlay:           (MediaItem) -> Unit,
     onDetails:        (MediaItem) -> Unit,
+    parentScroll:     ScrollState,
+    sectionMinHeight: Dp,
     modifier:         Modifier = Modifier,
     autoRotateMs:     Long     = 8_000L,
 ) {
     if (spotlight.isEmpty()) return
     var currentIdx by remember { mutableIntStateOf(0) }
+    var sectionTopY by remember { mutableFloatStateOf(0f) }
+    val scope = rememberCoroutineScope()
+    val playFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(spotlight) {
         if (spotlight.size <= 1) return@LaunchedEffect
@@ -98,15 +122,39 @@ fun HeroSection(
         }
     }
 
+    // Claim initial focus so the LazyRow inside the first rail
+    // doesn't auto-grab it on first composition and snap the page
+    // past the Hero. runCatching keeps a hostile focus state (no
+    // composed node yet) from crashing — should always succeed in
+    // normal flow.
+    LaunchedEffect(Unit) {
+        runCatching { playFocusRequester.requestFocus() }
+    }
+
     val displayItem = spotlight.getOrNull(currentIdx.coerceAtMost(spotlight.lastIndex))
         ?: return
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(420.dp),
+            .heightIn(min = sectionMinHeight)
+            .onGloballyPositioned { coords ->
+                sectionTopY = coords.positionInParent().y
+            }
+            .onFocusChanged { state ->
+                if (state.hasFocus) {
+                    scope.launch {
+                        parentScroll.animateScrollTo(
+                            value         = sectionTopY.toInt(),
+                            animationSpec = tween(durationMillis = SECTION_SNAP_ANIM_MS),
+                        )
+                    }
+                }
+            },
     ) {
-        // ── Backdrop crossfade ──────────────────────────────────────────────
+        // ── Backdrop crossfade — stretched to fill the section so
+        //    the Hero reads as a full-screen page, not a 420dp band
+        //    with empty space below. ────────────────────────────────────
         Crossfade(
             targetState     = displayItem.id,
             animationSpec   = tween(durationMillis = 350),
@@ -122,15 +170,17 @@ fun HeroSection(
         }
 
         // ── Vertical fade to bg colour at bottom + horizontal fade left ─────
-        // Same trick the web hero uses so the info column reads cleanly
-        // over any backdrop.
+        // Same trick the web hero uses so the info column reads
+        // cleanly over any backdrop. The vertical fade is now
+        // stronger toward the bottom because the section is taller
+        // than 420dp.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         0f   to Color.Transparent,
-                        0.6f to BgBase.copy(alpha = 0.6f),
+                        0.5f to BgBase.copy(alpha = 0.35f),
                         1f   to BgBase,
                     ),
                 ),
@@ -147,7 +197,8 @@ fun HeroSection(
                 ),
         )
 
-        // ── Info column (left) crossfades content with the backdrop ────────
+        // ── Info column (left), aligned to the bottom-left so the
+        //    layout reads the same regardless of section height. ─────────
         AnimatedContent(
             targetState     = displayItem,
             label           = "hero-info",
@@ -157,20 +208,19 @@ fun HeroSection(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .widthIn(max = 640.dp)
-                .padding(horizontal = 32.dp, vertical = 28.dp),
+                .padding(horizontal = 32.dp, vertical = 48.dp),
         ) { item ->
             Column {
                 Text(
-                    text       = "TRENDING ESTA SEMANA",
-                    style      = MaterialTheme.typography.labelMedium,
-                    color      = Accent,
-                    fontWeight = FontWeight.Bold,
+                    text          = "TRENDING ESTA SEMANA",
+                    style         = MaterialTheme.typography.labelMedium,
+                    color         = Accent,
+                    fontWeight    = FontWeight.Bold,
                     letterSpacing = 1.2.sp,
                 )
                 Spacer(Modifier.height(8.dp))
 
-                // Title — show the logo when the backend has one (Trending
-                // items often do), fall back to the text title otherwise.
+                // Title — logo when available, text fallback otherwise.
                 if (!item.logoUrl.isNullOrBlank()) {
                     AsyncImage(
                         model              = item.logoUrl,
@@ -192,12 +242,9 @@ fun HeroSection(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // Meta row: rating · year · genres
                 MetaRow(item)
                 Spacer(Modifier.height(12.dp))
 
-                // Overview — only when present (Trending always has it,
-                // Continue Watching usually doesn't)
                 item.overview?.takeIf { it.isNotBlank() }?.let { overview ->
                     Text(
                         text     = overview,
@@ -209,10 +256,9 @@ fun HeroSection(
                     Spacer(Modifier.height(20.dp))
                 } ?: Spacer(Modifier.height(20.dp))
 
-                // CTAs — TV focus visuals (border + scale) mirror MediaCard.
-                // No FocusRequester here: HomeRail's LazyRow grabs initial
-                // focus by default, and HomeViewModel's firstFocusConsumed
-                // absorbs that event. Users reach the Hero via D-pad up.
+                // CTAs — TV focus visuals (border + scale) mirror
+                // MediaCard. The Play button gets the
+                // FocusRequester so initial focus lands here.
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     var playFocused by remember { mutableStateOf(false) }
                     var detailsFocused by remember { mutableStateOf(false) }
@@ -234,6 +280,7 @@ fun HeroSection(
                             contentColor   = OnAccent,
                         ),
                         modifier = Modifier
+                            .focusRequester(playFocusRequester)
                             .onFocusChanged { playFocused = it.isFocused }
                             .scale(playScale)
                             .then(
@@ -264,13 +311,13 @@ fun HeroSection(
             }
         }
 
-        // ── Pagination dots (right). ──────────────────────────────
+        // ── Pagination dots (bottom-right). ──────────────────────────────
         if (spotlight.size > 1) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(horizontal = 32.dp, vertical = 28.dp),
+                    .padding(horizontal = 32.dp, vertical = 48.dp),
             ) {
                 spotlight.forEachIndexed { i, _ ->
                     Box(
@@ -318,4 +365,3 @@ private fun MetaRow(item: MediaItem) {
         }
     }
 }
-

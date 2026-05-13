@@ -1,7 +1,9 @@
 package com.alex.hubplay.ui.home
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,19 +19,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.home.components.CardStyle
-import com.alex.hubplay.ui.home.components.FocusedHero
 import com.alex.hubplay.ui.home.components.HeroSection
 import com.alex.hubplay.ui.home.components.HomeRail
 import com.alex.hubplay.ui.home.components.LiveNowRail
@@ -37,17 +36,30 @@ import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.home.components.TopNav
 
 /**
- * Home — rich layout matching the web client.
+ * Home — Netflix-style vertical paging across sections.
  *
  *   [TopNav (sticky)]
- *   [Hero — auto-rotating Trending, INDEPENDENT of focus below]
- *   [Rails in the order /me/home/layout returned, hidden ones skipped]
+ *   [Hero section — fills the viewport, auto-rotating spotlight]
+ *   [Rail section per /me/home/layout — also viewport-tall]
  *
- * Hero stability matters: it doesn't react to which rail card is
- * focused. The future "card focus preview" surface lives next to the
- * card itself, not by hijacking the hero. Until that lands, the
- * focused-item flow on the ViewModel is collected but not displayed —
- * keeps the wiring ready without UX cost.
+ * Each section's outer container reserves `sectionMinHeight` so that
+ * focusing into a section snaps the parent vertical scroll so the
+ * section's top sits just under TopNav. That's what makes "estoy en
+ * Tendencias y solo veo Tendencias" work: the previous Hero stays
+ * off-screen above, the next rail stays off-screen below, and the
+ * focused rail occupies the whole content area.
+ *
+ * Each section owns the snap behaviour internally (it knows its own y
+ * via onGloballyPositioned and animates `parentScroll` on focus). The
+ * screen just hands down the shared [ScrollState] and the section
+ * height — no per-rail registration up here.
+ *
+ * The previous Hero/FocusedHero Crossfade was removed: with snap-
+ * scrolling the Hero is off-screen whenever the user is on a rail, so
+ * the FocusedHero never reads visually AND its lack of focusable
+ * descendants made D-pad UP from a rail skip past the Hero entirely
+ * (focus jumped to the top nav). Card preview can come back later as
+ * a side surface that doesn't replace the Hero's focus targets.
  */
 @Composable
 fun HomeScreen(
@@ -58,7 +70,7 @@ fun HomeScreen(
     onLogOut:        () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsState()
-    val focused by viewModel.focusedItem.collectAsState()
+    val scrollState = rememberScrollState()
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -73,56 +85,53 @@ fun HomeScreen(
                 onLogOut       = onLogOut,
             )
 
-            when {
-                ui.isLoading && ui.data.continueWatching.isEmpty()
+            // BoxWithConstraints lives OUTSIDE the verticalScroll so
+            // maxHeight is the content-area viewport (total height
+            // minus TopNav). The inner scrollable Column inherits
+            // this as `sectionHeight` and hands it to every section,
+            // which uses it as a minimum height so one section
+            // exactly fills the screen.
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val sectionHeight: Dp = maxHeight
+
+                when {
+                    ui.isLoading && ui.data.continueWatching.isEmpty()
                                                 && ui.data.trending.isEmpty() -> CenteredSpinner()
-                ui.error != null                                                -> ErrorBanner(
-                    message = ui.error!!,
-                    onRetry = viewModel::refresh,
-                )
-                else                                                            -> Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                ) {
-                    // The Hero band is one of two presentations:
-                    //   - HeroSection (rotating spotlight) when no card
-                    //     on the page is focused.
-                    //   - FocusedHero (backdrop + info panel) when the
-                    //     user is navigating cards — same idea as
-                    //     Netflix's home preview.
-                    // Crossfade swaps them in place so the band height
-                    // stays constant and the rails below never jump.
-                    androidx.compose.animation.Crossfade(
-                        targetState   = focused,
-                        animationSpec = androidx.compose.animation.core.tween(450),
-                        label         = "home-hero-crossfade",
-                    ) { focusedItem ->
-                        if (focusedItem != null) {
-                            FocusedHero(item = focusedItem)
-                        } else {
-                            HeroSection(
-                                spotlight = ui.data.hero,
-                                onPlay    = { onPlayItem(it.id, it.resumePosSec) },
-                                onDetails = { onOpenItem(it.id, it.kind) },
+                    ui.error != null                                                -> ErrorBanner(
+                        message = ui.error!!,
+                        onRetry = viewModel::refresh,
+                    )
+                    else -> Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState),
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                    ) {
+                        HeroSection(
+                            spotlight        = ui.data.hero,
+                            onPlay           = { onPlayItem(it.id, it.resumePosSec) },
+                            onDetails        = { onOpenItem(it.id, it.kind) },
+                            parentScroll     = scrollState,
+                            sectionMinHeight = sectionHeight,
+                        )
+
+                        // Render rails in the order the server (or
+                        // default) gave us. Empty rails self-hide
+                        // inside HomeRail.
+                        ui.data.rails.forEach { config ->
+                            RenderRail(
+                                config           = config,
+                                data             = ui.data,
+                                onCardFocused    = viewModel::onCardFocused,
+                                onOpenItem       = onOpenItem,
+                                onPlayItem       = onPlayItem,
+                                parentScroll     = scrollState,
+                                sectionMinHeight = sectionHeight,
                             )
                         }
-                    }
 
-                    // Render rails in the order the server (or default)
-                    // gave us. Empty rails self-hide inside HomeRail.
-                    ui.data.rails.forEach { config ->
-                        RenderRail(
-                            config     = config,
-                            data       = ui.data,
-                            onCardFocused = viewModel::onCardFocused,
-                            onOpenItem = onOpenItem,
-                            onPlayItem = onPlayItem,
-                        )
+                        Spacer(Modifier.height(40.dp))
                     }
-
-                    Spacer(Modifier.height(40.dp))
                 }
             }
         }
@@ -143,50 +152,62 @@ fun HomeScreen(
  */
 @Composable
 private fun RenderRail(
-    config:        HomeRailConfig,
-    data:          com.alex.hubplay.data.HomeData,
-    onCardFocused: (MediaItem) -> Unit,
-    onOpenItem:    (String, MediaKind) -> Unit,
-    onPlayItem:    (String, Long) -> Unit,
+    config:           HomeRailConfig,
+    data:             com.alex.hubplay.data.HomeData,
+    onCardFocused:    (MediaItem) -> Unit,
+    onOpenItem:       (String, MediaKind) -> Unit,
+    onPlayItem:       (String, Long) -> Unit,
+    parentScroll:     ScrollState,
+    sectionMinHeight: Dp,
 ) {
     when (config.type) {
         HomeRailType.ContinueWatching -> HomeRail(
-            title     = config.title,
-            items     = data.continueWatching,
-            style     = CardStyle.Landscape,
-            onFocused = onCardFocused,
-            onClick   = { onPlayItem(it.id, it.resumePosSec) },
+            title            = config.title,
+            items            = data.continueWatching,
+            style            = CardStyle.Landscape,
+            onFocused        = onCardFocused,
+            onClick          = { onPlayItem(it.id, it.resumePosSec) },
+            parentScroll     = parentScroll,
+            sectionMinHeight = sectionMinHeight,
         )
         HomeRailType.NextUp -> HomeRail(
-            title     = config.title,
-            items     = data.nextUp,
-            style     = CardStyle.Landscape,
-            onFocused = onCardFocused,
-            onClick   = { onPlayItem(it.id, 0L) },
+            title            = config.title,
+            items            = data.nextUp,
+            style            = CardStyle.Landscape,
+            onFocused        = onCardFocused,
+            onClick          = { onPlayItem(it.id, 0L) },
+            parentScroll     = parentScroll,
+            sectionMinHeight = sectionMinHeight,
         )
         HomeRailType.Trending -> HomeRail(
-            title     = config.title,
-            items     = data.trending,
-            style     = CardStyle.Portrait,
-            onFocused = onCardFocused,
-            onClick   = { onOpenItem(it.id, it.kind) },
+            title            = config.title,
+            items            = data.trending,
+            style            = CardStyle.Portrait,
+            onFocused        = onCardFocused,
+            onClick          = { onOpenItem(it.id, it.kind) },
+            parentScroll     = parentScroll,
+            sectionMinHeight = sectionMinHeight,
         )
         HomeRailType.LatestInLibrary -> HomeRail(
-            title     = config.title,
+            title            = config.title,
             // Each library has its own filtered list — keyed by the
             // rail config id so re-orders / new libraries on the
             // server's "Personalizar inicio" page don't desync the
             // mapping.
-            items     = data.latestByRailId[config.id].orEmpty(),
-            style     = CardStyle.Portrait,
-            onFocused = onCardFocused,
-            onClick   = { onOpenItem(it.id, it.kind) },
+            items            = data.latestByRailId[config.id].orEmpty(),
+            style            = CardStyle.Portrait,
+            onFocused        = onCardFocused,
+            onClick          = { onOpenItem(it.id, it.kind) },
+            parentScroll     = parentScroll,
+            sectionMinHeight = sectionMinHeight,
         )
         HomeRailType.LiveNow -> LiveNowRail(
-            title     = config.title,
-            items     = data.liveNow,
-            onFocused = onCardFocused,
-            onClick   = { onPlayItem(it.id, 0L) },
+            title            = config.title,
+            items            = data.liveNow,
+            onFocused        = onCardFocused,
+            onClick          = { onPlayItem(it.id, 0L) },
+            parentScroll     = parentScroll,
+            sectionMinHeight = sectionMinHeight,
         )
     }
 }
