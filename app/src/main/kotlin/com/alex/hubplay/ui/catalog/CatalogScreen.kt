@@ -144,11 +144,10 @@ fun PortraitCatalogCard(
     onOpen:     (String, MediaKind) -> Unit,
 ) {
     MediaCard(
-        item          = item,
-        style         = CardStyle.Portrait,
-        expandOnFocus = false,
-        onFocused     = { /* no focus preview on catalog screens */ },
-        onClick       = { onOpen(it.id, it.kind) },
+        item      = item,
+        style     = CardStyle.Portrait,
+        onFocused = { /* no focus preview on catalog screens */ },
+        onClick   = { onOpen(it.id, it.kind) },
     )
 }
 
