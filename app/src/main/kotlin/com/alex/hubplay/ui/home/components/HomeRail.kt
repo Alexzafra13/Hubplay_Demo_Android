@@ -7,9 +7,12 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -190,6 +193,23 @@ fun HomeRail(
                 )
                 val current = focusedIndex?.let { items.getOrNull(it) }
                 if (spotlightAlpha > 0.01f && current != null) {
+                    // Leading mask: hides any mid-animation sliver of
+                    // the previously-focused card peeking through the
+                    // 0..RailContentPadding strip on the left.
+                    // clipToBounds on the LazyRow stops content past
+                    // the rail's bounds, but x=0..24 IS within bounds
+                    // (it's the leading content padding area), so
+                    // collapsing cards can still show there for a
+                    // frame or two. This mask paints the rail's own
+                    // background on top.
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .width(RailContentPadding)
+                            .height(SpotlightDims.height)
+                            .alpha(spotlightAlpha)
+                            .background(MaterialTheme.colorScheme.background),
+                    )
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
@@ -257,11 +277,20 @@ fun LiveNowRail(
 }
 
 /**
- * Animate scroll so [index]'s left edge lands at the rail's leading
- * content padding. Uses animateScrollBy with a precise delta because
+ * Animate scroll so [index]'s left edge lands exactly at
+ * `beforeContentPadding` — that is the same x where the spotlight
+ * overlay sits, so the focused slot and the spotlight align to the
+ * pixel.
+ *
+ * Uses animateScrollBy with a precise delta because
  * animateScrollToItem treats the call as a no-op when the item is
  * already "visible enough" — which it always is for the focused card
  * sitting under the spotlight.
+ *
+ * Earlier this used `viewportStartOffset` (which is 0 for a LazyRow,
+ * not `beforeContentPadding`). That landed the focused slot at x=0
+ * while the spotlight was at x=24, producing the visible 24dp
+ * misalignment the user flagged.
  */
 private fun scrollFocusedToStart(
     scope:     CoroutineScope,
@@ -269,12 +298,11 @@ private fun scrollFocusedToStart(
     index:     Int,
 ) {
     scope.launch {
-        val info       = listState.layoutInfo
-        val target     = info.visibleItemsInfo.firstOrNull { it.index == index }
-        val viewportPx = info.viewportStartOffset
+        val info   = listState.layoutInfo
+        val target = info.visibleItemsInfo.firstOrNull { it.index == index }
 
         if (target != null) {
-            val delta = (target.offset - viewportPx).toFloat()
+            val delta = (target.offset - info.beforeContentPadding).toFloat()
             if (delta != 0f) {
                 listState.animateScrollBy(
                     value         = delta,
