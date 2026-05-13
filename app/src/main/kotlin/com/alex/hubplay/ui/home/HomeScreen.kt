@@ -36,30 +36,27 @@ import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.home.components.TopNav
 
 /**
- * Home — Netflix-style vertical paging across sections.
+ * Home — section-based vertical navigation.
  *
  *   [TopNav (sticky)]
- *   [Hero section — fills the viewport, auto-rotating spotlight]
- *   [Rail section per /me/home/layout — also viewport-tall]
+ *   [Hero — viewport-tall, cinematic, auto-rotating spotlight]
+ *   [Rails — natural height, snap-on-focus with 60dp peek of the
+ *    previous section above and the next section peeking below]
  *
- * Each section's outer container reserves `sectionMinHeight` so that
- * focusing into a section snaps the parent vertical scroll so the
- * section's top sits just under TopNav. That's what makes "estoy en
- * Tendencias y solo veo Tendencias" work: the previous Hero stays
- * off-screen above, the next rail stays off-screen below, and the
- * focused rail occupies the whole content area.
+ * Why the asymmetry: the Hero has a full-bleed backdrop and reads
+ * best at viewport height (the "cogiendo toda la pantalla" the user
+ * asked for on the FIRST section). Rails are short by nature (title
+ * + a row of cards, ~330dp) — forcing them to viewport height
+ * leaves a 600+ dp black void below the cards, which the user
+ * specifically flagged as broken. Natural height + a small peek
+ * offset gives the "Netflix on TV" feel: focused row prominent at
+ * the top of the visible area, previous row's bottom faded above,
+ * next row's title visible below.
  *
- * Each section owns the snap behaviour internally (it knows its own y
- * via onGloballyPositioned and animates `parentScroll` on focus). The
- * screen just hands down the shared [ScrollState] and the section
- * height — no per-rail registration up here.
- *
- * The previous Hero/FocusedHero Crossfade was removed: with snap-
- * scrolling the Hero is off-screen whenever the user is on a rail, so
- * the FocusedHero never reads visually AND its lack of focusable
- * descendants made D-pad UP from a rail skip past the Hero entirely
- * (focus jumped to the top nav). Card preview can come back later as
- * a side surface that doesn't replace the Hero's focus targets.
+ * Each section owns its own snap behaviour: it knows its own y via
+ * onGloballyPositioned and animates the shared [ScrollState] on
+ * focus enter. The screen just hands down `parentScroll` and (for
+ * the Hero) the viewport height.
  */
 @Composable
 fun HomeScreen(
@@ -85,14 +82,13 @@ fun HomeScreen(
                 onLogOut       = onLogOut,
             )
 
-            // BoxWithConstraints lives OUTSIDE the verticalScroll so
-            // maxHeight is the content-area viewport (total height
-            // minus TopNav). The inner scrollable Column inherits
-            // this as `sectionHeight` and hands it to every section,
-            // which uses it as a minimum height so one section
-            // exactly fills the screen.
+            // BoxWithConstraints exposes the content-area viewport
+            // (total height minus TopNav). Used only as the Hero's
+            // minimum height — rails take their natural height so
+            // the page can show 2-3 rails at once with peek
+            // transitions.
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val sectionHeight: Dp = maxHeight
+                val viewportHeight: Dp = maxHeight
 
                 when {
                     ui.isLoading && ui.data.continueWatching.isEmpty()
@@ -112,21 +108,20 @@ fun HomeScreen(
                             onPlay           = { onPlayItem(it.id, it.resumePosSec) },
                             onDetails        = { onOpenItem(it.id, it.kind) },
                             parentScroll     = scrollState,
-                            sectionMinHeight = sectionHeight,
+                            sectionMinHeight = viewportHeight,
                         )
 
-                        // Render rails in the order the server (or
-                        // default) gave us. Empty rails self-hide
-                        // inside HomeRail.
+                        // Rails render in the order /me/home/layout
+                        // returned. Empty rails self-hide inside
+                        // HomeRail.
                         ui.data.rails.forEach { config ->
                             RenderRail(
-                                config           = config,
-                                data             = ui.data,
-                                onCardFocused    = viewModel::onCardFocused,
-                                onOpenItem       = onOpenItem,
-                                onPlayItem       = onPlayItem,
-                                parentScroll     = scrollState,
-                                sectionMinHeight = sectionHeight,
+                                config        = config,
+                                data          = ui.data,
+                                onCardFocused = viewModel::onCardFocused,
+                                onOpenItem    = onOpenItem,
+                                onPlayItem    = onPlayItem,
+                                parentScroll  = scrollState,
                             )
                         }
 
@@ -143,71 +138,56 @@ fun HomeScreen(
  *
  *   Continue Watching / Next Up   → Landscape stills, tap = Player (resume).
  *   Latest / Trending             → Portrait posters, tap = Detail.
- *   Live Now                      → Landscape logos, tap = Player (no detail
- *                                   page exists for a channel yet).
- *
- * `latest_in_library` rails (one per content library on the server)
- * all share the same source today — fetchLatest returns a global mix.
- * A future iteration can fetch per-libraryId.
+ *   Live Now                      → Landscape logos, tap = Player.
  */
 @Composable
 private fun RenderRail(
-    config:           HomeRailConfig,
-    data:             com.alex.hubplay.data.HomeData,
-    onCardFocused:    (MediaItem) -> Unit,
-    onOpenItem:       (String, MediaKind) -> Unit,
-    onPlayItem:       (String, Long) -> Unit,
-    parentScroll:     ScrollState,
-    sectionMinHeight: Dp,
+    config:        HomeRailConfig,
+    data:          com.alex.hubplay.data.HomeData,
+    onCardFocused: (MediaItem) -> Unit,
+    onOpenItem:    (String, MediaKind) -> Unit,
+    onPlayItem:    (String, Long) -> Unit,
+    parentScroll:  ScrollState,
 ) {
     when (config.type) {
         HomeRailType.ContinueWatching -> HomeRail(
-            title            = config.title,
-            items            = data.continueWatching,
-            style            = CardStyle.Landscape,
-            onFocused        = onCardFocused,
-            onClick          = { onPlayItem(it.id, it.resumePosSec) },
-            parentScroll     = parentScroll,
-            sectionMinHeight = sectionMinHeight,
+            title        = config.title,
+            items        = data.continueWatching,
+            style        = CardStyle.Landscape,
+            onFocused    = onCardFocused,
+            onClick      = { onPlayItem(it.id, it.resumePosSec) },
+            parentScroll = parentScroll,
         )
         HomeRailType.NextUp -> HomeRail(
-            title            = config.title,
-            items            = data.nextUp,
-            style            = CardStyle.Landscape,
-            onFocused        = onCardFocused,
-            onClick          = { onPlayItem(it.id, 0L) },
-            parentScroll     = parentScroll,
-            sectionMinHeight = sectionMinHeight,
+            title        = config.title,
+            items        = data.nextUp,
+            style        = CardStyle.Landscape,
+            onFocused    = onCardFocused,
+            onClick      = { onPlayItem(it.id, 0L) },
+            parentScroll = parentScroll,
         )
         HomeRailType.Trending -> HomeRail(
-            title            = config.title,
-            items            = data.trending,
-            style            = CardStyle.Portrait,
-            onFocused        = onCardFocused,
-            onClick          = { onOpenItem(it.id, it.kind) },
-            parentScroll     = parentScroll,
-            sectionMinHeight = sectionMinHeight,
+            title        = config.title,
+            items        = data.trending,
+            style        = CardStyle.Portrait,
+            onFocused    = onCardFocused,
+            onClick      = { onOpenItem(it.id, it.kind) },
+            parentScroll = parentScroll,
         )
         HomeRailType.LatestInLibrary -> HomeRail(
-            title            = config.title,
-            // Each library has its own filtered list — keyed by the
-            // rail config id so re-orders / new libraries on the
-            // server's "Personalizar inicio" page don't desync the
-            // mapping.
-            items            = data.latestByRailId[config.id].orEmpty(),
-            style            = CardStyle.Portrait,
-            onFocused        = onCardFocused,
-            onClick          = { onOpenItem(it.id, it.kind) },
-            parentScroll     = parentScroll,
-            sectionMinHeight = sectionMinHeight,
+            title        = config.title,
+            items        = data.latestByRailId[config.id].orEmpty(),
+            style        = CardStyle.Portrait,
+            onFocused    = onCardFocused,
+            onClick      = { onOpenItem(it.id, it.kind) },
+            parentScroll = parentScroll,
         )
         HomeRailType.LiveNow -> LiveNowRail(
-            title            = config.title,
-            items            = data.liveNow,
-            onFocused        = onCardFocused,
-            onClick          = { onPlayItem(it.id, 0L) },
-            parentScroll     = parentScroll,
-            sectionMinHeight = sectionMinHeight,
+            title        = config.title,
+            items        = data.liveNow,
+            onFocused    = onCardFocused,
+            onClick      = { onPlayItem(it.id, 0L) },
+            parentScroll = parentScroll,
         )
     }
 }
