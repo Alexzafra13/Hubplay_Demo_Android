@@ -57,7 +57,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -78,35 +77,30 @@ private const val SECTION_SNAP_ANIM_MS = 350
 /**
  * The big spotlight at the top of the Home screen.
  *
- * It is the FIRST page section: occupies the full viewport (via
- * [sectionMinHeight]) so that when the Hero is focused, no rail
- * peeks at the bottom of the screen. Pressing D-pad Down moves
- * focus to the first rail, which snaps the parent vertical-scroll
- * past the Hero entirely. Pressing Up from a rail brings focus
- * back to the Hero's Play button and animates the scroll back to
- * the top.
+ * Fixed 420dp tall — the original cinematic band height. An earlier
+ * iteration forced this to viewport height so the Hero "took the
+ * whole screen", but it felt sluggish: pressing Down from the Play
+ * button meant scrolling a full 1000dp before the first rail
+ * appeared, and the user explicitly flagged "queda muy alta y no
+ * se navega fluido". 420dp keeps the cinematic backdrop while
+ * letting Rail 1 peek below — closer to how Netflix actually does
+ * it.
  *
  * Auto-rotates through `spotlight` items every [autoRotateMs] ms
  * with pagination dots. Independent of which card is focused
- * elsewhere on the page — the per-card focus preview surface lives
- * separately (today: none; future: a side panel that doesn't fight
- * the Hero for focus targets).
+ * elsewhere on the page.
  *
- * The Play button uses a [FocusRequester] so the initial focus
- * lands here rather than on the first rail's auto-focused card.
- * Without this the LazyRow grabs initial focus, the rail's
- * snap-on-focus fires, and the user sees rail 1 instead of the
- * Hero on app start.
+ * The Play button uses a [FocusRequester] so initial focus lands
+ * here rather than on the first rail's auto-focused card.
  */
 @Composable
 fun HeroSection(
-    spotlight:        List<MediaItem>,
-    onPlay:           (MediaItem) -> Unit,
-    onDetails:        (MediaItem) -> Unit,
-    parentScroll:     ScrollState,
-    sectionMinHeight: Dp,
-    modifier:         Modifier = Modifier,
-    autoRotateMs:     Long     = 8_000L,
+    spotlight:    List<MediaItem>,
+    onPlay:       (MediaItem) -> Unit,
+    onDetails:    (MediaItem) -> Unit,
+    parentScroll: ScrollState,
+    modifier:     Modifier = Modifier,
+    autoRotateMs: Long     = 8_000L,
 ) {
     if (spotlight.isEmpty()) return
     var currentIdx by remember { mutableIntStateOf(0) }
@@ -137,7 +131,7 @@ fun HeroSection(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = sectionMinHeight)
+            .height(420.dp)
             .onGloballyPositioned { coords ->
                 sectionTopY = coords.positionInParent().y
             }
@@ -208,7 +202,7 @@ fun HeroSection(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .widthIn(max = 640.dp)
-                .padding(horizontal = 32.dp, vertical = 48.dp),
+                .padding(horizontal = 32.dp, vertical = 28.dp),
         ) { item ->
             Column {
                 Text(
@@ -317,7 +311,7 @@ fun HeroSection(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(horizontal = 32.dp, vertical = 48.dp),
+                    .padding(horizontal = 32.dp, vertical = 28.dp),
             ) {
                 spotlight.forEachIndexed { i, _ ->
                     Box(

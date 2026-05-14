@@ -45,16 +45,25 @@ import com.alex.hubplay.data.MediaItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val RailContentPadding = 24.dp
+/**
+ * Leading content padding for the rail. Sized so the focused card's
+ * scaled (1.06×) left edge lands OUTSIDE the [EdgeFadeWidth] zone —
+ * otherwise the focused poster reads as 'metida a la izquierda',
+ * partially dimmed by the edge fade. With leadingPad=32 and
+ * edgeFade=24, a focused 150dp portrait at slot 0 has its scaled
+ * left edge at x = 32 - 4.5 ≈ 27.5dp, beyond the 24dp fade zone =
+ * full opacity.
+ */
+private val RailContentPadding = 32.dp
 
 /**
  * Width of the soft alpha fade applied to both ends of every rail.
- * Cards leaving the viewport (because the focused one was auto-
- * scrolled to the start) feather into transparency instead of being
- * sliced sharply at the rail's edge — same polish trick Plex / Apple
- * TV / Disney+ use.
+ * Cards leaving the viewport feather into transparency instead of
+ * being sliced sharply at the rail's edge. Kept just under
+ * [RailContentPadding] so the focused (scaled) card's left edge
+ * sits past the fade — see the comment on [RailContentPadding].
  */
-private val EdgeFadeWidth = 48.dp
+private val EdgeFadeWidth = 24.dp
 
 /**
  * Vertical headroom inside the rail's offscreen compositing layer so
@@ -74,14 +83,17 @@ private val RailScaleHeadroom = 14.dp
  * — the "transición elegante entre rails, no negro" the user asked
  * for.
  */
-private val RailPeekOffset = 60.dp
+private val RailPeekOffset = 40.dp
 
 /**
- * Hover dwell required before the spotlight opens for the focused
- * card. ANY focus change closes the spotlight immediately and
- * restarts this timer.
+ * Hover dwell before the spotlight opens for the focused card. ANY
+ * focus change closes the spotlight immediately and restarts this
+ * timer. 1800ms was the value the user landed on after testing the
+ * 800ms default felt rushed — long enough that fast D-pad sweeps
+ * never trigger the spotlight, short enough that a deliberate stop
+ * still feels intentional.
  */
-private const val SPOTLIGHT_OPEN_DELAY_MS = 800L
+private const val SPOTLIGHT_OPEN_DELAY_MS = 1800L
 
 /**
  * Vertical scroll animation when a rail gains focus and snaps the

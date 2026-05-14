@@ -1,12 +1,13 @@
 package com.alex.hubplay.ui.home
 
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -21,8 +22,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRailType
@@ -34,29 +36,32 @@ import com.alex.hubplay.ui.home.components.HomeRail
 import com.alex.hubplay.ui.home.components.LiveNowRail
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.home.components.TopNav
+import com.alex.hubplay.ui.theme.BgBase
 
 /**
- * Home — section-based vertical navigation.
+ * Home — Netflix-style vertical paging.
  *
  *   [TopNav (sticky)]
- *   [Hero — viewport-tall, cinematic, auto-rotating spotlight]
- *   [Rails — natural height, snap-on-focus with 60dp peek of the
- *    previous section above and the next section peeking below]
+ *   [Hero — 420dp cinematic spotlight with auto-rotation]
+ *   [Rails — natural height, snap-on-focus with 40dp peek of the
+ *    prior section above; the bottom of the viewport fades to bg so
+ *    the next rail's title peeks but its cards never read as a
+ *    competing layout]
  *
- * Why the asymmetry: the Hero has a full-bleed backdrop and reads
- * best at viewport height (the "cogiendo toda la pantalla" the user
- * asked for on the FIRST section). Rails are short by nature (title
- * + a row of cards, ~330dp) — forcing them to viewport height
- * leaves a 600+ dp black void below the cards, which the user
- * specifically flagged as broken. Natural height + a small peek
- * offset gives the "Netflix on TV" feel: focused row prominent at
- * the top of the visible area, previous row's bottom faded above,
- * next row's title visible below.
+ * The two gradient overlays inside the content Box are what make
+ * the transition between sections feel like Netflix rather than
+ * "rails stacked in a scroll view":
  *
- * Each section owns its own snap behaviour: it knows its own y via
- * onGloballyPositioned and animates the shared [ScrollState] on
- * focus enter. The screen just hands down `parentScroll` and (for
- * the Hero) the viewport height.
+ *   - Top fade (40dp, BgBase → Transparent) softens the leading
+ *     edge so the prior section's content fades into the new one
+ *     instead of cutting sharply.
+ *   - Bottom fade (200dp, Transparent → BgBase) is the key one.
+ *     With rails at natural height there's enough vertical room
+ *     to show 2-3 rails at once. The fade darkens the lower part
+ *     of the viewport so only titles and a sliver of the next
+ *     rail's cards stay readable — the "siempre saca la sección y
+ *     un poco de abajo con el título" effect the user pointed
+ *     to in the Netflix screenshots.
  */
 @Composable
 fun HomeScreen(
@@ -82,14 +87,15 @@ fun HomeScreen(
                 onLogOut       = onLogOut,
             )
 
-            // BoxWithConstraints exposes the content-area viewport
-            // (total height minus TopNav). Used only as the Hero's
-            // minimum height — rails take their natural height so
-            // the page can show 2-3 rails at once with peek
-            // transitions.
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val viewportHeight: Dp = maxHeight
-
+            // Content Box claims the remaining height via weight(1f).
+            // The fade overlays are siblings of the scrollable Column
+            // so they stay anchored to the viewport edges instead of
+            // scrolling with the content.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+            ) {
                 when {
                     ui.isLoading && ui.data.continueWatching.isEmpty()
                                                 && ui.data.trending.isEmpty() -> CenteredSpinner()
@@ -104,16 +110,12 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
                         HeroSection(
-                            spotlight        = ui.data.hero,
-                            onPlay           = { onPlayItem(it.id, it.resumePosSec) },
-                            onDetails        = { onOpenItem(it.id, it.kind) },
-                            parentScroll     = scrollState,
-                            sectionMinHeight = viewportHeight,
+                            spotlight    = ui.data.hero,
+                            onPlay       = { onPlayItem(it.id, it.resumePosSec) },
+                            onDetails    = { onOpenItem(it.id, it.kind) },
+                            parentScroll = scrollState,
                         )
 
-                        // Rails render in the order /me/home/layout
-                        // returned. Empty rails self-hide inside
-                        // HomeRail.
                         ui.data.rails.forEach { config ->
                             RenderRail(
                                 config        = config,
@@ -128,6 +130,39 @@ fun HomeScreen(
                         Spacer(Modifier.height(40.dp))
                     }
                 }
+
+                // Top fade — short, softens the peek of the previous
+                // section's bottom edge.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                0f to BgBase,
+                                1f to Color.Transparent,
+                            ),
+                        ),
+                )
+
+                // Bottom fade — tall, hides the bulk of the next
+                // rail's cards while letting its title remain
+                // legible. Sized so a portrait rail's title (40dp)
+                // + a sliver of its first card (~40dp) read clearly
+                // and the rest dissolves into bg.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                1f to BgBase,
+                            ),
+                        ),
+                )
             }
         }
     }
