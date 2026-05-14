@@ -75,15 +75,15 @@ private val EdgeFadeWidth = 24.dp
 private val RailScaleHeadroom = 14.dp
 
 /**
- * Peek the previous section keeps when the focused rail snaps into
- * place. Instead of putting the rail title flush at the viewport
- * top (which leaves a wide black band above when the previous
- * section is shorter than the viewport), we land the title 60dp
- * below the top so the user sees a faded slice of the prior content
- * — the "transición elegante entre rails, no negro" the user asked
- * for.
+ * Vertical snap target offset (currently 0): each rail's title
+ * lands flush with the top of the scrollable area, directly below
+ * the TopNav, with no peek of the previous section. The "next rail
+ * with title peek" effect is achieved entirely by the bottom
+ * gradient overlay in HomeScreen — not by leaving a peek band
+ * above. The user explicitly wanted "posicionarse debajo de la
+ * cabecera solo saliendo lo siguiente un poco abajo".
  */
-private val RailPeekOffset = 40.dp
+private val RailPeekOffset = 0.dp
 
 /**
  * Hover dwell before the spotlight opens for the focused card. ANY
@@ -105,15 +105,18 @@ private const val SECTION_SNAP_ANIM_MS = 350
 /**
  * Replica factor for the cyclic LazyRow. Items are repeated this
  * many times so D-pad past the last item lands on the FIRST item
- * again (= the next replica's slot 0) without any visual jump or
- * focus reset — Compose just navigates to the next focusable in the
- * row. The user starts at index `items.size * (REPEATS / 2)` so
- * they can also navigate LEFT past item 0 for tens of thousands of
- * presses before exhausting the replicas. 200 replicas keeps total
- * content-width well under Float precision limits even on a long
- * 100-item rail.
+ * again (= the next replica's slot 0) without any visual jump.
+ *
+ * 50 (was 200): the higher count was causing OOM-style crashes when
+ * the user held the D-pad direction button — Compose's LazyList
+ * pre-fetch / state-tracking machinery scales with the slot count
+ * even though only ~10 are composed. 50 × items.size still gives
+ * tens of seconds of held navigation in each direction from the
+ * mid-cycle start (e.g. 25 × 20 = 500 presses left from item 0
+ * before exhausting), which is "infinite" in practice for a TV
+ * remote.
  */
-private const val CYCLE_REPEATS = 200
+private const val CYCLE_REPEATS = 50
 
 /**
  * A titled horizontal rail with cyclic navigation + section-snap.
@@ -195,14 +198,22 @@ fun HomeRail(
         }
     }
 
-    // Focused cycle-index always re-aligns to slot 0. Uses
-    // animateScrollToItem so the smooth-scroller re-targets each
-    // frame as slot widths animate — the previous animateScrollBy-
-    // with-precomputed-delta over-shot while the prior spotlight
-    // slot was still collapsing.
+    // Focused cycle-index always re-aligns to slot 0. INSTANT
+    // scrollToItem (not animateScrollToItem) for two reasons:
+    //   1. When the previous slot is mid-collapse (475→150) the
+    //      smooth-scroller's continuous re-targeting visibly drags
+    //      the new focused card through a 1-second misaligned
+    //      transitional position. With scrollToItem the new card is
+    //      AT slot 0 immediately and the previous slot's collapse
+    //      animation continues off-screen-left without affecting
+    //      anything visible.
+    //   2. Holding the D-pad fired animateScrollToItem at 60Hz —
+    //      each cancelled the previous suspended scroll, and the
+    //      accumulated cancellations were crashing the app. Instant
+    //      scroll has no in-flight state to cancel.
     LaunchedEffect(focusedIndex) {
         val target = focusedIndex ?: return@LaunchedEffect
-        listState.animateScrollToItem(index = target, scrollOffset = 0)
+        listState.scrollToItem(index = target, scrollOffset = 0)
     }
 
     Column(
@@ -361,7 +372,7 @@ fun LiveNowRail(
 
     LaunchedEffect(focusedIndex) {
         val target = focusedIndex ?: return@LaunchedEffect
-        listState.animateScrollToItem(index = target, scrollOffset = 0)
+        listState.scrollToItem(index = target, scrollOffset = 0)
     }
 
     Column(

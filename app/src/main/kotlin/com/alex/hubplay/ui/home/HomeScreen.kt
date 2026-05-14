@@ -131,31 +131,24 @@ fun HomeScreen(
                     }
                 }
 
-                // Top fade — short, softens the peek of the previous
-                // section's bottom edge.
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .height(40.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                0f to BgBase,
-                                1f to Color.Transparent,
-                            ),
-                        ),
-                )
-
-                // Bottom fade — tall, hides the bulk of the next
-                // rail's cards while letting its title remain
-                // legible. Sized so a portrait rail's title (40dp)
-                // + a sliver of its first card (~40dp) read clearly
-                // and the rest dissolves into bg.
+                // Bottom fade — tall. With the focused rail snapped
+                // flush below the TopNav, the next rail's title sits
+                // at roughly viewport y ≈ 360-400 (after the focused
+                // rail's content + 20dp spacing). The fade starts at
+                // y ≈ 650 and goes opaque at the viewport bottom, so
+                // the next rail's title + a sliver of its first card
+                // read clearly and any rail after that dissolves into
+                // bg. "Saliendo lo siguiente un poco abajo con el
+                // título para saber donde pasas".
+                //
+                // No top fade: with no peek above (snap is flush to
+                // section top), darkening the top would just dim the
+                // focused rail's own title.
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(200.dp)
+                        .height(500.dp)
                         .background(
                             Brush.verticalGradient(
                                 0f to Color.Transparent,
