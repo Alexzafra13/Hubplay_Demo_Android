@@ -34,15 +34,11 @@
     <string name="login_server_hint">https://hubplay.duckdns.org</string>
     <string name="login_continue">Continuar</string>
     <string name="login_pairing_title">Empareja este dispositivo</string>
-    <string name="login_pairing_subtitle">Elige cómo enlazar: escanea el QR desde un dispositivo ya conectado o introduce el código manualmente.</string>
     <string name="login_pairing_step_url">En tu móvil o navegador, abre:</string>
     <string name="login_pairing_step_code">Y escribe este código</string>
     <string name="login_pairing_or">o</string>
     <string name="login_pairing_qr_secondary">Escanea con tu móvil</string>
     <string name="login_pairing_qr_title">Escanea el QR</string>
-    <string name="login_pairing_qr_help">Desde un dispositivo ya conectado a este servidor: Ajustes → Dispositivos → Escanear código.</string>
-    <string name="login_pairing_code_title">O introduce el código</string>
-    <string name="login_pairing_code_help">Abre HubPlay en cualquier navegador y entra a Ajustes → Dispositivos.</string>
     <string name="login_pairing_waiting">Esperando aprobación…</string>
     <string name="login_pairing_change_url">Cambiar servidor</string>
     <string name="login_pairing_approved">Aprobado, abriendo HubPlay…</string>
