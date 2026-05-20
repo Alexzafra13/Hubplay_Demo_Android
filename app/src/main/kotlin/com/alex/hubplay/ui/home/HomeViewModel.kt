@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.HomeData
 import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.HomeRepository
+import com.alex.hubplay.data.MeEvent
+import com.alex.hubplay.data.MeEventsStream
 import com.alex.hubplay.data.MediaItem
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
@@ -35,7 +37,8 @@ import kotlinx.coroutines.supervisorScope
  */
 @OptIn(FlowPreview::class)
 class HomeViewModel(
-    private val repository: HomeRepository,
+    private val repository:     HomeRepository,
+    private val meEventsStream: MeEventsStream,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(HomeUiState(isLoading = true))
@@ -62,7 +65,31 @@ class HomeViewModel(
             .debounce(FOCUS_DEBOUNCE_MS)
             .onEach { _focusedItem.value = it }
             .launchIn(viewModelScope)
+
+        // Listen for cross-device events. ProgressUpdated and
+        // PlayedToggled both affect Continue Watching / Next Up, so we
+        // refresh the page. FavoriteToggled only matters once we add a
+        // Favorites rail — silently ignored for now to avoid pointless
+        // refresh storms when the user marks a movie as favourite from
+        // another device. Debounced so a burst of progress events
+        // (e.g. someone seeking on the laptop) collapses into one fetch.
+        meEventsStream.events()
+            .onEach { event ->
+                when (event) {
+                    is MeEvent.ProgressUpdated, is MeEvent.PlayedToggled -> rebuildDebouncer.tryEmit(Unit)
+                    is MeEvent.FavoriteToggled                            -> Unit
+                }
+            }
+            .launchIn(viewModelScope)
+        rebuildDebouncer
+            .debounce(SSE_REFRESH_DEBOUNCE_MS)
+            .onEach { refresh() }
+            .launchIn(viewModelScope)
     }
+
+    private val rebuildDebouncer = MutableSharedFlow<Unit>(
+        replay = 0, extraBufferCapacity = 8,
+    )
 
     fun refresh() {
         _ui.value = _ui.value.copy(isLoading = true, error = null)
@@ -179,12 +206,21 @@ class HomeViewModel(
          */
         private const val FOCUS_DEBOUNCE_MS = 800L
 
-        fun factory(repository: HomeRepository) = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return HomeViewModel(repository) as T
+        /**
+         * Collapse a burst of SSE events into a single refresh — when the
+         * user scrubs on another device the server emits one progress
+         * update per chunk. We don't want to repaint the page 30 times
+         * a minute.
+         */
+        private const val SSE_REFRESH_DEBOUNCE_MS = 1_500L
+
+        fun factory(repository: HomeRepository, meEventsStream: MeEventsStream) =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    return HomeViewModel(repository, meEventsStream) as T
+                }
             }
-        }
     }
 }
 

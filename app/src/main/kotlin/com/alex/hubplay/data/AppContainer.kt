@@ -93,6 +93,12 @@ class AppContainer(context: Context) {
 
     val liveTvRepository: LiveTvRepository = LiveTvRepository(hubplayApi, tokenStore)
 
+    /**
+     * Server-Sent Events stream over `/me/events` — drives cross-device
+     * sync of Continue Watching, played/unplayed and favourites.
+     */
+    val meEventsStream: MeEventsStream = MeEventsStream(mainOkHttp, tokenStore, moshi)
+
     private fun loggingInterceptor() = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BASIC
     }

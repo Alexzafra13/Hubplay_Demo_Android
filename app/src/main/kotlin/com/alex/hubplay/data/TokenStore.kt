@@ -112,6 +112,15 @@ class TokenStore(private val context: Context) {
      * device-code finalisation). Suspends rather than blocks.
      */
     suspend fun snapshot(): AuthState = authStateFlow.first()
+
+    /**
+     * Synchronous read of the persisted server URL. Used by the SSE
+     * stream's reconnect loop, where suspending across the EventSource
+     * factory call would complicate the cancellation story. Acceptable
+     * because DataStore reads are cheap and the call happens at
+     * connect-time, not per-event.
+     */
+    fun serverUrlBlocking(): String? = runBlocking { serverUrlFlow.first() }
 }
 
 data class AuthState(

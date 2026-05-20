@@ -99,7 +99,7 @@ fun HubplayNavGraph(
         // ── Home ─────────────────────────────────────────────────────
         composable(Route.Home.path) {
             val viewModel = viewModel<HomeViewModel>(
-                factory = HomeViewModel.factory(container.homeRepository),
+                factory = HomeViewModel.factory(container.homeRepository, container.meEventsStream),
             )
             HomeScreen(
                 viewModel       = viewModel,
