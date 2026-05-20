@@ -329,7 +329,6 @@ private fun ChannelOrderRow(
     val nameColor = if (isHidden) TextSecondary else TextPrimary
     val isMoveTarget = pendingDigits != null
     var rowFocused by remember { mutableStateOf(false) }
-    val interactionSource = remember { MutableInteractionSource() }
 
     Row(
         modifier = Modifier
@@ -344,19 +343,19 @@ private fun ChannelOrderRow(
                 else Modifier,
             )
             .onFocusChanged { state ->
-                rowFocused = state.isFocused || state.hasFocus
+                val nowFocused = state.isFocused || state.hasFocus
                 // Leaving the row mid-buffer cancels the pending move so
                 // the digits don't latch on a row the user moved away from.
-                if (!rowFocused && isMoveTarget) onCancelMove()
+                if (rowFocused && !nowFocused && isMoveTarget) onCancelMove()
+                rowFocused = nowFocused
             }
-            .focusable(interactionSource = interactionSource)
+            .focusable()
             .onPreviewKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 val ch = ev.utf16CodePoint.toChar()
                 when {
                     ch.isDigit() -> { onAppendDigit(ch); true }
-                    ev.key == Key.Backspace ||
-                        ev.key == Key.Delete -> {
+                    ev.key == Key.Backspace -> {
                         if (isMoveTarget) { onPopDigit(); true } else false
                     }
                     ev.key == Key.Enter ||
@@ -364,7 +363,7 @@ private fun ChannelOrderRow(
                         ev.key == Key.DirectionCenter -> {
                         if (isMoveTarget) { onCommitMove(); true } else false
                     }
-                    ev.key == Key.Escape || ev.key == Key.Back -> {
+                    ev.key == Key.Escape -> {
                         if (isMoveTarget) { onCancelMove(); true } else false
                     }
                     else -> false
