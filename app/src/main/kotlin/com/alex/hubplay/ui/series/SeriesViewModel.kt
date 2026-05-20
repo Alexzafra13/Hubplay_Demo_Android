@@ -197,12 +197,14 @@ class SeriesViewModel(
     }
 }
 
+@androidx.compose.runtime.Immutable
 data class SeriesUiState(
     val isLoading: Boolean      = false,
     val data:      SeriesData?  = null,
     val error:     String?      = null,
 )
 
+@androidx.compose.runtime.Immutable
 data class SeriesData(
     val series:             MediaItem?,
     val seasons:            List<MediaItem>,

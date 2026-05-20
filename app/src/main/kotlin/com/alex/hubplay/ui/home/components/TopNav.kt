@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -58,12 +57,11 @@ import com.alex.hubplay.ui.theme.AccentSoft
  */
 @Composable
 fun TopNav(
-    selectedTab:    Tab,
-    onTabSelected:  (Tab) -> Unit,
-    onLogOut:       () -> Unit,
-    onSettings:     () -> Unit = {},
-    onSwitchProfile: () -> Unit = {},
-    modifier:       Modifier = Modifier,
+    selectedTab:   Tab,
+    onTabSelected: (Tab) -> Unit,
+    onLogOut:      () -> Unit,
+    onSettings:    () -> Unit = {},
+    modifier:      Modifier = Modifier,
 ) {
     Row(
         modifier              = modifier
@@ -99,9 +97,8 @@ fun TopNav(
         // standalone search icon disappeared when Search became a tab,
         // so the right-hand cluster is just identity-related actions.
         AvatarMenu(
-            onSwitchProfile = onSwitchProfile,
-            onSettings      = onSettings,
-            onLogOut        = onLogOut,
+            onSettings = onSettings,
+            onLogOut   = onLogOut,
         )
     }
 }
@@ -142,9 +139,8 @@ private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun AvatarMenu(
-    onSwitchProfile: () -> Unit,
-    onSettings:      () -> Unit,
-    onLogOut:        () -> Unit,
+    onSettings: () -> Unit,
+    onLogOut:   () -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -169,11 +165,9 @@ private fun AvatarMenu(
             expanded         = open,
             onDismissRequest = { open = false },
         ) {
-            DropdownMenuItem(
-                text     = { Text("Cambiar perfil") },
-                leadingIcon = { Icon(Icons.Default.SwitchAccount, contentDescription = null) },
-                onClick  = { open = false; onSwitchProfile() },
-            )
+            // "Cambiar perfil" was here as a non-functional placeholder.
+            // Removed on purpose — better to ship no entry than one that
+            // lies; we'll re-add it the day multi-profile actually works.
             DropdownMenuItem(
                 text     = { Text("Ajustes") },
                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },

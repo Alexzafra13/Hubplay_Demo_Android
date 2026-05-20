@@ -97,6 +97,7 @@ class SearchViewModel(
     }
 }
 
+@androidx.compose.runtime.Immutable
 data class SearchUiState(
     val query:       String           = "",
     val results:     List<MediaItem>  = emptyList(),

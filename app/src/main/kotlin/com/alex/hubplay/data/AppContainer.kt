@@ -119,6 +119,18 @@ class AppContainer(context: Context) {
     /** Backdrop pool the screensaver crossfades between. */
     val screensaverImageSource: ScreensaverImageSource = ScreensaverImageSource(homeRepository)
 
+    /**
+     * On-device crash logger. Installed and attached from
+     * HubplayApp.onCreate (before any composables can mount) so the
+     * Settings screen can read recent traces via this reference.
+     * Nullable here so unit tests don't have to bring up the
+     * application-level handler.
+     */
+    @Volatile
+    private var _crashLogger: CrashLogger? = null
+    val crashLogger: CrashLogger? get() = _crashLogger
+    fun attachCrashLogger(logger: CrashLogger) { _crashLogger = logger }
+
     init {
         // Keep the screensaver pool in sync with the paired session — on
         // login (or server switch) we re-fetch so the slideshow matches

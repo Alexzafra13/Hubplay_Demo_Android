@@ -192,12 +192,20 @@ fun HubplayNavGraph(
         // ── Settings ─────────────────────────────────────────────────
         composable(Route.Settings.path) {
             val vm = viewModel<SettingsViewModel>(
-                factory = SettingsViewModel.factory(container.tokenStore),
+                factory = SettingsViewModel.factory(container.tokenStore, container.crashLogger),
             )
+            val forgetServer: () -> Unit = {
+                // Wipes BOTH tokens + server URL, then drops back to login.
+                container.tokenStore.forgetServerBlocking()
+                navController.navigate(Route.Login.path) {
+                    popUpTo(Route.Home.path) { inclusive = true }
+                }
+            }
             SettingsScreen(
-                viewModel = vm,
-                onBack    = { navController.popBackStack() },
-                onLogOut  = logOut,
+                viewModel       = vm,
+                onBack          = { navController.popBackStack() },
+                onLogOut        = logOut,
+                onForgetServer  = forgetServer,
             )
         }
 

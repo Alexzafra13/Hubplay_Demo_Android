@@ -401,6 +401,15 @@ enum class MediaKind {
     }
 }
 
+/**
+ * Marked `@Immutable` so the Compose compiler treats `MediaItem` as a
+ * stable parameter and skips recomposition for unchanged instances.
+ * Every field below is a read-only `val` of a stable type (String,
+ * primitive, immutable List<String>), so the marker is honest — Compose
+ * would have inferred stability for most fields but `List<String>` is
+ * conservatively treated as unstable without the explicit annotation.
+ */
+@androidx.compose.runtime.Immutable
 data class MediaItem(
     val id:           String,
     val kind:         MediaKind,
@@ -449,6 +458,7 @@ data class MediaItem(
     val isFavorite:   Boolean = false,
 )
 
+@androidx.compose.runtime.Immutable
 data class HomeData(
     val hero:             List<MediaItem> = emptyList(),
     val continueWatching: List<MediaItem> = emptyList(),
@@ -466,6 +476,7 @@ data class HomeData(
 )
 
 /** A single rail's place in the home layout. */
+@androidx.compose.runtime.Immutable
 data class HomeRailConfig(
     val id:        String,
     val type:      HomeRailType,

@@ -212,6 +212,7 @@ internal fun normalizeServerUrl(input: String): String? {
     return url.toString().trimEnd('/')
 }
 
+@androidx.compose.runtime.Immutable
 data class LoginUiState(
     val serverUrl:     String = "",
     val isStarting:    Boolean = false,

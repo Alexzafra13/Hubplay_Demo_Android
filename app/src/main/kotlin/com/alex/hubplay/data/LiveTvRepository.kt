@@ -152,11 +152,13 @@ class LiveTvRepository(
 
 // ─── Domain types ────────────────────────────────────────────────────────────
 
+@androidx.compose.runtime.Immutable
 data class LiveLibrary(
     val id:   String,
     val name: String,
 )
 
+@androidx.compose.runtime.Immutable
 data class LiveChannel(
     val id:            String,
     val name:          String,
@@ -176,6 +178,7 @@ data class LiveChannel(
     val healthStatus:  String,
 )
 
+@androidx.compose.runtime.Immutable
 data class EpgProgram(
     val id:          String,
     val title:       String,

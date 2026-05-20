@@ -72,6 +72,7 @@ class DetailViewModel(
     }
 }
 
+@androidx.compose.runtime.Immutable
 data class DetailUiState(
     val isLoading: Boolean    = false,
     val item:      MediaItem? = null,
