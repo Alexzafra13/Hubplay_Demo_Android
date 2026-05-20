@@ -33,13 +33,27 @@ class DeviceCodeRepository(
         tokenStore.storeServerUrl(serverUrl)
         val resp = authApi.deviceStart(DeviceStartRequest())
         val data = resp.data ?: error("device/start returned no data envelope")
+        val userCode  = data.userCode    ?: error("device/start returned no user_code")
+        val verifyUrl = data.verificationUrl ?: data.verificationUri ?: serverUrl
+        // Prefer the server-built URL (RFC 8628 §3.3.1). Older deployments
+        // skip this field; reconstruct it locally with the same format the
+        // backend's buildVerificationURIComplete() uses.
+        val completeUrl = data.verificationUriComplete
+            ?: buildVerificationUriComplete(verifyUrl, userCode)
         return DeviceCodeStart(
-            userCode    = data.userCode    ?: error("device/start returned no user_code"),
-            deviceCode  = data.deviceCode  ?: error("device/start returned no device_code"),
-            verifyUrl   = data.verificationUrl ?: data.verificationUri ?: serverUrl,
-            intervalSec = (data.interval ?: 2).coerceAtLeast(1),
-            expiresInSec= data.expiresIn ?: 600,
+            userCode             = userCode,
+            deviceCode           = data.deviceCode ?: error("device/start returned no device_code"),
+            verifyUrl            = verifyUrl,
+            verifyUrlComplete    = completeUrl,
+            intervalSec          = (data.interval ?: 2).coerceAtLeast(1),
+            expiresInSec         = data.expiresIn ?: 600,
         )
+    }
+
+    private fun buildVerificationUriComplete(verifyUrl: String, userCode: String): String {
+        val base = verifyUrl.trimEnd('?', '&')
+        val sep  = if (base.contains('?')) '&' else '?'
+        return "$base${sep}code=$userCode"
     }
 
     /**
@@ -87,11 +101,14 @@ class DeviceCodeRepository(
 }
 
 data class DeviceCodeStart(
-    val userCode:     String,
-    val deviceCode:   String,
-    val verifyUrl:    String,
-    val intervalSec:  Int,
-    val expiresInSec: Int,
+    val userCode:          String,
+    val deviceCode:        String,
+    /** Plain verification URL (`https://server/link`). */
+    val verifyUrl:         String,
+    /** QR-encodable URL with `?code=` embedded (RFC 8628 §3.3.1). */
+    val verifyUrlComplete: String,
+    val intervalSec:       Int,
+    val expiresInSec:      Int,
 )
 
 sealed interface DeviceCodeStatus {

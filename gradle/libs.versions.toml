@@ -47,10 +47,19 @@ coil               = "3.0.4"          # Coil 3 stable (group is io.coil-kt.coil3
 # watchdog always tripped. WebView gives us mediaPlaybackRequiresUserGesture
 # control directly, which is enough to make autoplay-muted work.
 
+# ─── QR generation (login pairing) ──────────────────────────────────────────
+# zxing-core es pure-Java (~530 KB) y se mantiene activamente. Solo
+# generamos QR — no escaneamos — así que NO necesitamos `zxing-android-embedded`
+# ni CameraX.
+zxing              = "3.5.3"
+
 # ─── Tests ──────────────────────────────────────────────────────────────────
 junit              = "4.13.2"
 androidxTestExt    = "1.2.1"
 espresso           = "3.6.1"
+truth              = "1.4.4"
+turbine            = "1.2.0"
+mockwebserver      = "4.12.0"   # match okhttp version exactly
 
 [libraries]
 # AndroidX core
@@ -78,6 +87,7 @@ retrofit                       = { group = "com.squareup.retrofit2",   name = "r
 retrofit-converter-moshi       = { group = "com.squareup.retrofit2",   name = "converter-moshi",      version.ref = "retrofit" }
 retrofit-converter-scalars     = { group = "com.squareup.retrofit2",   name = "converter-scalars",    version.ref = "retrofit" }
 okhttp                         = { group = "com.squareup.okhttp3",     name = "okhttp",               version.ref = "okhttp" }
+okhttp-sse                     = { group = "com.squareup.okhttp3",     name = "okhttp-sse",           version.ref = "okhttp" }
 okhttp-logging-interceptor     = { group = "com.squareup.okhttp3",     name = "logging-interceptor",  version.ref = "okhttp" }
 moshi                          = { group = "com.squareup.moshi",       name = "moshi",                version.ref = "moshi" }
 moshi-kotlin                   = { group = "com.squareup.moshi",       name = "moshi-kotlin",         version.ref = "moshi" }
@@ -102,10 +112,17 @@ kotlinx-coroutines-android     = { group = "org.jetbrains.kotlinx",    name = "k
 coil-compose                   = { group = "io.coil-kt.coil3",         name = "coil-compose",         version.ref = "coil" }
 coil-network-okhttp            = { group = "io.coil-kt.coil3",         name = "coil-network-okhttp", version.ref = "coil" }
 
+# QR generation
+zxing-core                     = { group = "com.google.zxing",         name = "core",                 version.ref = "zxing" }
+
 # Tests
 junit                          = { group = "junit",                    name = "junit",                version.ref = "junit" }
 androidx-test-ext-junit        = { group = "androidx.test.ext",        name = "junit",                version.ref = "androidxTestExt" }
 androidx-test-espresso-core    = { group = "androidx.test.espresso",   name = "espresso-core",        version.ref = "espresso" }
+truth                          = { group = "com.google.truth",         name = "truth",                version.ref = "truth" }
+turbine                        = { group = "app.cash.turbine",         name = "turbine",              version.ref = "turbine" }
+kotlinx-coroutines-test        = { group = "org.jetbrains.kotlinx",    name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+mockwebserver                  = { group = "com.squareup.okhttp3",     name = "mockwebserver",        version.ref = "mockwebserver" }
 
 [plugins]
 android-application = { id = "com.android.application",       version.ref = "agp" }

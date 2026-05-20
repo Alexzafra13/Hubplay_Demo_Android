@@ -43,7 +43,10 @@ fun HubplayNavGraph(
         // ── Login ────────────────────────────────────────────────────
         composable(Route.Login.path) {
             val viewModel = viewModel<LoginViewModel>(
-                factory = LoginViewModel.factory(container.deviceCodeRepository),
+                factory = LoginViewModel.factory(
+                    container.deviceCodeRepository,
+                    container.lanDiscovery,
+                ),
             )
             LoginScreen(
                 viewModel = viewModel,

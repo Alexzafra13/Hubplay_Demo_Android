@@ -159,10 +159,15 @@ dependencies {
     implementation(libs.retrofit.converter.moshi)
     implementation(libs.retrofit.converter.scalars)
     implementation(libs.okhttp)
+    implementation(libs.okhttp.sse)            // /me/events SSE stream
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.moshi)
     implementation(libs.moshi.kotlin)
     ksp(libs.moshi.kotlin.codegen)
+
+    // ── QR generation (login pairing screen — encodes
+    //     verification_uri_complete so the web client can scan it)
+    implementation(libs.zxing.core)
 
     // ── Media3 / ExoPlayer (HLS)
     implementation(libs.media3.exoplayer)
@@ -186,6 +191,10 @@ dependencies {
 
     // ── Tests
     testImplementation(libs.junit)
+    testImplementation(libs.truth)
+    testImplementation(libs.turbine)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockwebserver)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)
 }

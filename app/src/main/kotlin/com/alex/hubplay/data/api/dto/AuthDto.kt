@@ -56,6 +56,16 @@ data class DeviceStartData(
      */
     @Json(name = "verification_url") val verificationUrl: String? = null,
     @Json(name = "verification_uri") val verificationUri: String? = null,
+    /**
+     * RFC 8628 §3.3.1 — verification URL with the `user_code` already
+     * embedded as `?code=…`. This is exactly what the QR code in the
+     * login screen encodes; the web client's QRScannerModal extracts
+     * the `code` query param and POSTs `/auth/device/approve`.
+     *
+     * Falls back to building it client-side from `verification_url` +
+     * `user_code` if the server doesn't return it (older deployments).
+     */
+    @Json(name = "verification_uri_complete") val verificationUriComplete: String? = null,
     @Json(name = "expires_in")       val expiresIn:       Int?    = null,
     val interval:                                          Int?    = null,
 )

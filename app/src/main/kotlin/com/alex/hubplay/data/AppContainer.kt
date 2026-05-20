@@ -79,6 +79,9 @@ class AppContainer(context: Context) {
         tokenStore = tokenStore,
     )
 
+    /** mDNS-based LAN discovery for the login screen. */
+    val lanDiscovery: LanDiscovery = LanDiscovery(context.applicationContext)
+
     /**
      * The hand-written API surface the Home + Player screens consume
      * today. Lives alongside the auto-generated `AuthApi` until we move
