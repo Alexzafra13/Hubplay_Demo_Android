@@ -2,6 +2,8 @@ package com.alex.hubplay.ui.login
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material3.Button
@@ -116,9 +119,17 @@ fun LoginScreen(
                     )
                     Spacer(Modifier.height(32.dp))
 
-                    when (ui.stage) {
-                        LoginStage.ServerUrl -> ServerUrlForm(ui, viewModel)
-                        LoginStage.Pairing   -> PairingForm(ui, viewModel, isWide)
+                    when {
+                        // Single LAN server got auto-picked → render the
+                        // "Conectando…" overlay even while stage is still
+                        // ServerUrl, so the user sees the auto-decision
+                        // happen explicitly rather than a stage flicker.
+                        ui.stage == LoginStage.ServerUrl && ui.autoConnected && ui.isStarting ->
+                            AutoConnectingOverlay(ui)
+                        ui.stage == LoginStage.ServerUrl ->
+                            ServerUrlForm(ui, viewModel)
+                        ui.stage == LoginStage.Pairing   ->
+                            PairingForm(ui, viewModel, isWide)
                     }
 
                     ui.error?.let { error ->
@@ -137,7 +148,17 @@ fun LoginScreen(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stage 1 — Server URL
+// Stage 1 — Server URL / LAN picker
+//
+// Three visual states layered into one composable:
+//
+//  1. LAN servers discovered → big tappable cards on top (primary path,
+//     Steam Link style). The URL input collapses into "¿Otro servidor?"
+//     so the typed path stays available without competing for attention.
+//  2. Still searching, nothing found yet → URL input is primary, with a
+//     small "Buscando en tu red…" indicator above.
+//  3. Search finished with no hits (router blocks multicast, remote
+//     server) → URL input is primary, no spinner.
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -146,6 +167,7 @@ private fun ServerUrlForm(ui: LoginUiState, viewModel: LoginViewModel) {
         text      = stringResource(R.string.login_title),
         style     = MaterialTheme.typography.headlineMedium,
         textAlign = TextAlign.Center,
+        fontWeight = FontWeight.SemiBold,
     )
     Spacer(Modifier.height(8.dp))
     Text(
@@ -154,8 +176,149 @@ private fun ServerUrlForm(ui: LoginUiState, viewModel: LoginViewModel) {
         color     = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
     )
-    Spacer(Modifier.height(32.dp))
+    Spacer(Modifier.height(28.dp))
 
+    val hasLanHits = ui.lanDiscovery.isNotEmpty()
+
+    if (hasLanHits) {
+        // LAN cards as the primary action — large, tappable, focusable.
+        LanServerList(
+            entries   = ui.lanDiscovery,
+            searching = ui.lanSearching,
+            onPick    = { url -> viewModel.pickServer(url) },
+        )
+        Spacer(Modifier.height(20.dp))
+        // Subtle divider + the typed URL path as a secondary affordance.
+        SecondaryUrlInput(ui, viewModel)
+    } else {
+        // No LAN hits → typed URL is the only path.
+        if (ui.lanSearching) {
+            LanSearchingPill()
+            Spacer(Modifier.height(14.dp))
+        }
+        PrimaryUrlInput(ui, viewModel)
+    }
+}
+
+@Composable
+private fun LanServerList(
+    entries:   List<LanServer>,
+    searching: Boolean,
+    onPick:    (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier              = Modifier.padding(bottom = 4.dp),
+        ) {
+            Icon(
+                imageVector        = Icons.Outlined.Lan,
+                contentDescription = null,
+                tint               = MaterialTheme.colorScheme.primary,
+                modifier           = Modifier.size(18.dp),
+            )
+            Text(
+                text  = stringResource(R.string.login_lan_discovered),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (searching) {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier    = Modifier.size(12.dp),
+                    color       = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        entries.forEach { entry ->
+            LanServerCard(entry = entry, onPick = onPick)
+        }
+    }
+}
+
+@Composable
+private fun LanServerCard(entry: LanServer, onPick: (String) -> Unit) {
+    Surface(
+        color          = MaterialTheme.colorScheme.surface,
+        shape          = RoundedCornerShape(14.dp),
+        tonalElevation = 3.dp,
+        modifier       = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = { onPick(entry.url) }),
+    ) {
+        Row(
+            modifier              = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            // Round badge with the brand mark colour so a TV user sees a
+            // clear hit target even at distance.
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector        = Icons.Outlined.Lan,
+                    contentDescription = null,
+                    tint               = MaterialTheme.colorScheme.primary,
+                    modifier           = Modifier.size(20.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text       = entry.displayName,
+                    style      = MaterialTheme.typography.bodyLarge,
+                    color      = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text  = entry.url,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(
+                imageVector        = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint               = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LanSearchingPill() {
+    Surface(
+        color    = MaterialTheme.colorScheme.surface,
+        shape    = RoundedCornerShape(999.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier              = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            CircularProgressIndicator(
+                strokeWidth = 2.dp,
+                modifier    = Modifier.size(14.dp),
+                color       = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text  = stringResource(R.string.login_lan_searching),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PrimaryUrlInput(ui: LoginUiState, viewModel: LoginViewModel) {
     OutlinedTextField(
         value           = ui.serverUrl,
         onValueChange   = viewModel::onServerUrlChange,
@@ -166,22 +329,7 @@ private fun ServerUrlForm(ui: LoginUiState, viewModel: LoginViewModel) {
         modifier        = Modifier.fillMaxWidth(),
         shape           = RoundedCornerShape(12.dp),
     )
-
-    // LAN discovery card — only rendered when there's something to show
-    // or when we're still searching. Suppresses entirely if the user
-    // already typed a URL longer than the discovered hostnames, since
-    // they clearly know where they're going.
-    if (ui.lanDiscovery.isNotEmpty() || ui.lanSearching) {
-        Spacer(Modifier.height(16.dp))
-        LanDiscoveryCard(
-            entries   = ui.lanDiscovery,
-            searching = ui.lanSearching,
-            onPick    = { url -> viewModel.onServerUrlChange(url) },
-        )
-    }
-
-    Spacer(Modifier.height(24.dp))
-
+    Spacer(Modifier.height(20.dp))
     Button(
         onClick        = viewModel::onContinueClicked,
         enabled        = !ui.isStarting && ui.serverUrl.isNotBlank(),
@@ -201,73 +349,94 @@ private fun ServerUrlForm(ui: LoginUiState, viewModel: LoginViewModel) {
     }
 }
 
+/**
+ * Compact variant of the URL input shown UNDER the LAN list. Same logic
+ * but visually demoted — smaller heading, lighter button — so it reads
+ * as "fallback for power users" not "the main thing you should do".
+ */
 @Composable
-private fun LanDiscoveryCard(
-    entries:   List<LanServer>,
-    searching: Boolean,
-    onPick:    (String) -> Unit,
-) {
-    Surface(
-        color    = MaterialTheme.colorScheme.surface,
-        shape    = RoundedCornerShape(12.dp),
-        tonalElevation = 2.dp,
+private fun SecondaryUrlInput(ui: LoginUiState, viewModel: LoginViewModel) {
+    Text(
+        text       = stringResource(R.string.login_other_server),
+        style      = MaterialTheme.typography.labelLarge,
+        color      = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = FontWeight.SemiBold,
+    )
+    Spacer(Modifier.height(10.dp))
+    OutlinedTextField(
+        value           = ui.serverUrl,
+        onValueChange   = viewModel::onServerUrlChange,
+        placeholder     = { Text(stringResource(R.string.login_server_hint)) },
+        singleLine      = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+        modifier        = Modifier.fillMaxWidth(),
+        shape           = RoundedCornerShape(12.dp),
+    )
+    Spacer(Modifier.height(12.dp))
+    TextButton(
+        onClick  = viewModel::onContinueClicked,
+        enabled  = !ui.isStarting && ui.serverUrl.isNotBlank(),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Outlined.Lan,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text  = stringResource(R.string.login_lan_discovered),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                if (searching) {
-                    Spacer(Modifier.width(12.dp))
-                    CircularProgressIndicator(
-                        strokeWidth = 2.dp,
-                        modifier    = Modifier.size(14.dp),
-                        color       = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            if (entries.isEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text  = stringResource(R.string.login_lan_searching),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                Spacer(Modifier.height(8.dp))
-                entries.forEach { entry ->
-                    TextButton(
-                        onClick  = { onPick(entry.url) },
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                text       = entry.displayName,
-                                style      = MaterialTheme.typography.bodyMedium,
-                                color      = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Medium,
-                            )
-                            Text(
-                                text  = entry.url,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
+        Text(stringResource(R.string.login_continue))
+    }
+}
+
+/**
+ * Full-screen "Conectando con HubPlay…" while the auto-skip path is
+ * waiting for /auth/device/start to come back. Surfaces the server we
+ * picked so the user sees the auto-decision explicitly — no naked
+ * spinner, no mystery delay before the QR appears.
+ */
+@Composable
+private fun AutoConnectingOverlay(ui: LoginUiState) {
+    val picked = ui.lanDiscovery.firstOrNull { it.url == ui.serverUrl }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier            = Modifier.fillMaxWidth(),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector        = Icons.Outlined.Lan,
+                contentDescription = null,
+                tint               = MaterialTheme.colorScheme.primary,
+                modifier           = Modifier.size(28.dp),
+            )
         }
+        Spacer(Modifier.height(18.dp))
+        Text(
+            text       = stringResource(R.string.login_auto_connecting),
+            style      = MaterialTheme.typography.titleMedium,
+            color      = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold,
+            textAlign  = TextAlign.Center,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text      = picked?.displayName ?: ui.serverUrl,
+            style     = MaterialTheme.typography.bodyMedium,
+            color     = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text  = ui.serverUrl,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(22.dp))
+        CircularProgressIndicator(
+            strokeWidth = 2.dp,
+            modifier    = Modifier.size(22.dp),
+            color       = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 

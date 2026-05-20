@@ -19,4 +19,6 @@
     <string name="login_error_generic">Error de conexión. Comprueba la URL y vuelve a intentarlo.</string>
     <string name="login_lan_discovered">Servidores en tu red</string>
     <string name="login_lan_searching">Buscando servidores en tu red…</string>
+    <string name="login_other_server">¿Otro servidor?</string>
+    <string name="login_auto_connecting">Conectando con HubPlay…</string>
 </resources>

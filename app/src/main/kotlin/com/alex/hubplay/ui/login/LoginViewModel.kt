@@ -9,6 +9,7 @@ import com.alex.hubplay.data.DeviceCodeStatus
 import com.alex.hubplay.data.LanDiscovery
 import com.alex.hubplay.data.LanServer
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +40,14 @@ class LoginViewModel(
     private var pollingJob: Job? = null
     private val discoveryJob: Job
 
+    /**
+     * Auto-skip stage 1 when there's exactly one HubPlay server on the
+     * LAN — same idea as Steam Link picking the only PC it finds. Set
+     * to true once after the grace window so a user who explicitly
+     * cancels pairing isn't yanked back into the same server again.
+     */
+    @Volatile private var autoSkipConsumed: Boolean = false
+
     init {
         discoveryJob = viewModelScope.launch {
             _uiState.update { it.copy(lanSearching = true) }
@@ -49,20 +58,52 @@ class LoginViewModel(
                 }
             }
         }
+        viewModelScope.launch { armAutoSkip() }
+    }
+
+    /**
+     * Waits [AUTO_SKIP_GRACE_MS] after construction so mDNS has time to
+     * surface more than one candidate (we don't want to commit to the
+     * first announcer if a second is arriving 200 ms behind). Then, if
+     * exactly one entry was discovered AND the user hasn't typed
+     * anything AND we're still on stage 1, jump straight to pairing.
+     */
+    private suspend fun armAutoSkip() {
+        delay(AUTO_SKIP_GRACE_MS)
+        val state = _uiState.value
+        if (autoSkipConsumed)                                return
+        if (state.stage != LoginStage.ServerUrl)             return
+        if (state.serverUrl.isNotBlank())                    return
+        if (state.lanDiscovery.size != 1)                    return
+        autoSkipConsumed = true
+        pickServer(state.lanDiscovery.first().url, fromAuto = true)
     }
 
     fun onServerUrlChange(url: String) {
+        // Any typing cancels the auto-skip race — user wants control.
+        autoSkipConsumed = true
         _uiState.update { it.copy(serverUrl = url, error = null) }
     }
 
-    fun onContinueClicked() {
-        val raw = _uiState.value.serverUrl.trim()
-        val normalized = normalizeUrl(raw) ?: run {
+    /**
+     * Drives stage 1 → stage 2 for both code paths: the user tapping a
+     * LAN card / Continue, and the auto-skip when there's a single LAN
+     * server. The [fromAuto] flag toggles a UI hint so the screen can
+     * render "Conectando con HubPlay…" instead of a generic spinner.
+     */
+    fun pickServer(url: String, fromAuto: Boolean = false) {
+        val normalized = normalizeServerUrl(url) ?: run {
             _uiState.update { it.copy(error = "URL inválida") }
             return
         }
-
-        _uiState.update { it.copy(isStarting = true, error = null) }
+        _uiState.update {
+            it.copy(
+                serverUrl     = normalized,
+                isStarting    = true,
+                error         = null,
+                autoConnected = fromAuto,
+            )
+        }
         viewModelScope.launch {
             val result = runCatching { deviceCodeRepository.start(normalized) }
             result.fold(
@@ -79,18 +120,35 @@ class LoginViewModel(
                 },
                 onFailure = { err ->
                     _uiState.update {
-                        it.copy(isStarting = false, error = err.message ?: "Error de conexión")
+                        it.copy(
+                            isStarting    = false,
+                            autoConnected = false,
+                            error         = err.message ?: "Error de conexión",
+                        )
                     }
                 },
             )
         }
     }
 
+    /** Continue button on the URL input — kept as a thin alias of pickServer. */
+    fun onContinueClicked() {
+        pickServer(_uiState.value.serverUrl)
+    }
+
     fun onCancelPairing() {
         pollingJob?.cancel()
         pollingJob = null
+        // Cancelling means "I want to pick another server" — never
+        // auto-skip back into the same one we just left.
+        autoSkipConsumed = true
         _uiState.update {
-            it.copy(stage = LoginStage.ServerUrl, pairingStart = null, pollStatus = null)
+            it.copy(
+                stage         = LoginStage.ServerUrl,
+                pairingStart  = null,
+                pollStatus    = null,
+                autoConnected = false,
+            )
         }
     }
 
@@ -114,6 +172,15 @@ class LoginViewModel(
     internal fun normalizeUrl(input: String): String? = normalizeServerUrl(input)
 
     companion object {
+        /**
+         * Grace window before auto-skip considers "only one server" to
+         * be the final count. Long enough that mDNS announcers arriving
+         * within a few hundred ms of each other all get counted; short
+         * enough that the user doesn't notice the wait on a single-server
+         * LAN.
+         */
+        private const val AUTO_SKIP_GRACE_MS = 1_200L
+
         fun factory(repository: DeviceCodeRepository, lanDiscovery: LanDiscovery) =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -154,6 +221,13 @@ data class LoginUiState(
     val error:         String? = null,
     val lanSearching:  Boolean = false,
     val lanDiscovery:  List<LanServer> = emptyList(),
+    /**
+     * True when stage 1 was skipped automatically because a single LAN
+     * server was the obvious pick. Drives the "Conectando con HubPlay…"
+     * overlay so the user sees the auto-decision happen rather than a
+     * naked spinner.
+     */
+    val autoConnected: Boolean = false,
 )
 
 enum class LoginStage { ServerUrl, Pairing }
