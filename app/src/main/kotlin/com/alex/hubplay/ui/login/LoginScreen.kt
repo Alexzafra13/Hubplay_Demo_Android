@@ -206,11 +206,18 @@ private fun ServerUrlForm(ui: LoginUiState, viewModel: LoginViewModel) {
         // Subtle divider + the typed URL path as a secondary affordance.
         SecondaryUrlInput(ui, viewModel)
     } else {
-        // No LAN hits → typed URL is the only path.
+        // No LAN hits → typed URL is the only path. We still want to
+        // tell the user *something* about the search so they're not
+        // guessing — either "we're looking" with the spinner, or
+        // "we looked and found nothing, want to try again?" with a
+        // retry. Either takes the same vertical real estate so the
+        // form below doesn't jump when the state flips.
         if (ui.lanSearching) {
             LanSearchingPill()
-            Spacer(Modifier.height(14.dp))
+        } else {
+            LanNoResultsPill(onSearchAgain = viewModel::restartLanSearch)
         }
+        Spacer(Modifier.height(14.dp))
         PrimaryUrlInput(ui, viewModel)
     }
 }
@@ -328,6 +335,49 @@ private fun LanSearchingPill() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/**
+ * Shown when the discovery window closed with zero hits. Same visual
+ * frame as [LanSearchingPill] (so the form doesn't jump when the
+ * timeout fires) but swaps the spinner for a "Buscar de nuevo" button.
+ * Common when the user is on the emulator (no multicast) or on a guest
+ * VLAN that blocks mDNS — neither hopeless, just needs a nudge.
+ */
+@Composable
+private fun LanNoResultsPill(onSearchAgain: () -> Unit) {
+    Surface(
+        color    = MaterialTheme.colorScheme.surface,
+        shape    = RoundedCornerShape(999.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier              = Modifier.padding(start = 16.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector        = Icons.Outlined.Lan,
+                contentDescription = null,
+                tint               = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier           = Modifier.size(16.dp),
+            )
+            Text(
+                text     = stringResource(R.string.login_lan_no_results),
+                style    = MaterialTheme.typography.bodyMedium,
+                color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onSearchAgain) {
+                Text(
+                    text       = stringResource(R.string.login_lan_search_again),
+                    style      = MaterialTheme.typography.labelLarge,
+                    color      = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
         }
     }
 }
