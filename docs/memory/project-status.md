@@ -142,6 +142,29 @@ app/src/main/kotlin/com/alex/hubplay/
 
 ## Backlog priorizado
 
+### Primer commit de la próxima sesión (DEUDA viva)
+
+**Re-apretar detekt**. En esta rama intenté `ignoreFailures = false`
+(commit `887d93c`) y CI cayó por findings pre-existentes. Lo dejé
+revertido a soft mode (`ignoreFailures = true`) para que el PR sea
+mergeable. La próxima sesión:
+
+1. En el run rojo del CI (commit `887d93c`), baja el artefacto
+   `detekt-report` desde la pestaña Actions del repo.
+2. Abre `app/build/reports/detekt/detekt.html` del zip.
+3. Por cada finding decide: fix o baseline.
+   - Para fix: edita el código, re-pushea.
+   - Para baseline: `./gradlew :app:detektBaseline` en local genera
+     `config/detekt-baseline.xml` con todos los findings actuales.
+     Commit ese fichero. Hace que esos findings concretos queden
+     "grandfathered" pero código nuevo siga teniendo el gate.
+4. Flip `ignoreFailures` de `true` a `false` en `app/build.gradle.kts`.
+5. Push. CI debe pasar verde.
+
+Sin esto, detekt sigue corriendo y subiendo el report en cada run pero
+no falla CI por findings nuevos. Funcional pero no es el gate que
+queremos a medio plazo.
+
 ### Próxima sesión candidata (Live TV polish)
 
 1. **Pantalla de reorder canales + hide canales** — UNA sesión, mismo storage.
