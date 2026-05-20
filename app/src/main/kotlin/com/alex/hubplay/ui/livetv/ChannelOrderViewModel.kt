@@ -32,9 +32,11 @@ import kotlinx.coroutines.launch
  *   - `PUT /me/iptv/channels/order` for reorder (full overlay replace, debounced)
  *   - `DELETE /me/iptv/channels/order` for "Restablecer"
  *
- * Sync to other devices comes for free because the list endpoint already
- * applies the overlay server-side — TV2 will see TV1's edits on the next
- * navigation to Live TV (we don't have an SSE event for order yet).
+ * Sync to other devices: the list endpoint already applies the overlay
+ * server-side so a fresh nav to Live TV is enough. For live propagation
+ * the backend also publishes `user.channel.order.updated` on /me/events
+ * after each personalisation write — `LiveTvViewModel` listens and
+ * refetches without waiting for the user to renavigate.
  *
  * UI semantics:
  *  - Edits are **optimistic**: local state flips immediately, then the
@@ -57,6 +59,9 @@ class ChannelOrderViewModel(
 
     /** Coalesces rapid reorder taps into one PUT — see [scheduleOrderPersist]. */
     private val pendingPersists = mutableMapOf<String, Job>()
+
+    /** Auto-commit timer for the type-a-number move buffer. */
+    private var pendingCommitJob: Job? = null
 
     init { load() }
 
@@ -110,6 +115,75 @@ class ChannelOrderViewModel(
             if (index < 0 || index >= channels.lastIndex) channels
             else channels.toMutableList().apply { add(index + 1, removeAt(index)) }
         }
+    }
+
+    /**
+     * TV-remote style "type a number to jump" entry. Each digit the user
+     * presses while a row is focused accumulates in
+     * [ChannelOrderUiState.pendingMove]. After [PENDING_TIMEOUT_MS] of
+     * idle (or an explicit [commitPendingMove]), the focused channel
+     * moves to that 1-based position. Buffer caps at [MAX_DIGITS] to
+     * keep absurdly long sequences from latching forever.
+     */
+    fun appendMoveDigit(channelId: String, digit: Char) {
+        if (!digit.isDigit()) return
+        val current = _ui.value.pendingMove
+        val nextDigits = (if (current?.channelId == channelId) current.digits else "") + digit
+        val capped = nextDigits.take(MAX_DIGITS)
+        _ui.update { it.copy(pendingMove = PendingMove(channelId, capped)) }
+        // Restart the auto-commit timer on every keystroke so a fast
+        // typer composing "127" doesn't fire mid-input.
+        pendingCommitJob?.cancel()
+        pendingCommitJob = viewModelScope.launch {
+            delay(PENDING_TIMEOUT_MS)
+            commitPendingMoveInternal()
+        }
+    }
+
+    /** Delete the last digit of the in-flight move buffer (Backspace from the row). */
+    fun popMoveDigit() {
+        val current = _ui.value.pendingMove ?: return
+        val nextDigits = current.digits.dropLast(1)
+        if (nextDigits.isEmpty()) {
+            cancelPendingMove()
+            return
+        }
+        _ui.update { it.copy(pendingMove = current.copy(digits = nextDigits)) }
+        pendingCommitJob?.cancel()
+        pendingCommitJob = viewModelScope.launch {
+            delay(PENDING_TIMEOUT_MS)
+            commitPendingMoveInternal()
+        }
+    }
+
+    /** Fired by the screen on Enter / OK — flush the pending move immediately. */
+    fun commitPendingMove() {
+        pendingCommitJob?.cancel()
+        viewModelScope.launch { commitPendingMoveInternal() }
+    }
+
+    fun cancelPendingMove() {
+        pendingCommitJob?.cancel()
+        pendingCommitJob = null
+        _ui.update { it.copy(pendingMove = null) }
+    }
+
+    private fun commitPendingMoveInternal() {
+        val pending  = _ui.value.pendingMove ?: return
+        val targetPosition = pending.digits.toIntOrNull()
+        _ui.update { it.copy(pendingMove = null) }
+        if (targetPosition == null || targetPosition <= 0) return
+        val libraryId = _ui.value.selectedLibraryId ?: return
+        val channels  = _ui.value.channelsByLib[libraryId] ?: return
+        val srcIndex  = channels.indexOfFirst { it.id == pending.channelId }
+        if (srcIndex < 0) return
+        // Clamp the requested position to the list bounds so typing
+        // "9999" simply moves the channel to the bottom.
+        val targetIdx = (targetPosition - 1).coerceIn(0, channels.lastIndex)
+        if (srcIndex == targetIdx) return
+        val next = channels.toMutableList().apply { add(targetIdx, removeAt(srcIndex)) }
+        _ui.update { it.copy(channelsByLib = it.channelsByLib + (libraryId to next)) }
+        scheduleOrderPersist(libraryId)
     }
 
     fun toggleHidden(libraryId: String, channelId: String) {
@@ -230,6 +304,8 @@ class ChannelOrderViewModel(
     companion object {
         private const val TAG                = "ChannelOrderVM"
         private const val ORDER_DEBOUNCE_MS  = 300L
+        private const val PENDING_TIMEOUT_MS = 1200L
+        private const val MAX_DIGITS         = 4
 
         fun factory(
             repository: LiveTvRepository,
@@ -245,6 +321,13 @@ class ChannelOrderViewModel(
 }
 
 @androidx.compose.runtime.Immutable
+data class PendingMove(
+    val channelId: String,
+    /** 1..MAX_DIGITS digits typed so far; numeric only. */
+    val digits:    String,
+)
+
+@androidx.compose.runtime.Immutable
 data class ChannelOrderUiState(
     val isLoading:          Boolean = false,
     val error:              String? = null,
@@ -252,6 +335,8 @@ data class ChannelOrderUiState(
     val libraries:          List<LiveLibrary> = emptyList(),
     val channelsByLib:      Map<String, List<LiveChannel>> = emptyMap(),
     val selectedLibraryId:  String? = null,
+    /** Active type-a-number-to-move buffer, scoped to a single channel. */
+    val pendingMove:        PendingMove? = null,
 ) {
     /**
      * Channels for the focused library, exactly as the backend returned

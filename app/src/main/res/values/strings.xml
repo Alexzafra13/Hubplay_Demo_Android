@@ -127,7 +127,7 @@
 
     <!-- Channel order / hide -->
     <string name="channel_order_title">Reordenar canales</string>
-    <string name="channel_order_help">Usa las flechas para subir o bajar cada canal. El icono del ojo lo oculta del listado principal de TV en vivo.</string>
+    <string name="channel_order_help">Usa las flechas para subir o bajar cada canal, o teclea un número para saltar a esa posición. El icono del ojo lo oculta del listado principal de TV en vivo.</string>
     <string name="channel_order_reset">Restablecer</string>
     <string name="channel_order_move_up">Subir canal</string>
     <string name="channel_order_move_down">Bajar canal</string>

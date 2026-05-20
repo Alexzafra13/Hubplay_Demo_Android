@@ -127,7 +127,7 @@
 
     <!-- Channel order / hide -->
     <string name="channel_order_title">Reorder channels</string>
-    <string name="channel_order_help">Use the arrows to move each channel up or down. The eye icon hides it from the main Live TV list.</string>
+    <string name="channel_order_help">Use the arrows to move each channel up or down, or type a number to jump to that position. The eye icon hides it from the main Live TV list.</string>
     <string name="channel_order_reset">Reset</string>
     <string name="channel_order_move_up">Move channel up</string>
     <string name="channel_order_move_down">Move channel down</string>
