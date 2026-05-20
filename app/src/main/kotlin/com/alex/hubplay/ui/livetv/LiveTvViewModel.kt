@@ -8,6 +8,8 @@ import com.alex.hubplay.data.ChannelOrderStore
 import com.alex.hubplay.data.EpgProgram
 import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.LiveTvRepository
+import com.alex.hubplay.data.MeEvent
+import com.alex.hubplay.data.MeEventsStream
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -57,6 +59,7 @@ import java.time.Instant
 class LiveTvViewModel(
     private val repository:        LiveTvRepository,
     private val channelOrderStore: ChannelOrderStore,
+    private val meEventsStream:    MeEventsStream,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(LiveTvUiState(isLoading = true))
@@ -67,6 +70,7 @@ class LiveTvViewModel(
         startNowTicker()
         startScheduleRefresher()
         observeOrderEdits()
+        observeServerEvents()
     }
 
     fun load() {
@@ -216,6 +220,23 @@ class LiveTvViewModel(
     }
 
     /**
+     * Sibling devices of the same user push a `channel.order.updated`
+     * event via /me/events when they edit ordering or visibility — we
+     * refetch on receipt so this device's Live TV reflects the change
+     * without waiting for a manual reload. The own-device path already
+     * refetches via [observeOrderEdits]; receiving the SSE echo for our
+     * own write triggers a second `load()` but that's a cheap roundtrip
+     * to the same backend state we already have.
+     */
+    private fun observeServerEvents() {
+        meEventsStream.events()
+            .onEach { event ->
+                if (event is MeEvent.ChannelOrderUpdated) load()
+            }
+            .launchIn(viewModelScope)
+    }
+
+    /**
      * 30s heartbeat — bumps `nowEpoch` so progress bars and current-program
      * picks recompute. Does NOT refetch.
      */
@@ -283,10 +304,11 @@ class LiveTvViewModel(
         fun factory(
             repository:        LiveTvRepository,
             channelOrderStore: ChannelOrderStore,
+            meEventsStream:    MeEventsStream,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return LiveTvViewModel(repository, channelOrderStore) as T
+                return LiveTvViewModel(repository, channelOrderStore, meEventsStream) as T
             }
         }
     }

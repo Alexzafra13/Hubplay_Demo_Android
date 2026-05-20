@@ -193,11 +193,19 @@ queremos a medio plazo.
    - **`ChannelOrderStore`** — pasa de source-of-truth a cache write-through
      + bus de señal. Mismo blob JSON (`hubplay_channel_prefs`). Los helpers
      `applyPrefs` se eliminaron (yagn).
-   - **Sync multidispositivo**: TV1 edita → backend persiste. TV2 al
-     entrar a Live TV ve el orden nuevo automáticamente (server lo devuelve
-     con overlay aplicado). NO hay live-push: para que TV2 vea el cambio
-     en el mismo segundo, faltaría añadir un evento SSE
-     `channel.order.updated` en backend y suscribir en `MeEventsStream`.
+   - **Sync multidispositivo + live-push SSE**: TV1 edita → backend
+     persiste → publica `user.channel.order.updated` en `/me/events`. TV2
+     lo recibe vía `MeEventsStream`, `LiveTvViewModel.observeServerEvents`
+     dispara `load()` y el orden nuevo aparece en el instante sin
+     renavegar. El evento solo lleva `user_id` en Data (filtrado per-user
+     en el lado servidor); contenido irrelevante, el tick es lo que cuenta.
+   - **Type-a-number para mover** (estilo TV): teclear dígitos sobre una
+     fila enfocada en la pantalla de reorder dispara `appendMoveDigit`.
+     La fila se ilumina con borde accent y el slot LCN cambia a "→ 47";
+     tras 1.2s de pausa (o Enter/OK) la fila se mueve a la posición 47.
+     Backspace borra dígitos, Esc/Back cancela. Buffer cap 4 dígitos.
+     Saltar del foco a otra fila durante el buffer cancela el move
+     pendiente — evita latching cuando el usuario navega.
 
 2. **"Recientemente visto"** filtro auto-generado en sidebar Live TV.
    - Storage: lista circular en DataStore (últimos 20 channel IDs vistos).

@@ -3,6 +3,7 @@ package com.alex.hubplay.ui.livetv
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,6 +47,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -122,6 +129,10 @@ fun ChannelOrderScreen(
                         onMoveUp        = { libId, index -> viewModel.moveUp(libId, index) },
                         onMoveDown      = { libId, index -> viewModel.moveDown(libId, index) },
                         onToggleHidden  = { libId, channelId -> viewModel.toggleHidden(libId, channelId) },
+                        onAppendDigit   = { channelId, digit -> viewModel.appendMoveDigit(channelId, digit) },
+                        onPopDigit      = viewModel::popMoveDigit,
+                        onCommitMove    = viewModel::commitPendingMove,
+                        onCancelMove    = viewModel::cancelPendingMove,
                     )
                 }
             }
@@ -136,6 +147,10 @@ private fun Content(
     onMoveUp:        (String, Int) -> Unit,
     onMoveDown:      (String, Int) -> Unit,
     onToggleHidden:  (String, String) -> Unit,
+    onAppendDigit:   (String, Char) -> Unit,
+    onPopDigit:      () -> Unit,
+    onCommitMove:    () -> Unit,
+    onCancelMove:    () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         if (ui.libraries.size > 1) {
@@ -170,14 +185,19 @@ private fun Content(
                     }
                     itemsIndexed(channels, key = { _, ch -> ch.id }) { index, channel ->
                         ChannelOrderRow(
-                            channel    = channel,
-                            position   = index + 1,
-                            isFirst    = index == 0,
-                            isLast     = index == channels.lastIndex,
-                            isHidden   = channel.hidden,
-                            onMoveUp   = { onMoveUp(libId, index) },
-                            onMoveDown = { onMoveDown(libId, index) },
+                            channel        = channel,
+                            position       = index + 1,
+                            isFirst        = index == 0,
+                            isLast         = index == channels.lastIndex,
+                            isHidden       = channel.hidden,
+                            pendingDigits  = ui.pendingMove?.takeIf { it.channelId == channel.id }?.digits,
+                            onMoveUp       = { onMoveUp(libId, index) },
+                            onMoveDown     = { onMoveDown(libId, index) },
                             onToggleHidden = { onToggleHidden(libId, channel.id) },
+                            onAppendDigit  = { digit -> onAppendDigit(channel.id, digit) },
+                            onPopDigit     = onPopDigit,
+                            onCommitMove   = onCommitMove,
+                            onCancelMove   = onCancelMove,
                         )
                     }
                 }
@@ -295,28 +315,84 @@ private fun ChannelOrderRow(
     isFirst:        Boolean,
     isLast:         Boolean,
     isHidden:       Boolean,
+    /** Active digits-buffer for this row, or null if no pending move targets us. */
+    pendingDigits:  String?,
     onMoveUp:       () -> Unit,
     onMoveDown:     () -> Unit,
     onToggleHidden: () -> Unit,
+    onAppendDigit:  (Char) -> Unit,
+    onPopDigit:     () -> Unit,
+    onCommitMove:   () -> Unit,
+    onCancelMove:   () -> Unit,
 ) {
     val bg = MaterialTheme.colorScheme.surface
     val nameColor = if (isHidden) TextSecondary else TextPrimary
+    val isMoveTarget = pendingDigits != null
+    var rowFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
+            .then(
+                // Highlight the row in the accent while the user is typing
+                // a target position — gives the same visual cue a TV would
+                // when the number-pad is active.
+                if (isMoveTarget) Modifier.border(1.5.dp, Accent, RoundedCornerShape(10.dp))
+                else Modifier,
+            )
+            .onFocusChanged { state ->
+                rowFocused = state.isFocused || state.hasFocus
+                // Leaving the row mid-buffer cancels the pending move so
+                // the digits don't latch on a row the user moved away from.
+                if (!rowFocused && isMoveTarget) onCancelMove()
+            }
+            .focusable(interactionSource = interactionSource)
+            .onPreviewKeyEvent { ev ->
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val ch = ev.utf16CodePoint.toChar()
+                when {
+                    ch.isDigit() -> { onAppendDigit(ch); true }
+                    ev.key == Key.Backspace ||
+                        ev.key == Key.Delete -> {
+                        if (isMoveTarget) { onPopDigit(); true } else false
+                    }
+                    ev.key == Key.Enter ||
+                        ev.key == Key.NumPadEnter ||
+                        ev.key == Key.DirectionCenter -> {
+                        if (isMoveTarget) { onCommitMove(); true } else false
+                    }
+                    ev.key == Key.Escape || ev.key == Key.Back -> {
+                        if (isMoveTarget) { onCancelMove(); true } else false
+                    }
+                    else -> false
+                }
+            }
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text       = "$position",
-            color      = TextSecondary,
-            fontSize   = 13.sp,
-            fontWeight = FontWeight.Medium,
-            modifier   = Modifier.width(36.dp),
-        )
+        if (isMoveTarget) {
+            // Replace the static position number with the digits-in-flight
+            // so the user sees their input echoed in the LCN slot. Padded
+            // with a "→" so it reads as an intent, not the current state.
+            Text(
+                text       = "→ $pendingDigits",
+                color      = Accent,
+                fontSize   = 13.sp,
+                fontWeight = FontWeight.Bold,
+                modifier   = Modifier.width(56.dp),
+            )
+        } else {
+            Text(
+                text       = "$position",
+                color      = TextSecondary,
+                fontSize   = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier   = Modifier.width(56.dp),
+            )
+        }
         // Pre-resolve composable string lookups before composing the
         // subtitle — @Composable can't be called from inside buildString.
         val hiddenBadge = stringResource(R.string.channel_order_hidden_badge)

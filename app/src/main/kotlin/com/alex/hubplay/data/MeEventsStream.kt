@@ -127,6 +127,11 @@ class MeEventsStream(
                 itemId     = payload.itemId     ?: return null,
                 isFavorite = payload.isFavorite ?: false,
             )
+            // Refresh signal for the Live TV personalisation overlay —
+            // emitted by the backend when this user's order/hidden state
+            // changes on any device. Payload has nothing actionable, the
+            // tick itself is what counts.
+            "user.channel.order.updated" -> MeEvent.ChannelOrderUpdated
             else -> null
         }
     }
@@ -156,4 +161,6 @@ sealed interface MeEvent {
     data class ProgressUpdated(val itemId: String, val positionTicks: Long, val completed: Boolean) : MeEvent
     data class PlayedToggled  (val itemId: String, val played: Boolean, val completed: Boolean)     : MeEvent
     data class FavoriteToggled(val itemId: String, val isFavorite: Boolean)                          : MeEvent
+    /** Marker event — another device of this user just changed channel order/visibility. */
+    data object ChannelOrderUpdated                                                                  : MeEvent
 }

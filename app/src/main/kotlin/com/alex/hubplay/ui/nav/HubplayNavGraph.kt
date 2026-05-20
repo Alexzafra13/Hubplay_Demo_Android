@@ -170,6 +170,7 @@ fun HubplayNavGraph(
                 factory = LiveTvViewModel.factory(
                     container.liveTvRepository,
                     container.channelOrderStore,
+                    container.meEventsStream,
                 ),
             )
             LiveTvScreen(
