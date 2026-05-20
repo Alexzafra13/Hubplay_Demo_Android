@@ -110,7 +110,24 @@ El `AuthInterceptor` se encarga del refresh automático en 401 con un único ref
 ./gradlew installDebug           # instala en device conectado
 ./gradlew refreshOpenApiSpec     # actualiza spec del server
 ./gradlew :app:openApiGenerate   # regenera cliente sin build completo
+./gradlew :app:testDebugUnitTest # unitarios (src/test/kotlin)
 ```
+
+---
+
+## CI
+
+`.github/workflows/ci.yml` corre en cada push a `main` o ramas
+`claude/**` y en cada PR contra `main`:
+
+1. `:app:openApiGenerate` — regenera el cliente Retrofit desde el spec.
+2. `:app:testDebugUnitTest` — unitarios JVM (resolver de series, normalización de URL, throttling del ProgressReporter, …).
+3. `:app:assembleDebug` — APK debug completo, ejercita el toolchain entero.
+
+Sube como artefactos: reportes de tests siempre (también en rojo) +
+APK debug si el build pasa. Usa `gradle/actions/setup-gradle@v4` con
+Gradle 8.10.2 (igual que el wrapper local), así no hace falta tener el
+`gradle-wrapper.jar` commiteado.
 
 ---
 

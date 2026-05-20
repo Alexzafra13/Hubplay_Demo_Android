@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Cancel older runs of the same branch when a new push arrives — saves
+# free-tier minutes when iterating on a PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Build + unit tests ────────────────────────────────────────────────────
+  # Single job. Splitting into "lint" + "test" + "build" would feel cleaner
+  # but on free-tier runners every job pays the JDK + Gradle warm-up tax
+  # (~90s) which outweighs the parallelism on a project this size.
+  build:
+    name: Build & unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # setup-gradle provisions Gradle itself (so we don't need
+      # gradle-wrapper.jar committed) AND wires up dependency / build
+      # caching keyed by the lockfile + build scripts. Subsequent runs
+      # land in <30 s of "configure" if nothing changed.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # Match the version pinned in gradle/wrapper/gradle-wrapper.properties
+          # so behaviour locally and in CI stays identical.
+          gradle-version: "8.10.2"
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      # ── 1. Generate the OpenAPI client up-front ───────────────────────
+      # Compilation depends on it via `dependsOn("openApiGenerate")` but
+      # running it as a separate step makes failures here obvious in the
+      # CI log instead of buried in a compile error.
+      - name: Generate OpenAPI client
+        run: gradle :app:openApiGenerate --no-daemon --stacktrace
+
+      # ── 2. Unit tests ─────────────────────────────────────────────────
+      # JVM-only tests (src/test/kotlin). Instrumented tests would need
+      # an emulator matrix which we'll add when the test surface grows.
+      - name: Run unit tests
+        run: gradle :app:testDebugUnitTest --no-daemon --stacktrace
+
+      # ── 3. Debug APK build ────────────────────────────────────────────
+      # `assembleDebug` exercises the full Kotlin/Compose/AGP toolchain
+      # plus resource processing and DEX — anything compile-error-ish
+      # surfaces here.
+      - name: Assemble debug APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      # ── 4. Artifacts ─────────────────────────────────────────────────
+      # Always upload the test reports so a red build is debuggable
+      # without re-running locally. APK only on success — saves
+      # storage when something's broken anyway.
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 14

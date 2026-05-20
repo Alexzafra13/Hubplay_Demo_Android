@@ -23,7 +23,6 @@ import com.alex.hubplay.data.api.dto.UpdateProgressRequest
 import com.alex.hubplay.data.api.dto.WatchBeaconResponse
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -46,7 +45,7 @@ class ProgressReporterTest {
     @Test
     fun `first reportPosition writes immediately`() = runTest {
         val api = FakeApi()
-        val reporter = ProgressReporter(api, TestScope(coroutineContext), "item-1")
+        val reporter = ProgressReporter(api, backgroundScope, "item-1")
 
         reporter.reportPosition(positionSec = 30, durationSec = 6000, isPlaying = true)
         advanceUntilIdle()
@@ -59,7 +58,7 @@ class ProgressReporterTest {
     @Test
     fun `paused player never writes regardless of position changes`() = runTest {
         val api = FakeApi()
-        val reporter = ProgressReporter(api, TestScope(coroutineContext), "item-2")
+        val reporter = ProgressReporter(api, backgroundScope, "item-2")
 
         reporter.reportPosition(positionSec = 30,  durationSec = 6000, isPlaying = false)
         reporter.reportPosition(positionSec = 60,  durationSec = 6000, isPlaying = false)
@@ -72,7 +71,7 @@ class ProgressReporterTest {
     @Test
     fun `flush bypasses throttle and writes the supplied position`() = runTest {
         val api = FakeApi()
-        val reporter = ProgressReporter(api, TestScope(coroutineContext), "item-3")
+        val reporter = ProgressReporter(api, backgroundScope, "item-3")
 
         reporter.reportPosition(positionSec = 10, durationSec = 6000, isPlaying = true)
         advanceUntilIdle()
@@ -86,7 +85,7 @@ class ProgressReporterTest {
     @Test
     fun `crossing 95 percent fires markPlayed and skips the position write`() = runTest {
         val api = FakeApi()
-        val reporter = ProgressReporter(api, TestScope(coroutineContext), "item-4")
+        val reporter = ProgressReporter(api, backgroundScope, "item-4")
 
         // duration = 100s; position 95s = 95% → triggers markPlayed branch.
         reporter.reportPosition(positionSec = 95, durationSec = 100, isPlaying = true)
@@ -100,7 +99,7 @@ class ProgressReporterTest {
     @Test
     fun `markPlayed fires exactly once even on repeated near-end reports`() = runTest {
         val api = FakeApi()
-        val reporter = ProgressReporter(api, TestScope(coroutineContext), "item-5")
+        val reporter = ProgressReporter(api, backgroundScope, "item-5")
 
         repeat(3) {
             reporter.reportPosition(positionSec = 97, durationSec = 100, isPlaying = true)
