@@ -40,9 +40,10 @@ class SettingsViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), SettingsUiState())
 
     private fun AuthState.toUi() = SettingsUiState(
-        serverUrl    = serverUrl,
-        appVersion   = BuildConfig.VERSION_NAME,
-        buildFlavor  = if (BuildConfig.DEBUG) "debug" else "release",
+        serverUrl          = serverUrl,
+        appVersion         = BuildConfig.VERSION_NAME,
+        buildFlavor        = if (BuildConfig.DEBUG) "debug" else "release",
+        activeProfileName  = activeProfileName,
     )
 
     /** Read the crash-log file. Returns "" when no crashes recorded. */
@@ -64,7 +65,8 @@ class SettingsViewModel(
 
 @androidx.compose.runtime.Immutable
 data class SettingsUiState(
-    val serverUrl:   String? = null,
-    val appVersion:  String  = "",
-    val buildFlavor: String  = "",
+    val serverUrl:          String? = null,
+    val appVersion:         String  = "",
+    val buildFlavor:        String  = "",
+    val activeProfileName:  String? = null,
 )

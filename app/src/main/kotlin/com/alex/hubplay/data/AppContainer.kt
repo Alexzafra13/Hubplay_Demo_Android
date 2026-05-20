@@ -108,6 +108,15 @@ class AppContainer(context: Context) {
     val liveTvRepository: LiveTvRepository = LiveTvRepository(hubplayApi, tokenStore)
 
     /**
+     * "Who's watching?" multi-profile picker. The repository talks to
+     * `/me/profiles` (list) and `/auth/switch-profile` (mint new bearer
+     * for the target profile) and persists the active selection back
+     * into [TokenStore]. The NavGraph gates Home behind a non-null
+     * `activeProfileId`.
+     */
+    val profileRepository: ProfileRepository = ProfileRepository(hubplayApi, tokenStore)
+
+    /**
      * Server-Sent Events stream over `/me/events` — drives cross-device
      * sync of Continue Watching, played/unplayed and favourites.
      */

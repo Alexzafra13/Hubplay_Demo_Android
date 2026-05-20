@@ -17,7 +17,10 @@ import com.alex.hubplay.data.api.dto.LatestResponse
 import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.NextUpResponse
+import com.alex.hubplay.data.api.dto.ProfilesResponse
 import com.alex.hubplay.data.api.dto.SearchResponse
+import com.alex.hubplay.data.api.dto.SwitchProfileRequest
+import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.StatusResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
@@ -264,4 +267,25 @@ interface HubplayApi {
         @Query("q")     query: String,
         @Query("limit") limit: Int = 60,
     ): SearchResponse
+
+    // ─── Multi-profile ("Who's watching?") ─────────────────────────────────
+
+    /**
+     * GET /api/v1/me/profiles — the profile tree under the authenticated
+     * account. Returns siblings + parent, each with `has_pin` so the
+     * picker can render a lock icon. Solo accounts get a 1-entry list
+     * (just the caller). The Android picker auto-skips when ≤ 1.
+     */
+    @GET("me/profiles")
+    suspend fun listProfiles(): ProfilesResponse
+
+    /**
+     * POST /api/v1/auth/switch-profile — mint a new token pair for a
+     * sibling/parent profile. Caller authenticates with their current
+     * Bearer; the server verifies the target shares the same parent
+     * tree before issuing fresh tokens. PIN-protected profiles require
+     * the matching PIN — wrong PIN returns 401.
+     */
+    @POST("auth/switch-profile")
+    suspend fun switchProfile(@Body body: SwitchProfileRequest): SwitchProfileResponse
 }

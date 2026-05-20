@@ -33,6 +33,8 @@ import com.alex.hubplay.ui.series.SeriesScreen
 import com.alex.hubplay.ui.series.SeriesViewModel
 import com.alex.hubplay.ui.settings.SettingsScreen
 import com.alex.hubplay.ui.settings.SettingsViewModel
+import com.alex.hubplay.ui.whoiswatching.WhoIsWatchingScreen
+import com.alex.hubplay.ui.whoiswatching.WhoIsWatchingViewModel
 
 @Composable
 fun HubplayNavGraph(
@@ -57,8 +59,27 @@ fun HubplayNavGraph(
             LoginScreen(
                 viewModel = viewModel,
                 onAuthenticated = {
-                    navController.navigate(Route.Home.path) {
+                    // Always land on the WhoIsWatching gateway. The
+                    // screen itself auto-skips to Home when the tree
+                    // has ≤ 1 profile, so solo accounts never see the
+                    // picker.
+                    navController.navigate(Route.WhoIsWatching.path) {
                         popUpTo(Route.Login.path) { inclusive = true }
+                    }
+                },
+            )
+        }
+
+        // ── Who's watching? (multi-profile picker) ───────────────────
+        composable(Route.WhoIsWatching.path) {
+            val vm = viewModel<WhoIsWatchingViewModel>(
+                factory = WhoIsWatchingViewModel.factory(container.profileRepository),
+            )
+            WhoIsWatchingScreen(
+                viewModel       = vm,
+                onNavigateHome  = {
+                    navController.navigate(Route.Home.path) {
+                        popUpTo(Route.WhoIsWatching.path) { inclusive = true }
                     }
                 },
             )
@@ -226,11 +247,22 @@ fun HubplayNavGraph(
                     popUpTo(Route.Home.path) { inclusive = true }
                 }
             }
+            val changeProfile: () -> Unit = {
+                // Drop only the picked-profile flag — bearer + server URL
+                // stay so the picker can call /me/profiles + switch the
+                // token in-place. Pop Home so back-press from the new
+                // session doesn't land on the previous user's content.
+                container.tokenStore.clearActiveProfileBlocking()
+                navController.navigate(Route.WhoIsWatching.path) {
+                    popUpTo(Route.Home.path) { inclusive = true }
+                }
+            }
             SettingsScreen(
                 viewModel           = vm,
                 onBack              = { navController.popBackStack() },
                 onLogOut            = logOut,
                 onForgetServer      = forgetServer,
+                onChangeProfile     = changeProfile,
                 onReorderChannels   = openChannelOrder,
             )
         }

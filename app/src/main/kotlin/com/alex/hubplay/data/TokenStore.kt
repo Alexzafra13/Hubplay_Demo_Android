@@ -37,13 +37,17 @@ class TokenStore(private val context: Context) {
 
     private val Context.dataStore by preferencesDataStore(name = "hubplay_auth")
 
-    private val keyAccess     = stringPreferencesKey("access_token")
-    private val keyRefresh    = stringPreferencesKey("refresh_token")
-    private val keyServerUrl  = stringPreferencesKey("server_url")
+    private val keyAccess           = stringPreferencesKey("access_token")
+    private val keyRefresh          = stringPreferencesKey("refresh_token")
+    private val keyServerUrl        = stringPreferencesKey("server_url")
+    private val keyActiveProfileId  = stringPreferencesKey("active_profile_id")
+    private val keyActiveProfileName = stringPreferencesKey("active_profile_name")
 
-    val accessTokenFlow: Flow<String?>  = context.dataStore.data.map { it[keyAccess] }
-    val refreshTokenFlow: Flow<String?> = context.dataStore.data.map { it[keyRefresh] }
-    val serverUrlFlow: Flow<String?>    = context.dataStore.data.map { it[keyServerUrl] }
+    val accessTokenFlow: Flow<String?>       = context.dataStore.data.map { it[keyAccess] }
+    val refreshTokenFlow: Flow<String?>      = context.dataStore.data.map { it[keyRefresh] }
+    val serverUrlFlow: Flow<String?>         = context.dataStore.data.map { it[keyServerUrl] }
+    val activeProfileIdFlow: Flow<String?>   = context.dataStore.data.map { it[keyActiveProfileId] }
+    val activeProfileNameFlow: Flow<String?> = context.dataStore.data.map { it[keyActiveProfileName] }
 
     /**
      * Hot derived state: any consumer composable can collectAsState() on
@@ -52,7 +56,7 @@ class TokenStore(private val context: Context) {
     val authStateFlow = combine().stateIn(
         scope        = CoroutineScope(SupervisorJob() + Dispatchers.IO),
         started      = SharingStarted.Eagerly,
-        initialValue = AuthState(false, null, null, null),
+        initialValue = AuthState(false, null, null, null, null, null),
     )
 
     private fun combine(): Flow<AuthState> {
@@ -60,12 +64,16 @@ class TokenStore(private val context: Context) {
             accessTokenFlow,
             refreshTokenFlow,
             serverUrlFlow,
-        ) { access, refresh, server ->
+            activeProfileIdFlow,
+            activeProfileNameFlow,
+        ) { access, refresh, server, profileId, profileName ->
             AuthState(
-                isAuthenticated = !access.isNullOrBlank() && !server.isNullOrBlank(),
-                accessToken     = access,
-                refreshToken    = refresh,
-                serverUrl       = server,
+                isAuthenticated  = !access.isNullOrBlank() && !server.isNullOrBlank(),
+                accessToken      = access,
+                refreshToken     = refresh,
+                serverUrl        = server,
+                activeProfileId  = profileId,
+                activeProfileName = profileName,
             )
         }
     }
@@ -92,29 +100,63 @@ class TokenStore(private val context: Context) {
     }
 
     /**
-     * "Log out" — drop tokens, KEEP the server URL so the user can
-     * re-pair against the same HubPlay without re-typing the address.
-     * The expected flow afterwards is: login screen → device-code
-     * pairing UI shows up with the URL already filled.
+     * Persist the profile the user just picked in WhoIsWatching. We keep
+     * the human-readable label too so the topbar / Settings can render
+     * it without an extra fetch. Set to empty string to act as "clear",
+     * but prefer [clearActiveProfile] for that.
+     */
+    suspend fun setActiveProfile(id: String, displayName: String?) {
+        context.dataStore.edit { prefs ->
+            prefs[keyActiveProfileId] = id
+            if (!displayName.isNullOrBlank()) {
+                prefs[keyActiveProfileName] = displayName
+            } else {
+                prefs.remove(keyActiveProfileName)
+            }
+        }
+    }
+
+    /**
+     * Drop only the active-profile selection — keeps tokens + server URL
+     * intact. Used by the "Cambiar perfil" entry in Settings to send the
+     * user back to the picker without forcing a full re-login.
+     */
+    suspend fun clearActiveProfile() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(keyActiveProfileId)
+            prefs.remove(keyActiveProfileName)
+        }
+    }
+
+    /**
+     * "Log out" — drop tokens AND the active-profile selection, KEEP the
+     * server URL so the user can re-pair against the same HubPlay
+     * without re-typing the address. The expected flow afterwards is:
+     * login screen → device-code pairing UI shows up with the URL
+     * already filled.
      */
     suspend fun clear() {
         context.dataStore.edit { prefs ->
             prefs.remove(keyAccess)
             prefs.remove(keyRefresh)
+            prefs.remove(keyActiveProfileId)
+            prefs.remove(keyActiveProfileName)
             // Keep serverUrl so the user doesn't have to retype it
             // after a session expiry / refresh chain revoke.
         }
     }
 
     /**
-     * "Forget this server" — drop tokens AND the server URL. The user
-     * lands on the empty URL form, ready to point the app at a
-     * different HubPlay (e.g. moved house, friend's library).
+     * "Forget this server" — drop tokens, profile selection AND the
+     * server URL. The user lands on the empty URL form, ready to point
+     * the app at a different HubPlay (e.g. moved house, friend's library).
      */
     suspend fun forgetServer() {
         context.dataStore.edit { prefs ->
             prefs.remove(keyAccess)
             prefs.remove(keyRefresh)
+            prefs.remove(keyActiveProfileId)
+            prefs.remove(keyActiveProfileName)
             prefs.remove(keyServerUrl)
         }
     }
@@ -126,6 +168,7 @@ class TokenStore(private val context: Context) {
      */
     fun clearBlocking() = runBlocking { clear() }
     fun forgetServerBlocking() = runBlocking { forgetServer() }
+    fun clearActiveProfileBlocking() = runBlocking { clearActiveProfile() }
 
     /**
      * Read once for places that need the value right now (interceptor,
@@ -144,8 +187,10 @@ class TokenStore(private val context: Context) {
 }
 
 data class AuthState(
-    val isAuthenticated: Boolean,
-    val accessToken:     String?,
-    val refreshToken:    String?,
-    val serverUrl:       String?,
+    val isAuthenticated:   Boolean,
+    val accessToken:       String?,
+    val refreshToken:      String?,
+    val serverUrl:         String?,
+    val activeProfileId:   String? = null,
+    val activeProfileName: String? = null,
 )

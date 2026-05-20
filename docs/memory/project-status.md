@@ -1,11 +1,148 @@
 # Estado del proyecto — HubPlay Android
 
-> **Última sesión**: 2026-05-20 — rama `claude/kotlin-app-development-s0o78`
-> (reorder + hide de canales).
-> **Estado**: feature-complete contra la lista priorizada por el usuario.
-> CI verde sobre 8.10.2 + Java 17 con detekt en modo soft (deuda viva
-> sigue pendiente). EPG grid y "Recientemente visto" siguen abiertos.
+> **Última sesión**: 2026-05-20 — rama `claude/kotlin-project-review-faLKV`
+> (multi-perfil "Who's watching?").
+> **Estado**: feature-complete contra la lista priorizada por el usuario,
+> ahora con gating multi-perfil tras login. CI verde sobre 8.10.2 + Java
+> 17 con detekt en modo soft (deuda viva sigue pendiente). EPG grid y
+> "Recientemente visto" siguen abiertos.
 > **Leer este fichero al inicio de cada sesión** para retomar contexto.
+
+---
+
+## 🧑‍🤝‍🧑 Sesión 2026-05-20 — WhoIsWatching (multi-perfil)
+
+Primer bloque del plan "paridad con web" — gate de selección de perfil
+después del device pairing. Decisión del usuario: **recordar perfil hasta
+logout** (no pedir cada arranque).
+
+### Wire
+
+- **Backend ya estaba**: `GET /api/v1/me/profiles` devuelve el subtree
+  del usuario actual (`profileListResponse` en `internal/api/handlers/auth.go`),
+  `POST /api/v1/auth/switch-profile` `{ profile_id, pin, device_name,
+  device_id }` mintea tokens nuevos para el target. Ambos siguen el
+  envelope `{ data: ... }`.
+- **DTOs nuevos** en `data/api/dto/ProfileDto.kt`: `ProfileSummaryDto`,
+  `ProfilesResponse`, `SwitchProfileRequest`, `SwitchProfileData`,
+  `SwitchProfileResponse`.
+- **`HubplayApi`**: añadidos `listProfiles()` (GET) y `switchProfile(body)`
+  (POST). El bearer actual va vía el AuthInterceptor; el server valida
+  same-parent antes de emitir los nuevos tokens.
+
+### Estado persistido
+
+`TokenStore` ahora guarda dos nuevos campos:
+- `active_profile_id` → el perfil que el usuario picó. Vive hasta el
+  próximo logout / forget-server / "Cambiar perfil" en Settings.
+- `active_profile_name` → label cacheado para que la TopNav / Settings
+  pinte el nombre sin un fetch extra.
+
+`AuthState` se amplió con esos dos campos. Helpers nuevos:
+`setActiveProfile(id, name)`, `clearActiveProfile()` (suspend y blocking).
+`clear()` y `forgetServer()` también borran ambos.
+
+### Gating del NavGraph
+
+Tres-estados al arranque (en `ui/HubplayApp.kt`):
+- no token → `Login`
+- token + `activeProfileId == null` → `WhoIsWatching`
+- token + `activeProfileId != null` → `Home`
+
+Tras login (`onAuthenticated`), siempre se navega a `WhoIsWatching`
+con `popUpTo(Login, inclusive)`. El propio screen decide:
+- profiles fetch null (red) → muestra error + retry
+- profiles vacío → SkipToHome (solo deploy, sin nada que pickear)
+- profiles == 1 → pin del solo y SkipToHome (no se ve la pantalla)
+- profiles > 1 → grid de avatares
+
+Auto-skip ≤ 1 mirror del web (`useEffect(() => navigate("/", { replace }))`
+en `WhoIsWatching.tsx`).
+
+### Picker
+
+`ui/whoiswatching/WhoIsWatchingScreen.kt` — grid adaptativo (minSize
+180dp) de tiles circulares con:
+- avatar URL del backend si lo hay (Coil + main OkHttp authenticated).
+- fallback: círculo coloreado con iniciales. Color por hash FNV-1a 32-bit
+  del nombre del perfil sobre la misma paleta de 8 colores que el web
+  (`web/src/utils/avatarColor.ts`). Si el perfil tiene `avatar_color`
+  override (hex), gana.
+- badge "Protegido con PIN" cuando aplica.
+- click sin PIN → switch directo.
+- click con PIN → modal con `OutlinedTextField` (`NumberPassword`),
+  máximo 4 dígitos, "Desbloquear" habilitado sólo cuando se cumple
+  la longitud. Wrong PIN → `isError` + texto rojo, dialog queda abierto.
+
+### Repo
+
+`data/ProfileRepository.kt` expone `list()` (con server-URL aware
+absolutize para los avatar URLs), `switch(profileId, pin?, displayName?)`
+que persiste tokens + activeProfileId atómicamente, y
+`pinCurrentAsActive(profileId, displayName)` para el auto-skip de solo
+accounts. Constructor primario toma lambdas (testeable sin Android
+Context), constructor secundario toma TokenStore (production).
+
+`SwitchResult` sealed: `Success` / `InvalidPin` (401) / `NotAllowed`
+(403) / `Failure(message)`.
+
+### Settings
+
+Nueva tarjeta "Perfil" (sólo cuando `activeProfileName != null`) con:
+- label "Activo" + nombre del perfil actual.
+- botón "Cambiar perfil" → `clearActiveProfileBlocking()` + navigate
+  WhoIsWatching con `popUpTo(Home, inclusive)`. Stack queda
+  `[WhoIsWatching]` para que tras pickear se pueda popUpTo limpio a
+  `[Home]`.
+
+### Tests
+
+`data/ProfileRepositoryTest.kt` — 6 unitarios:
+- DTO → domain mapping (display_name fallback a username, avatar URL
+  absolutización).
+- list devuelve `null` en fallo de red (no empty list — la distinción
+  importa para no auto-skipear cuando la red ha caído).
+- list devuelve `[]` en deploy sin profiles → solo + SkipToHome.
+- switch éxito persiste tokens + activeProfileId.
+- switch 401 (wrong PIN) NO persiste (security: si persistiera, el
+  brute-force loguearía con el bearer rotado de la víctima).
+- switch sin tokens en respuesta → Failure.
+- pinCurrentAsActive sólo escribe el flag, no toca tokens.
+
+`FakeApi` (privada en el test) implementa los 28 endpoints de
+`HubplayApi` con `TODO()` para los irrelevantes (mismo patrón que
+`ProgressReporterTest`).
+
+`ProgressReporterTest.FakeApi` extendido con stubs `listProfiles` /
+`switchProfile` para que compile.
+
+### Strings (i18n)
+
+Nuevas keys en `values/strings.xml` + `values-en/strings.xml`:
+`who_title`, `who_subtitle`, `who_loading`, `who_error`, `who_locked`,
+`who_pin_dialog_title`, `who_pin_dialog_subtitle`, `who_pin_input_hint`,
+`who_pin_action_unlock`, `who_pin_action_cancel`, `who_pin_error_invalid`,
+`who_switch_failed`, `who_avatar_cd`, `settings_section_profile`,
+`settings_profile_help`, `settings_action_change_profile`,
+`settings_label_active_profile`. Paridad ES / EN verificada.
+
+### Lo que NO se hizo (próximos bloques del plan)
+
+Backlog del usuario por orden:
+1. ~~WhoIsWatching~~ ✅
+2. PersonDetail + StudioDetail (click en cast/director del ItemDetail).
+3. Collections (lista + detalle, ruta `/collections`).
+4. MyNotifications (campana en TopNav + SSE event `notification.created`).
+5. ChangePassword (sección en Settings, no pantalla aparte).
+6. Federation (peers/libraries/items/player — el bloque más pesado).
+
+Después: blurhash placeholders en MediaCard, versión del servidor en
+Settings.
+
+Deuda viva del backlog anterior sigue: re-apretar detekt
+(`ignoreFailures = false`), "Recientemente visto" en sidebar Live TV,
+EPG grid alternativo, tests Compose UI + emulator en CI, Baseline
+Profile.
 
 ---
 

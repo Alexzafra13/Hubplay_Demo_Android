@@ -38,7 +38,18 @@ fun HubplayApp(container: AppContainer) {
     val idleState by container.idleController.state.collectAsState()
     val slides    by container.screensaverImageSource.slides.collectAsState()
 
-    val startRoute = if (authState.isAuthenticated) Route.Home else Route.Login
+    // Three-state startup gate:
+    //   - no token        → Login
+    //   - token, no pick  → WhoIsWatching (auto-skips to Home if ≤ 1 profile)
+    //   - token + picked  → Home directly
+    // We only evaluate this on first composition; subsequent transitions
+    // (login, switch-profile) are handled by explicit navigate() calls
+    // in HubplayNavGraph so the back stack stays clean.
+    val startRoute = when {
+        !authState.isAuthenticated          -> Route.Login
+        authState.activeProfileId.isNullOrBlank() -> Route.WhoIsWatching
+        else                                -> Route.Home
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         HubplayNavGraph(

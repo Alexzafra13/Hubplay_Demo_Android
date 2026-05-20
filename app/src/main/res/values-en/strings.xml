@@ -155,4 +155,25 @@
     <string name="player_live_default_emission">Live broadcast</string>
     <string name="player_favorite_on">Favorite</string>
     <string name="player_favorite_add">Add</string>
+
+    <!-- Who is watching? (multi-profile picker) -->
+    <string name="who_title">Who\'s watching?</string>
+    <string name="who_subtitle">Pick your profile to continue.</string>
+    <string name="who_loading">Loading profiles…</string>
+    <string name="who_error">Could not load profiles. Retry or sign in again.</string>
+    <string name="who_locked">PIN protected</string>
+    <string name="who_pin_dialog_title">PIN required</string>
+    <string name="who_pin_dialog_subtitle">Enter %1$s\'s PIN to continue.</string>
+    <string name="who_pin_input_hint">4-digit PIN</string>
+    <string name="who_pin_action_unlock">Unlock</string>
+    <string name="who_pin_action_cancel">Cancel</string>
+    <string name="who_pin_error_invalid">Wrong PIN. Try again.</string>
+    <string name="who_switch_failed">Could not switch profile. Retry.</string>
+    <string name="who_avatar_cd">%1$s\'s avatar</string>
+
+    <!-- Settings — multi-profile entry -->
+    <string name="settings_section_profile">Profile</string>
+    <string name="settings_profile_help">Switch to another household member\'s profile without signing out.</string>
+    <string name="settings_action_change_profile">Change profile</string>
+    <string name="settings_label_active_profile">Active</string>
 </resources>

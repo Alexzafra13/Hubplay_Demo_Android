@@ -18,7 +18,10 @@ import com.alex.hubplay.data.api.dto.LatestResponse
 import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.NextUpResponse
+import com.alex.hubplay.data.api.dto.ProfilesResponse
 import com.alex.hubplay.data.api.dto.SearchResponse
+import com.alex.hubplay.data.api.dto.SwitchProfileRequest
+import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.StatusResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
@@ -230,6 +233,8 @@ class ProgressReporterTest {
         override suspend fun markUnplayed(itemId: String) = TODO()
         override suspend fun toggleItemFavorite(itemId: String): ItemFavoriteToggleResponse = TODO()
         override suspend fun searchItems(query: String, limit: Int): SearchResponse = TODO()
+        override suspend fun listProfiles(): ProfilesResponse                 = TODO()
+        override suspend fun switchProfile(body: SwitchProfileRequest): SwitchProfileResponse = TODO()
     }
 
     companion object {

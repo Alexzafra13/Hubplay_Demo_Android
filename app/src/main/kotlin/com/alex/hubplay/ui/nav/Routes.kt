@@ -10,6 +10,7 @@ package com.alex.hubplay.ui.nav
  */
 sealed class Route(val path: String) {
     data object Login   : Route("login")
+    data object WhoIsWatching : Route("who-is-watching")
     data object Home    : Route("home")
     data object Movies  : Route("movies")
     data object SeriesList : Route("series-list")
