@@ -155,4 +155,25 @@
     <string name="player_live_default_emission">Emisión en directo</string>
     <string name="player_favorite_on">Favorito</string>
     <string name="player_favorite_add">Añadir</string>
+
+    <!-- Who is watching? (multi-profile picker) -->
+    <string name="who_title">¿Quién está viendo?</string>
+    <string name="who_subtitle">Elige tu perfil para continuar.</string>
+    <string name="who_loading">Cargando perfiles…</string>
+    <string name="who_error">No se pudieron cargar los perfiles. Reintenta o inicia sesión de nuevo.</string>
+    <string name="who_locked">Protegido con PIN</string>
+    <string name="who_pin_dialog_title">PIN requerido</string>
+    <string name="who_pin_dialog_subtitle">Introduce el PIN de %1$s para continuar.</string>
+    <string name="who_pin_input_hint">PIN de 4 dígitos</string>
+    <string name="who_pin_action_unlock">Desbloquear</string>
+    <string name="who_pin_action_cancel">Cancelar</string>
+    <string name="who_pin_error_invalid">PIN incorrecto. Vuelve a intentarlo.</string>
+    <string name="who_switch_failed">No se pudo cambiar de perfil. Reintenta.</string>
+    <string name="who_avatar_cd">Avatar de %1$s</string>
+
+    <!-- Settings — multi-profile entry -->
+    <string name="settings_section_profile">Perfil</string>
+    <string name="settings_profile_help">Cambia al perfil de otro miembro de la cuenta sin cerrar sesión.</string>
+    <string name="settings_action_change_profile">Cambiar perfil</string>
+    <string name="settings_label_active_profile">Activo</string>
 </resources>

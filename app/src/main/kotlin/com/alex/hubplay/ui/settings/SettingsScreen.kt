@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.outlined.SwitchAccount
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -68,6 +69,7 @@ fun SettingsScreen(
     onBack:              () -> Unit,
     onLogOut:            () -> Unit,
     onForgetServer:      () -> Unit,
+    onChangeProfile:     () -> Unit = {},
     onReorderChannels:   () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsState()
@@ -125,6 +127,28 @@ fun SettingsScreen(
                             icon    = Icons.Outlined.LinkOff,
                             onClick = onForgetServer,
                         )
+                    }
+
+                    val activeProfileName = ui.activeProfileName
+                    if (activeProfileName != null) {
+                        SectionCard(title = stringResource(R.string.settings_section_profile), icon = Icons.Outlined.SwitchAccount) {
+                            InfoRow(
+                                label = stringResource(R.string.settings_label_active_profile),
+                                value = activeProfileName,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text  = stringResource(R.string.settings_profile_help),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            SecondaryAction(
+                                label   = stringResource(R.string.settings_action_change_profile),
+                                icon    = Icons.Outlined.SwitchAccount,
+                                onClick = onChangeProfile,
+                            )
+                        }
                     }
 
                     SectionCard(title = stringResource(R.string.settings_section_personalization), icon = Icons.Outlined.Tune) {
