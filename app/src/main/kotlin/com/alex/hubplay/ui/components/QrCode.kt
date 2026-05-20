@@ -15,8 +15,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.alex.hubplay.R
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -61,7 +63,7 @@ fun QrCode(
     ) {
         Image(
             bitmap = bitmap.asImageBitmap(),
-            contentDescription = "QR de emparejamiento",
+            contentDescription = stringResource(R.string.cd_pairing_qr),
             modifier = Modifier.size(size),
         )
     }

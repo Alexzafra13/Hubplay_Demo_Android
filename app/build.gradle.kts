@@ -29,10 +29,11 @@ detekt {
     autoCorrect            = false
     parallel               = true
     ignoredBuildTypes      = listOf("release")
-    // First-run posture: the report uploads to CI and we see findings,
-    // but the build is NOT gated red on day one. Once we've either fixed
-    // the existing findings or baselined them (./gradlew detektBaseline),
-    // flip this to false so new code is held to the full ruleset.
+    // Soft mode while we baseline existing findings. The first attempt
+    // at hard mode (commit 887d93c) found pre-existing issues we hadn't
+    // captured in detekt-baseline.xml. Next session: download the
+    // detekt-report artifact from the failing run, fix or baseline each
+    // finding, then flip this back to false. See docs/memory/project-status.md.
     ignoreFailures         = true
 }
 
@@ -230,6 +231,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.vm.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.core.splashscreen)   // splash backport for API < 31
 
     // ── Material Design XML resources — needed so the Activity's
     //     android:theme="@style/Theme.HubPlay" can inherit from

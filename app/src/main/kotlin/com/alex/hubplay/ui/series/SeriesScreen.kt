@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -211,12 +212,12 @@ private fun SeriesHeroFull(
             Spacer(Modifier.width(16.dp))
             Image(
                 painter            = painterResource(R.drawable.brand_wordmark),
-                contentDescription = "HubPlay",
+                contentDescription = stringResource(R.string.brand_hubplay),
                 modifier           = Modifier.height(28.dp),
             )
             Spacer(Modifier.width(10.dp))
             Text(
-                text          = "SERIES",
+                text          = stringResource(R.string.series_section_label),
                 style         = MaterialTheme.typography.labelMedium,
                 color         = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
                 fontWeight    = FontWeight.SemiBold,
@@ -230,8 +231,8 @@ private fun SeriesHeroFull(
         HeroIconButton(
             icon               = if (series?.isFavorite == true) Icons.Default.Favorite
                                  else                            Icons.Default.FavoriteBorder,
-            contentDescription = if (series?.isFavorite == true) "Quitar de favoritos"
-                                 else                            "Añadir a favoritos",
+            contentDescription = if (series?.isFavorite == true) stringResource(R.string.cd_remove_favorite)
+                                 else                            stringResource(R.string.cd_add_favorite),
             onClick            = onToggleFavorite,
             modifier           = Modifier
                 .align(Alignment.TopEnd)
@@ -318,9 +319,9 @@ private fun MetaRow(
 ) {
     if (item == null) return
     val countLabel: String? = when {
-        seasonsCount > 1                -> "$seasonsCount temporadas"
-        seasonsCount == 1 && episodeCount > 0 -> "$episodeCount episodios"
-        else                            -> null
+        seasonsCount > 1                      -> stringResource(R.string.series_seasons_count, seasonsCount)
+        seasonsCount == 1 && episodeCount > 0 -> stringResource(R.string.series_episodes_count, episodeCount)
+        else                                  -> null
     }
     Row(
         verticalAlignment     = Alignment.CenterVertically,
@@ -386,7 +387,7 @@ private fun HeroCtaColumn(
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         HeroCtaButton(
-            label    = resume.playLabel ?: "Sin episodios",
+            label    = resume.playLabel ?: stringResource(R.string.series_play_empty),
             icon     = Icons.Default.PlayArrow,
             primary  = true,
             enabled  = resume.episodeId != null,
@@ -397,7 +398,7 @@ private fun HeroCtaColumn(
             modifier = Modifier.fillMaxWidth(0.62f),
         )
         HeroCtaButton(
-            label    = "Episodios",
+            label    = stringResource(R.string.series_episodes_action),
             icon     = Icons.Default.VideoLibrary,
             primary  = false,
             onClick  = onShowEpisodes,
@@ -447,12 +448,12 @@ private fun SeriesEpisodesPanel(
             Spacer(Modifier.width(16.dp))
             Image(
                 painter            = painterResource(R.drawable.brand_wordmark),
-                contentDescription = "HubPlay",
+                contentDescription = stringResource(R.string.brand_hubplay),
                 modifier           = Modifier.height(28.dp),
             )
             Spacer(Modifier.width(10.dp))
             Text(
-                text          = "SERIES",
+                text          = stringResource(R.string.series_section_label),
                 style         = MaterialTheme.typography.labelMedium,
                 color         = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
                 fontWeight    = FontWeight.SemiBold,
@@ -561,8 +562,8 @@ private fun SeasonRow(
         animationSpec = tween(180),
         label         = "season-row-scale",
     )
-    val label    = season.seasonNumber?.let { "Temporada $it" } ?: season.title
-    val sublabel = episodeCount?.takeIf { it > 0 }?.let { "$it episodios" }
+    val label    = season.seasonNumber?.let { stringResource(R.string.series_season_format, it) } ?: season.title
+    val sublabel = episodeCount?.takeIf { it > 0 }?.let { stringResource(R.string.series_episodes_count, it) }
 
     Row(
         modifier = Modifier
@@ -653,7 +654,7 @@ private fun EpisodeRow(
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                 ) {
                     Text(
-                        text       = "Episodio $num",
+                        text       = stringResource(R.string.series_episode_label, num.toString()),
                         style      = MaterialTheme.typography.labelMedium,
                         color      = Color.White,
                         fontWeight = FontWeight.SemiBold,
@@ -673,7 +674,7 @@ private fun EpisodeRow(
         }
         Column(modifier = Modifier.weight(1f).padding(top = 4.dp)) {
             Text(
-                text       = episode.title.ifBlank { "Episodio ${episode.episodeNumber ?: ""}" },
+                text       = episode.title.ifBlank { stringResource(R.string.series_episode_label, episode.episodeNumber?.toString() ?: "") },
                 style      = MaterialTheme.typography.titleMedium,
                 color      = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.SemiBold,
@@ -693,7 +694,7 @@ private fun EpisodeRow(
             if (episode.durationSec > 0) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text  = "(${episode.durationSec / 60}m)",
+                    text  = stringResource(R.string.series_episode_duration_short, episode.durationSec / 60),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -725,7 +726,7 @@ private fun ErrorBanner(message: String, onRetry: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onRetry) { Text("Reintentar") }
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
     }
 }
 

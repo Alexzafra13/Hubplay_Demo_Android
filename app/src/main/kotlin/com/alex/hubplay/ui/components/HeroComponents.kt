@@ -32,9 +32,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.alex.hubplay.R
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.OnAccent
 
@@ -72,7 +74,7 @@ fun BackPill(
     ) {
         Icon(
             imageVector        = Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = "Volver",
+            contentDescription = stringResource(R.string.action_back),
             tint               = Color.White,
         )
     }

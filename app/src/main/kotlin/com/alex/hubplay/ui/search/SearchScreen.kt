@@ -36,10 +36,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.alex.hubplay.R
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.catalog.PortraitCatalogCard
 import com.alex.hubplay.ui.home.components.Tab
@@ -113,7 +115,7 @@ private fun SearchInputBar(
         value           = query,
         onValueChange   = onChange,
         singleLine      = true,
-        placeholder     = { Text("Películas, series, episodios…") },
+        placeholder     = { Text(stringResource(R.string.search_placeholder)) },
         leadingIcon     = {
             Icon(
                 imageVector        = Icons.Default.Search,
@@ -131,7 +133,7 @@ private fun SearchInputBar(
                 query.isNotEmpty() -> IconButton(onClick = onClear) {
                     Icon(
                         imageVector        = Icons.Default.Close,
-                        contentDescription = "Limpiar",
+                        contentDescription = stringResource(R.string.action_clear),
                         tint               = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -183,7 +185,7 @@ private fun EmptyHint() {
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            text      = "Empieza a escribir para buscar en tu biblioteca",
+            text      = stringResource(R.string.search_empty_hint),
             style     = MaterialTheme.typography.bodyMedium,
             color     = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -199,13 +201,13 @@ private fun NoMatches(query: String) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text       = "Sin resultados para \"${query.trim()}\"",
+            text       = stringResource(R.string.search_no_results, query.trim()),
             style      = MaterialTheme.typography.titleMedium,
             color      = MaterialTheme.colorScheme.onBackground,
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text  = "Prueba con otra palabra clave o revisa la ortografía.",
+            text  = stringResource(R.string.search_no_results_hint),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

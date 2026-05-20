@@ -6,6 +6,7 @@ import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.alex.hubplay.data.AppContainer
 import com.alex.hubplay.ui.HubplayApp
 import com.alex.hubplay.ui.theme.HubPlayTheme
@@ -34,6 +35,13 @@ class MainActivity : ComponentActivity() {
     private lateinit var container: AppContainer
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Install the splash screen BEFORE super.onCreate so the
+        // SplashScreen library can hook into Activity lifecycle to
+        // bridge the launch theme to the post-splash theme (declared
+        // in styles.xml as `postSplashScreenTheme`). Skipping this
+        // would leave the launch theme stuck through Compose's first
+        // frame, flashing the splash bg.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 

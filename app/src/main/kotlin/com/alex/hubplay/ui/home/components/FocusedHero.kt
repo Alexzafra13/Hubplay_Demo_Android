@@ -21,11 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.alex.hubplay.R
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.BgBase
@@ -98,7 +100,7 @@ fun FocusedHero(
             // Small section eyebrow — same brand cue as the detail/series
             // hero, lighter so it doesn't fight the title for attention.
             Text(
-                text          = "DESTACADO",
+                text          = stringResource(R.string.home_focused_eyebrow),
                 style         = MaterialTheme.typography.labelMedium,
                 color         = Accent,
                 fontWeight    = FontWeight.SemiBold,
@@ -172,7 +174,7 @@ private fun FocusedMetaRow(item: MediaItem) {
             Text("·", style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                text     = "${item.durationSec / 60} min",
+                text     = stringResource(R.string.detail_duration_minutes, item.durationSec / 60),
                 style    = MaterialTheme.typography.bodyMedium,
                 color    = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,

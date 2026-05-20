@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -175,7 +176,7 @@ private fun HeroFull(
             Spacer(Modifier.width(16.dp))
             Image(
                 painter            = painterResource(R.drawable.brand_wordmark),
-                contentDescription = "HubPlay",
+                contentDescription = stringResource(R.string.brand_hubplay),
                 modifier           = Modifier.height(28.dp),
             )
         }
@@ -196,13 +197,13 @@ private fun HeroFull(
             HeroIconButton(
                 icon               = if (item.isFavorite) Icons.Default.Favorite
                                      else                 Icons.Default.FavoriteBorder,
-                contentDescription = if (item.isFavorite) "Quitar de favoritos"
-                                     else                 "Añadir a favoritos",
+                contentDescription = if (item.isFavorite) stringResource(R.string.cd_remove_favorite)
+                                     else                 stringResource(R.string.cd_add_favorite),
                 onClick            = onToggleFavorite,
             )
             HeroIconButton(
                 icon               = Icons.Default.MoreVert,
-                contentDescription = "Más opciones",
+                contentDescription = stringResource(R.string.action_more_options),
                 onClick            = { /* TODO: overflow menu (marcar visto, info, eliminar) */ },
             )
         }
@@ -230,8 +231,8 @@ private fun PosterAndPlayColumn(item: MediaItem, onPlay: (String, Long) -> Unit)
     val playLabel = if (item.resumePosSec > 0) {
         val mins = item.resumePosSec / 60
         val secs = item.resumePosSec % 60
-        "Reanudar ${mins}:${secs.toString().padStart(2, '0')}"
-    } else "Reproducir"
+        stringResource(R.string.detail_resume_format, mins, secs)
+    } else stringResource(R.string.detail_play)
 
     val playFocus = remember { FocusRequester() }
     LaunchedEffect(item.id) {
@@ -356,7 +357,7 @@ private fun MetaRow(item: MediaItem) {
             Text("·", style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                text     = "${item.durationSec / 60} min",
+                text     = stringResource(R.string.detail_duration_minutes, item.durationSec / 60),
                 style    = MaterialTheme.typography.bodyMedium,
                 color    = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
@@ -397,6 +398,6 @@ private fun ErrorBanner(message: String, onRetry: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onRetry) { Text("Reintentar") }
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
     }
 }

@@ -34,10 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.alex.hubplay.R
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.BgBase
 import com.alex.hubplay.ui.theme.OnAccent
@@ -69,11 +71,14 @@ fun LiveTvSidebar(
     onOpenSettings:    () -> Unit = {},
     modifier:         Modifier = Modifier,
 ) {
-    val items = remember(groups, favoritesCount) {
+    val allLabel        = stringResource(R.string.livetv_filter_all)
+    val favoritesLabel  = stringResource(R.string.livetv_filter_favorites)
+    val favoritesWithCt = stringResource(R.string.livetv_filter_favorites_count, favoritesCount)
+    val items = remember(groups, favoritesCount, allLabel, favoritesLabel, favoritesWithCt) {
         buildList {
-            add(SidebarItem.Builtin("Todos", ChannelFilter.All))
+            add(SidebarItem.Builtin(allLabel, ChannelFilter.All))
             add(SidebarItem.Builtin(
-                label  = if (favoritesCount > 0) "Favoritos · $favoritesCount" else "Favoritos",
+                label  = if (favoritesCount > 0) favoritesWithCt else favoritesLabel,
                 filter = ChannelFilter.Favorites,
                 isStar = true,
             ))
@@ -125,14 +130,14 @@ fun LiveTvSidebar(
                 modifier = Modifier.padding(vertical = 6.dp),
             )
             SidebarRow(
-                label       = "Reordenar canales",
+                label       = stringResource(R.string.livetv_sidebar_reorder),
                 isStar      = false,
                 selected    = false,
                 leadingIcon = Icons.Filled.SwapVert,
                 onClick     = onReorderChannels,
             )
             SidebarRow(
-                label       = "Ajustes",
+                label       = stringResource(R.string.livetv_sidebar_settings),
                 isStar      = false,
                 selected    = false,
                 leadingIcon = Icons.Filled.Settings,

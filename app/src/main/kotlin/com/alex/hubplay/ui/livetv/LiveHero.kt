@@ -34,12 +34,14 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
+import com.alex.hubplay.R
 import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.data.EpgProgram
 import com.alex.hubplay.data.LiveChannel
@@ -241,8 +243,9 @@ private fun HeroInfo(
         // "3Cat Exclusiu 3 (1080p) [Geo-blocked]") don't squeeze the
         // group label and rotate it into vertical letters. The whole
         // line truncates with ellipsis on its own line.
+        val defaultName = stringResource(R.string.livetv_hero_default_title)
         val titleLine = buildString {
-            append(channel?.name ?: "TV en vivo")
+            append(channel?.name ?: defaultName)
             channel?.groupName?.takeIf { it.isNotBlank() }?.let { g ->
                 append("  ·  ").append(g)
             }
@@ -268,7 +271,7 @@ private fun HeroInfo(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text     = buildMetaLine(nowProgram, nowInstant),
+                text     = buildMetaLine(nowProgram, nowInstant, remainingLabel(nowProgram, nowInstant)),
                 color    = Color(0xFFCBD2DD),
                 fontSize = 12.sp,
             )
@@ -296,7 +299,7 @@ private fun HeroInfo(
             if (nextProgram != null) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text       = "DESPUÉS · ${formatTime(nextProgram.startTime)} · ${nextProgram.title}",
+                    text       = stringResource(R.string.livetv_after_program_format, formatTime(nextProgram.startTime), nextProgram.title),
                     color      = Color(0xFF7B8597),
                     fontSize   = 10.sp,
                     letterSpacing = 0.5.sp,
@@ -307,7 +310,7 @@ private fun HeroInfo(
             }
         } else if (channel != null) {
             Text(
-                text       = "Sin información del programa actual",
+                text       = stringResource(R.string.livetv_hero_no_program_title),
                 color      = Color.White,
                 fontSize   = 18.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -316,7 +319,7 @@ private fun HeroInfo(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text     = "Pulsa OK sobre la fila del canal para reproducirlo en directo.",
+                text     = stringResource(R.string.livetv_hero_no_program_hint),
                 color    = Color(0xFF8892A5),
                 fontSize = 12.sp,
             )
@@ -364,20 +367,20 @@ private fun PreviewFallback(
     }
 }
 
-private fun buildMetaLine(program: EpgProgram, now: Instant): String {
+private fun buildMetaLine(program: EpgProgram, now: Instant, remaining: String): String {
     val range  = "${formatTime(program.startTime)} – ${formatTime(program.endTime)}"
     val genre  = program.category.takeIf { it.isNotBlank() }
-    val left   = remainingLabel(program, now)
-    return listOfNotNull(range, genre, left).joinToString("  ·  ")
+    return listOfNotNull(range, genre, remaining).joinToString("  ·  ")
 }
 
+@androidx.compose.runtime.Composable
 private fun remainingLabel(program: EpgProgram, now: Instant): String {
     val secondsLeft = program.endTime.epochSecond - now.epochSecond
-    if (secondsLeft <= 0L) return "Terminando"
+    if (secondsLeft <= 0L) return stringResource(R.string.livetv_remaining_ending)
     val minutesLeft = (secondsLeft / 60L).coerceAtLeast(1L)
     return when {
-        minutesLeft < 60L -> "$minutesLeft min restantes"
-        else              -> "${minutesLeft / 60L} h ${minutesLeft % 60L} min restantes"
+        minutesLeft < 60L -> stringResource(R.string.livetv_remaining_minutes, minutesLeft)
+        else              -> stringResource(R.string.livetv_remaining_hours_minutes, minutesLeft / 60L, minutesLeft % 60L)
     }
 }
 

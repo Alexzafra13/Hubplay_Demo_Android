@@ -19,6 +19,7 @@ detekt            = "1.23.7"
 # ─── AndroidX core ──────────────────────────────────────────────────────────
 coreKtx            = "1.15.0"
 activityCompose    = "1.9.3"
+splashscreen       = "1.0.1"          # AndroidX SplashScreen backport library
 lifecycle          = "2.8.7"
 navigationCompose  = "2.8.4"
 datastore          = "1.1.1"
@@ -77,6 +78,7 @@ androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle",       name = "l
 androidx-lifecycle-vm-compose  = { group = "androidx.lifecycle",       name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 androidx-navigation-compose    = { group = "androidx.navigation",      name = "navigation-compose",   version.ref = "navigationCompose" }
 androidx-datastore-preferences = { group = "androidx.datastore",       name = "datastore-preferences",version.ref = "datastore" }
+androidx-core-splashscreen     = { group = "androidx.core",            name = "core-splashscreen",    version.ref = "splashscreen" }
 
 # Material Design (XML resources for the Activity's themes.xml)
 material                       = { group = "com.google.android.material", name = "material",          version.ref = "material" }

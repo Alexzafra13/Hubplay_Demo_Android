@@ -43,8 +43,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.alex.hubplay.R
 import com.alex.hubplay.ui.theme.BgBase
 
 /**
@@ -81,13 +83,13 @@ fun SettingsScreen(
                 IconButton(onClick = onBack) {
                     Icon(
                         imageVector        = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
+                        contentDescription = stringResource(R.string.action_back),
                         tint               = MaterialTheme.colorScheme.onBackground,
                     )
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text       = "Ajustes",
+                    text       = stringResource(R.string.settings_title),
                     style      = MaterialTheme.typography.headlineSmall,
                     color      = MaterialTheme.colorScheme.onBackground,
                     fontWeight = FontWeight.SemiBold,
@@ -104,51 +106,49 @@ fun SettingsScreen(
                 ) {
                     Spacer(Modifier.height(8.dp))
 
-                    SectionCard(title = "Servidor", icon = Icons.Outlined.Dns) {
-                        InfoRow(label = "URL", value = ui.serverUrl ?: "—")
+                    SectionCard(title = stringResource(R.string.settings_section_server), icon = Icons.Outlined.Dns) {
+                        InfoRow(label = stringResource(R.string.settings_label_url), value = ui.serverUrl ?: stringResource(R.string.settings_value_unknown))
                         Spacer(Modifier.height(14.dp))
                         // Two distinct exit doors. Log out keeps the URL so
                         // re-pairing is one tap; Forget server wipes it.
                         SecondaryAction(
-                            label   = "Cerrar sesión",
+                            label   = stringResource(R.string.settings_action_logout),
                             icon    = Icons.AutoMirrored.Filled.Logout,
                             onClick = onLogOut,
                         )
                         Spacer(Modifier.height(10.dp))
                         SecondaryAction(
-                            label   = "Cambiar servidor (olvidar este)",
+                            label   = stringResource(R.string.settings_action_change_server),
                             icon    = Icons.Outlined.LinkOff,
                             onClick = onForgetServer,
                         )
                     }
 
-                    SectionCard(title = "Diagnóstico", icon = Icons.Outlined.BugReport) {
+                    SectionCard(title = stringResource(R.string.settings_section_diagnostics), icon = Icons.Outlined.BugReport) {
                         Text(
-                            text  = "Si la app se cierra inesperadamente, aquí queda " +
-                                    "el stack trace del último crash. Cópialo cuando " +
-                                    "reportes un fallo.",
+                            text  = stringResource(R.string.settings_diagnostics_help),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             SecondaryAction(
-                                label   = "Ver logs",
+                                label   = stringResource(R.string.settings_action_view_logs),
                                 icon    = Icons.Outlined.BugReport,
                                 onClick = { showCrashDialog = true },
                             )
                             SecondaryAction(
-                                label   = "Borrar logs",
+                                label   = stringResource(R.string.settings_action_clear_logs),
                                 icon    = Icons.Outlined.DeleteSweep,
                                 onClick = { viewModel.clearCrashLog() },
                             )
                         }
                     }
 
-                    SectionCard(title = "Acerca de", icon = Icons.Outlined.Info) {
-                        InfoRow(label = "Versión",   value = ui.appVersion)
-                        InfoRow(label = "Build",     value = ui.buildFlavor)
-                        InfoRow(label = "Paquete",   value = "com.alex.hubplay")
+                    SectionCard(title = stringResource(R.string.settings_section_about), icon = Icons.Outlined.Info) {
+                        InfoRow(label = stringResource(R.string.settings_label_version), value = ui.appVersion)
+                        InfoRow(label = stringResource(R.string.settings_label_build),   value = ui.buildFlavor)
+                        InfoRow(label = stringResource(R.string.settings_label_package), value = stringResource(R.string.settings_package_value))
                     }
                 }
             }
@@ -188,14 +188,14 @@ private fun SecondaryAction(
 
 @Composable
 private fun CrashLogDialog(log: String, onDismiss: () -> Unit) {
-    val text = log.ifBlank { "Sin crashes registrados." }
+    val text = log.ifBlank { stringResource(R.string.settings_crash_dialog_empty) }
     val scroll = rememberScrollState()
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton    = {
-            TextButton(onClick = onDismiss) { Text("Cerrar") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
         },
-        title  = { Text("Logs de crashes") },
+        title  = { Text(stringResource(R.string.settings_crash_dialog_title)) },
         text   = {
             // Stack traces are tall. Wrap in a vertical scroller so the
             // dialog itself stays bounded; horizontal overflow folds to

@@ -116,7 +116,7 @@ fun LoginScreen(
                 ) {
                     Image(
                         painter            = painterResource(R.drawable.brand_wordmark),
-                        contentDescription = "HubPlay",
+                        contentDescription = stringResource(R.string.brand_hubplay),
                         modifier           = Modifier.height(64.dp),
                     )
                     Spacer(Modifier.height(32.dp))
@@ -615,8 +615,8 @@ private fun PollStatusRow(status: DeviceCodeStatus?) {
     val message = when (status) {
         is DeviceCodeStatus.Pending,
         null                         -> stringResource(R.string.login_pairing_waiting)
-        is DeviceCodeStatus.Approved -> "Aprobado, abriendo HubPlay…"
-        is DeviceCodeStatus.Expired  -> "El código expiró. Inténtalo de nuevo."
+        is DeviceCodeStatus.Approved -> stringResource(R.string.login_pairing_approved)
+        is DeviceCodeStatus.Expired  -> stringResource(R.string.login_pairing_expired)
         is DeviceCodeStatus.Failed   -> status.message
     }
     Row(
