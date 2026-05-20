@@ -37,6 +37,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -44,6 +45,7 @@ import androidx.activity.compose.BackHandler
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.alex.hubplay.R
 import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.player.HubplayPlayer
 import kotlinx.coroutines.delay
@@ -166,7 +168,7 @@ fun PlayerScreen(
             ) {
                 Icon(
                     imageVector       = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Volver",
+                    contentDescription = stringResource(R.string.action_back),
                     tint              = Color.White,
                 )
             }
@@ -179,7 +181,7 @@ fun PlayerScreen(
             ) {
                 Icon(
                     imageVector        = Icons.Outlined.ClosedCaption,
-                    contentDescription = "Audio y subtítulos",
+                    contentDescription = stringResource(R.string.player_audio_subtitles),
                     tint               = Color.White,
                 )
             }
@@ -205,7 +207,7 @@ fun PlayerScreen(
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text  = ui.title ?: "Preparando…",
+                    text  = ui.title ?: stringResource(R.string.player_preparing),
                     color = Color.White,
                     style = MaterialTheme.typography.bodyMedium,
                 )

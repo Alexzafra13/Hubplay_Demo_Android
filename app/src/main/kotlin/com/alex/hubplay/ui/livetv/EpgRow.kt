@@ -43,11 +43,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.alex.hubplay.R
 import com.alex.hubplay.data.EpgProgram
 import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.ui.theme.Accent
@@ -177,7 +179,7 @@ private fun ChannelHeader(
                 if (isFavorite) {
                     Icon(
                         imageVector       = Icons.Filled.Star,
-                        contentDescription = "Favorito",
+                        contentDescription = stringResource(R.string.cd_favorite),
                         tint              = Accent,
                         modifier          = Modifier.size(12.dp),
                     )
@@ -306,7 +308,7 @@ private fun EmptyEpgCell(
         contentAlignment = Alignment.CenterStart,
     ) {
         Text(
-            text     = "Sin guía electrónica · Pulsa OK para reproducir",
+            text     = stringResource(R.string.livetv_epg_no_guide),
             color    = TextMuted,
             fontSize = 12.sp,
         )
@@ -417,13 +419,14 @@ private fun formatTime(instant: Instant): String =
 
 private val EPG_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
+@androidx.compose.runtime.Composable
 private fun remainingShort(program: EpgProgram, now: Instant): String {
     val secondsLeft = program.endTime.epochSecond - now.epochSecond
-    if (secondsLeft <= 0L) return "Fin"
+    if (secondsLeft <= 0L) return stringResource(R.string.livetv_epg_ended)
     val minutesLeft = (secondsLeft / 60L).coerceAtLeast(1L)
     return when {
-        minutesLeft < 60L -> "$minutesLeft min restantes"
-        else              -> "${minutesLeft / 60L} h ${minutesLeft % 60L} min"
+        minutesLeft < 60L -> stringResource(R.string.livetv_remaining_minutes, minutesLeft)
+        else              -> stringResource(R.string.livetv_remaining_hours_minutes_short, minutesLeft / 60L, minutesLeft % 60L)
     }
 }
 

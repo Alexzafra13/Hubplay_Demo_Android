@@ -2,6 +2,31 @@
 <resources>
     <string name="app_name">HubPlay</string>
 
+    <!-- Brand / shared -->
+    <string name="brand_hubplay">HubPlay</string>
+
+    <!-- Actions (shared verbs) -->
+    <string name="action_retry">Reintentar</string>
+    <string name="action_close">Cerrar</string>
+    <string name="action_back">Volver</string>
+    <string name="action_more_options">Más opciones</string>
+    <string name="action_clear">Limpiar</string>
+
+    <!-- Common content descriptions -->
+    <string name="cd_account">Cuenta</string>
+    <string name="cd_favorite">Favorito</string>
+    <string name="cd_selected">Seleccionada</string>
+    <string name="cd_add_favorite">Añadir a favoritos</string>
+    <string name="cd_remove_favorite">Quitar de favoritos</string>
+    <string name="cd_pairing_qr">QR de emparejamiento</string>
+
+    <!-- Navigation (TopNav tabs) -->
+    <string name="nav_tab_home">Inicio</string>
+    <string name="nav_tab_movies">Películas</string>
+    <string name="nav_tab_series">Series</string>
+    <string name="nav_tab_livetv">TV en vivo</string>
+    <string name="nav_tab_search">Buscar</string>
+
     <!-- Login -->
     <string name="login_title">Conecta tu HubPlay</string>
     <string name="login_subtitle">Introduce la URL de tu servidor para emparejar este dispositivo.</string>
@@ -16,9 +41,103 @@
     <string name="login_pairing_code_help">Abre HubPlay en cualquier navegador y entra a Ajustes → Dispositivos.</string>
     <string name="login_pairing_waiting">Esperando aprobación…</string>
     <string name="login_pairing_change_url">Cambiar servidor</string>
+    <string name="login_pairing_approved">Aprobado, abriendo HubPlay…</string>
+    <string name="login_pairing_expired">El código expiró. Inténtalo de nuevo.</string>
     <string name="login_error_generic">Error de conexión. Comprueba la URL y vuelve a intentarlo.</string>
     <string name="login_lan_discovered">Servidores en tu red</string>
     <string name="login_lan_searching">Buscando servidores en tu red…</string>
     <string name="login_other_server">¿Otro servidor?</string>
     <string name="login_auto_connecting">Conectando con HubPlay…</string>
+
+    <!-- Home -->
+    <string name="home_hero_eyebrow">TRENDING ESTA SEMANA</string>
+    <string name="home_play">Reproducir</string>
+    <string name="home_view_details">Ver detalles</string>
+    <string name="home_focused_eyebrow">DESTACADO</string>
+
+    <!-- Catalog -->
+    <string name="catalog_empty">Sin contenido en esta biblioteca</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_section_server">Servidor</string>
+    <string name="settings_section_diagnostics">Diagnóstico</string>
+    <string name="settings_section_about">Acerca de</string>
+    <string name="settings_label_url">URL</string>
+    <string name="settings_label_version">Versión</string>
+    <string name="settings_label_build">Build</string>
+    <string name="settings_label_package">Paquete</string>
+    <string name="settings_package_value">com.alex.hubplay</string>
+    <string name="settings_value_unknown">—</string>
+    <string name="settings_action_logout">Cerrar sesión</string>
+    <string name="settings_action_change_server">Cambiar servidor (olvidar este)</string>
+    <string name="settings_diagnostics_help">Si la app se cierra inesperadamente, aquí queda el stack trace del último crash. Cópialo cuando reportes un fallo.</string>
+    <string name="settings_action_view_logs">Ver logs</string>
+    <string name="settings_action_clear_logs">Borrar logs</string>
+    <string name="settings_crash_dialog_title">Logs de crashes</string>
+    <string name="settings_crash_dialog_empty">Sin crashes registrados.</string>
+
+    <!-- Search -->
+    <string name="search_placeholder">Películas, series, episodios…</string>
+    <string name="search_empty_hint">Empieza a escribir para buscar en tu biblioteca</string>
+    <string name="search_no_results">Sin resultados para \"%1$s\"</string>
+    <string name="search_no_results_hint">Prueba con otra palabra clave o revisa la ortografía.</string>
+
+    <!-- Detail -->
+    <string name="detail_resume_format">Reanudar %1$d:%2$02d</string>
+    <string name="detail_play">Reproducir</string>
+    <string name="detail_duration_minutes">%1$d min</string>
+
+    <!-- Series -->
+    <string name="series_section_label">SERIES</string>
+    <string name="series_seasons_count">%1$d temporadas</string>
+    <string name="series_episodes_count">%1$d episodios</string>
+    <string name="series_play_empty">Sin episodios</string>
+    <string name="series_episodes_action">Episodios</string>
+    <string name="series_season_format">Temporada %1$d</string>
+    <string name="series_episode_label">Episodio %1$s</string>
+    <string name="series_episode_duration_short">(%1$dm)</string>
+
+    <!-- Live TV -->
+    <string name="livetv_empty_title">No hay canales IPTV</string>
+    <string name="livetv_empty_subtitle">Añade un origen M3U desde la app web para empezar a ver TV en directo.</string>
+    <string name="livetv_filter_all">Todos</string>
+    <string name="livetv_filter_favorites">Favoritos</string>
+    <string name="livetv_filter_favorites_count">Favoritos · %1$d</string>
+    <string name="livetv_sidebar_reorder">Reordenar canales</string>
+    <string name="livetv_sidebar_settings">Ajustes</string>
+    <string name="livetv_empty_favorites_title">Aún no tienes favoritos</string>
+    <string name="livetv_empty_favorites_subtitle">Mantén pulsado OK sobre un canal para marcarlo.</string>
+    <string name="livetv_empty_group">No hay canales en %1$s</string>
+    <string name="livetv_empty_generic">No hay canales que mostrar</string>
+    <string name="livetv_hero_default_title">TV en vivo</string>
+    <string name="livetv_hero_no_program_title">Sin información del programa actual</string>
+    <string name="livetv_hero_no_program_hint">Pulsa OK sobre la fila del canal para reproducirlo en directo.</string>
+    <string name="livetv_after_program_format">DESPUÉS · %1$s · %2$s</string>
+    <string name="livetv_remaining_ending">Terminando</string>
+    <string name="livetv_remaining_minutes">%1$d min restantes</string>
+    <string name="livetv_remaining_hours_minutes">%1$d h %2$d min restantes</string>
+    <string name="livetv_epg_no_guide">Sin guía electrónica · Pulsa OK para reproducir</string>
+    <string name="livetv_epg_no_guide_short">Sin guía</string>
+    <string name="livetv_epg_ended">Fin</string>
+    <string name="livetv_remaining_hours_minutes_short">%1$d h %2$d min</string>
+
+    <!-- Player -->
+    <string name="player_preparing">Preparando…</string>
+    <string name="player_audio_subtitles">Audio y subtítulos</string>
+    <string name="player_section_audio">Audio</string>
+    <string name="player_section_subtitles">Subtítulos</string>
+    <string name="player_subtitles_disabled">Desactivados</string>
+    <string name="player_no_extra_audio">Sin pistas de audio adicionales</string>
+    <string name="player_audio_default_label">Audio</string>
+    <string name="player_subtitles_default_label">Subtítulos</string>
+    <string name="player_audio_mono">Mono</string>
+    <string name="player_audio_stereo">Estéreo</string>
+    <string name="player_audio_channels_format">%1$d canales</string>
+    <string name="player_subtitle_flag_forced">forzados</string>
+    <string name="player_subtitle_flag_default">por defecto</string>
+    <string name="player_live_default_channel_name">Canal en vivo</string>
+    <string name="player_live_default_emission">Emisión en directo</string>
+    <string name="player_favorite_on">Favorito</string>
+    <string name="player_favorite_add">Añadir</string>
 </resources>

@@ -23,12 +23,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.C
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import com.alex.hubplay.R
 
 /**
  * Bottom sheet that lets the user pick the active audio + subtitle
@@ -69,9 +71,9 @@ fun TrackSelectionSheet(
             modifier            = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            SectionHeader("Audio")
+            SectionHeader(stringResource(R.string.player_section_audio))
             if (audioGroups.isEmpty()) {
-                EmptyRow("Sin pistas de audio adicionales")
+                EmptyRow(stringResource(R.string.player_no_extra_audio))
             } else {
                 audioGroups.forEach { group ->
                     repeat(group.length) { idx ->
@@ -96,9 +98,9 @@ fun TrackSelectionSheet(
             }
 
             Spacer(Modifier.height(16.dp))
-            SectionHeader("Subtítulos")
+            SectionHeader(stringResource(R.string.player_section_subtitles))
             TrackRow(
-                label    = "Desactivados",
+                label    = stringResource(R.string.player_subtitles_disabled),
                 selected = subtitleGroups.none { group ->
                     (0 until group.length).any { group.isTrackSelected(it) }
                 },
@@ -137,26 +139,29 @@ fun TrackSelectionSheet(
 // ─── Format-to-label helpers ─────────────────────────────────────────────────
 
 @OptIn(UnstableApi::class)
+@androidx.compose.runtime.Composable
 private fun formatAudioLabel(format: androidx.media3.common.Format): String {
     val lang     = languageDisplay(format.language)
     val channels = when (format.channelCount) {
-        1    -> "Mono"
-        2    -> "Estéreo"
+        1    -> stringResource(R.string.player_audio_mono)
+        2    -> stringResource(R.string.player_audio_stereo)
         6    -> "5.1"
         8    -> "7.1"
-        else -> if (format.channelCount > 0) "${format.channelCount} canales" else null
+        else -> if (format.channelCount > 0) stringResource(R.string.player_audio_channels_format, format.channelCount) else null
     }
     val codec = format.codecs?.substringBefore('.')?.uppercase()
-    return listOfNotNull(lang ?: "Audio", channels, codec).joinToString(" · ")
+    val defaultAudio = stringResource(R.string.player_audio_default_label)
+    return listOfNotNull(lang ?: defaultAudio, channels, codec).joinToString(" · ")
 }
 
 @OptIn(UnstableApi::class)
+@androidx.compose.runtime.Composable
 private fun formatSubtitleLabel(format: androidx.media3.common.Format): String {
-    val lang  = languageDisplay(format.language) ?: format.label ?: "Subtítulos"
+    val lang  = languageDisplay(format.language) ?: format.label ?: stringResource(R.string.player_subtitles_default_label)
     val flags = mutableListOf<String>()
     val selFlags = format.selectionFlags
-    if (selFlags and C.SELECTION_FLAG_FORCED  != 0) flags += "forzados"
-    if (selFlags and C.SELECTION_FLAG_DEFAULT != 0) flags += "por defecto"
+    if (selFlags and C.SELECTION_FLAG_FORCED  != 0) flags += stringResource(R.string.player_subtitle_flag_forced)
+    if (selFlags and C.SELECTION_FLAG_DEFAULT != 0) flags += stringResource(R.string.player_subtitle_flag_default)
     return if (flags.isEmpty()) lang else "$lang (${flags.joinToString(", ")})"
 }
 
@@ -204,7 +209,7 @@ private fun TrackRow(label: String, selected: Boolean, onClick: () -> Unit) {
             if (selected) {
                 Icon(
                     imageVector        = Icons.Outlined.Check,
-                    contentDescription = "Seleccionada",
+                    contentDescription = stringResource(R.string.cd_selected),
                     tint               = MaterialTheme.colorScheme.primary,
                 )
             }

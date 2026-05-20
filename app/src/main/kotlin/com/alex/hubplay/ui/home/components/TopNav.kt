@@ -33,11 +33,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.annotation.StringRes
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.R
@@ -74,7 +76,7 @@ fun TopNav(
         // ── Brand mark
         Image(
             painter            = painterResource(R.drawable.brand_wordmark),
-            contentDescription = "HubPlay",
+            contentDescription = stringResource(R.string.brand_hubplay),
             modifier           = Modifier.height(28.dp),
         )
 
@@ -85,7 +87,7 @@ fun TopNav(
         ) {
             Tab.entries.forEach { tab ->
                 NavTab(
-                    label    = tab.label,
+                    label    = stringResource(tab.labelRes),
                     selected = tab == selectedTab,
                     onClick  = { onTabSelected(tab) },
                 )
@@ -156,7 +158,7 @@ private fun AvatarMenu(
             ) {
                 Icon(
                     imageVector        = Icons.Default.AccountCircle,
-                    contentDescription = "Cuenta",
+                    contentDescription = stringResource(R.string.cd_account),
                     tint               = Accent,
                 )
             }
@@ -169,13 +171,13 @@ private fun AvatarMenu(
             // Removed on purpose — better to ship no entry than one that
             // lies; we'll re-add it the day multi-profile actually works.
             DropdownMenuItem(
-                text     = { Text("Ajustes") },
+                text     = { Text(stringResource(R.string.settings_title)) },
                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
                 onClick  = { open = false; onSettings() },
             )
             HorizontalDivider()
             DropdownMenuItem(
-                text     = { Text("Cerrar sesión") },
+                text     = { Text(stringResource(R.string.settings_action_logout)) },
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null) },
                 onClick  = { open = false; onLogOut() },
             )
@@ -183,10 +185,10 @@ private fun AvatarMenu(
     }
 }
 
-enum class Tab(val label: String) {
-    Home("Inicio"),
-    Movies("Películas"),
-    Series("Series"),
-    LiveTv("TV en vivo"),
-    Search("Buscar"),
+enum class Tab(@StringRes val labelRes: Int) {
+    Home(R.string.nav_tab_home),
+    Movies(R.string.nav_tab_movies),
+    Series(R.string.nav_tab_series),
+    LiveTv(R.string.nav_tab_livetv),
+    Search(R.string.nav_tab_search),
 }

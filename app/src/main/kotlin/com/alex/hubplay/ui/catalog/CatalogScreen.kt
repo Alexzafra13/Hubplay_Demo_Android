@@ -19,9 +19,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.alex.hubplay.R
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.home.components.CardStyle
@@ -117,7 +119,7 @@ private fun ErrorBanner(message: String, onRetry: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onRetry) { Text("Reintentar") }
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
     }
 }
 
@@ -128,7 +130,7 @@ private fun EmptyBanner() {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text  = "Sin contenido en esta biblioteca",
+            text  = stringResource(R.string.catalog_empty),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

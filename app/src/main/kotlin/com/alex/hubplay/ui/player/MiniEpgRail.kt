@@ -37,11 +37,13 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.alex.hubplay.R
 import com.alex.hubplay.data.EpgProgram
 import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.ui.theme.Accent
@@ -224,7 +226,7 @@ private fun MiniEpgCard(
             )
         } else {
             Text(
-                text     = "Sin guía",
+                text     = stringResource(R.string.livetv_epg_no_guide_short),
                 color    = Color(0xFF6A7488),
                 fontSize = 11.sp,
             )

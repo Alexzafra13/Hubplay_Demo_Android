@@ -32,10 +32,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.alex.hubplay.R
 import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.ui.home.components.Tab
@@ -100,8 +102,8 @@ fun LiveTvScreen(
                 ui.error != null && ui.channels.isEmpty() ->
                     ErrorBanner(message = ui.error!!, onRetry = viewModel::load)
                 ui.channels.isEmpty() -> EmptyBanner(
-                    title    = "No hay canales IPTV",
-                    subtitle = "Añade un origen M3U desde la app web para empezar a ver TV en directo.",
+                    title    = stringResource(R.string.livetv_empty_title),
+                    subtitle = stringResource(R.string.livetv_empty_subtitle),
                 )
                 else -> MainLayout(
                     ui             = ui,
@@ -299,7 +301,7 @@ private fun ErrorBanner(message: String, onRetry: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onRetry) { Text("Reintentar") }
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
     }
 }
 
@@ -333,11 +335,12 @@ private fun EmptyBanner(title: String, subtitle: String) {
 private fun EmptyFilterBanner(filter: ChannelFilter) {
     val (title, subtitle) = when (filter) {
         is ChannelFilter.Favorites ->
-            "Aún no tienes favoritos" to "Mantén pulsado OK sobre un canal para marcarlo."
+            stringResource(R.string.livetv_empty_favorites_title) to
+                stringResource(R.string.livetv_empty_favorites_subtitle)
         is ChannelFilter.Group ->
-            "No hay canales en ${filter.name}" to ""
+            stringResource(R.string.livetv_empty_group, filter.name) to ""
         else ->
-            "No hay canales que mostrar" to ""
+            stringResource(R.string.livetv_empty_generic) to ""
     }
     Column(
         modifier              = Modifier.fillMaxWidth().padding(40.dp),

@@ -55,11 +55,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.alex.hubplay.R
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.BgBase
@@ -206,7 +208,7 @@ fun HeroSection(
         ) { item ->
             Column {
                 Text(
-                    text          = "TRENDING ESTA SEMANA",
+                    text          = stringResource(R.string.home_hero_eyebrow),
                     style         = MaterialTheme.typography.labelMedium,
                     color         = Accent,
                     fontWeight    = FontWeight.Bold,
@@ -285,7 +287,7 @@ fun HeroSection(
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text("Reproducir", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.home_play), fontWeight = FontWeight.SemiBold)
                     }
                     OutlinedButton(
                         onClick = { onDetails(item) },
@@ -299,7 +301,7 @@ fun HeroSection(
                                 else Modifier,
                             ),
                     ) {
-                        Text("Ver detalles")
+                        Text(stringResource(R.string.home_view_details))
                     }
                 }
             }
