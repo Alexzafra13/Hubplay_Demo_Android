@@ -1,5 +1,6 @@
 package com.alex.hubplay.ui.login
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -129,6 +130,17 @@ class LoginViewModel(
                     startPolling(start)
                 },
                 onFailure = { err ->
+                    // Walk the cause chain at WARN so logcat shows the
+                    // root cause (cert subject, expiry, hostname mismatch,
+                    // refused connection) without us having to ship a
+                    // debug build. Grep with: `adb logcat | grep LoginVM`.
+                    Log.w(TAG, "device/start failed for $normalized")
+                    var cur: Throwable? = err
+                    val seen = mutableSetOf<Throwable>()
+                    while (cur != null && seen.add(cur)) {
+                        Log.w(TAG, "  caused by ${cur::class.java.name}: ${cur.message}")
+                        cur = cur.cause
+                    }
                     _uiState.update {
                         it.copy(
                             isStarting    = false,
@@ -182,6 +194,8 @@ class LoginViewModel(
     internal fun normalizeUrl(input: String): String? = normalizeServerUrl(input)
 
     companion object {
+        private const val TAG = "LoginVM"
+
         /**
          * Grace window before auto-skip considers "only one server" to
          * be the final count. Long enough that mDNS announcers arriving
