@@ -81,13 +81,17 @@ class HomeViewModel(
         // refresh the page. FavoriteToggled only matters once we add a
         // Favorites rail — silently ignored for now to avoid pointless
         // refresh storms when the user marks a movie as favourite from
-        // another device. Debounced so a burst of progress events
-        // (e.g. someone seeking on the laptop) collapses into one fetch.
+        // another device. ChannelOrderUpdated is a Live TV concern,
+        // handled by LiveTvViewModel; Home doesn't render channel
+        // ordering so we ignore it here too. Debounced so a burst of
+        // progress events (e.g. someone seeking on the laptop)
+        // collapses into one fetch.
         meEventsStream.events()
             .onEach { event ->
                 when (event) {
                     is MeEvent.ProgressUpdated, is MeEvent.PlayedToggled -> rebuildDebouncer.tryEmit(Unit)
                     is MeEvent.FavoriteToggled                            -> Unit
+                    MeEvent.ChannelOrderUpdated                           -> Unit
                 }
             }
             .launchIn(viewModelScope)
