@@ -79,6 +79,9 @@ class AppContainer(context: Context) {
         tokenStore = tokenStore,
     )
 
+    /** mDNS-based LAN discovery for the login screen. */
+    val lanDiscovery: LanDiscovery = LanDiscovery(context.applicationContext)
+
     /**
      * The hand-written API surface the Home + Player screens consume
      * today. Lives alongside the auto-generated `AuthApi` until we move
@@ -89,6 +92,12 @@ class AppContainer(context: Context) {
     val homeRepository: HomeRepository = HomeRepository(hubplayApi, tokenStore)
 
     val liveTvRepository: LiveTvRepository = LiveTvRepository(hubplayApi, tokenStore)
+
+    /**
+     * Server-Sent Events stream over `/me/events` — drives cross-device
+     * sync of Continue Watching, played/unplayed and favourites.
+     */
+    val meEventsStream: MeEventsStream = MeEventsStream(mainOkHttp, tokenStore, moshi)
 
     private fun loggingInterceptor() = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BASIC

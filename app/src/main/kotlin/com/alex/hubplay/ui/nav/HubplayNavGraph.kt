@@ -25,8 +25,12 @@ import com.alex.hubplay.ui.login.LoginScreen
 import com.alex.hubplay.ui.login.LoginViewModel
 import com.alex.hubplay.ui.player.PlayerScreen
 import com.alex.hubplay.ui.player.PlayerViewModel
+import com.alex.hubplay.ui.search.SearchScreen
+import com.alex.hubplay.ui.search.SearchViewModel
 import com.alex.hubplay.ui.series.SeriesScreen
 import com.alex.hubplay.ui.series.SeriesViewModel
+import com.alex.hubplay.ui.settings.SettingsScreen
+import com.alex.hubplay.ui.settings.SettingsViewModel
 
 @Composable
 fun HubplayNavGraph(
@@ -43,7 +47,10 @@ fun HubplayNavGraph(
         // ── Login ────────────────────────────────────────────────────
         composable(Route.Login.path) {
             val viewModel = viewModel<LoginViewModel>(
-                factory = LoginViewModel.factory(container.deviceCodeRepository),
+                factory = LoginViewModel.factory(
+                    container.deviceCodeRepository,
+                    container.lanDiscovery,
+                ),
             )
             LoginScreen(
                 viewModel = viewModel,
@@ -82,6 +89,7 @@ fun HubplayNavGraph(
                 Tab.Movies -> Route.Movies.path
                 Tab.Series -> Route.SeriesList.path
                 Tab.LiveTv -> Route.LiveTv.path
+                Tab.Search -> Route.Search.path
             }
             navController.navigate(target) {
                 popUpTo(Route.Home.path) {
@@ -92,11 +100,14 @@ fun HubplayNavGraph(
                 restoreState    = true
             }
         }
+        val openSettings: () -> Unit = {
+            navController.navigate(Route.Settings.path)
+        }
 
         // ── Home ─────────────────────────────────────────────────────
         composable(Route.Home.path) {
             val viewModel = viewModel<HomeViewModel>(
-                factory = HomeViewModel.factory(container.homeRepository),
+                factory = HomeViewModel.factory(container.homeRepository, container.meEventsStream),
             )
             HomeScreen(
                 viewModel       = viewModel,
@@ -104,6 +115,7 @@ fun HubplayNavGraph(
                 onPlayItem      = playItem,
                 onNavigateToTab = navigateToTab,
                 onLogOut        = logOut,
+                onOpenSettings  = openSettings,
             )
         }
 
@@ -122,6 +134,7 @@ fun HubplayNavGraph(
                 onRetry       = vm::load,
                 onTabSelected = navigateToTab,
                 onLogOut      = logOut,
+                onSettings    = openSettings,
                 cardContent   = { item -> PortraitCatalogCard(item, openItem) },
             )
         }
@@ -141,6 +154,7 @@ fun HubplayNavGraph(
                 onRetry       = vm::load,
                 onTabSelected = navigateToTab,
                 onLogOut      = logOut,
+                onSettings    = openSettings,
                 cardContent   = { item -> PortraitCatalogCard(item, openItem) },
             )
         }
@@ -157,6 +171,33 @@ fun HubplayNavGraph(
                 onPlayChannel = { channelId -> playItem(channelId, 0L) },
                 onTabSelected = navigateToTab,
                 onLogOut      = logOut,
+                onSettings    = openSettings,
+            )
+        }
+
+        // ── Search ───────────────────────────────────────────────────
+        composable(Route.Search.path) {
+            val vm = viewModel<SearchViewModel>(
+                factory = SearchViewModel.factory(container.homeRepository),
+            )
+            SearchScreen(
+                viewModel     = vm,
+                onTabSelected = navigateToTab,
+                onOpenItem    = openItem,
+                onLogOut      = logOut,
+                onSettings    = openSettings,
+            )
+        }
+
+        // ── Settings ─────────────────────────────────────────────────
+        composable(Route.Settings.path) {
+            val vm = viewModel<SettingsViewModel>(
+                factory = SettingsViewModel.factory(container.tokenStore),
+            )
+            SettingsScreen(
+                viewModel = vm,
+                onBack    = { navController.popBackStack() },
+                onLogOut  = logOut,
             )
         }
 

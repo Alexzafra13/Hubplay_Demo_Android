@@ -175,7 +175,33 @@ class HomeRepository(
             resumePosSec = resumeSec,
             trailerKey   = data.trailer?.key,
             trailerSite  = data.trailer?.site,
+            isFavorite   = data.userData?.isFavorite == true,
         )
+    }
+
+    /**
+     * Toggle the favourite flag on a movie / series / episode. Returns
+     * the new state (true = now favourite). Doesn't try to be clever
+     * about concurrent toggles — the server is the source of truth and
+     * a stale optimistic update gets corrected on the next /me/events
+     * tick.
+     */
+    suspend fun toggleItemFavorite(itemId: String): Boolean {
+        val resp = api.toggleItemFavorite(itemId)
+        return resp.data?.isFavorite == true
+    }
+
+    /**
+     * Full-text search across the catalogue. Returns the same MediaItem
+     * shape Home rails use so the result grid can reuse MediaCard +
+     * navigate to Detail/Series with the existing rules. Empty query
+     * short-circuits without hitting the network.
+     */
+    suspend fun searchItems(query: String, limit: Int = 60): List<MediaItem> {
+        val q = query.trim()
+        if (q.isEmpty()) return emptyList()
+        val server = serverUrl()
+        return api.searchItems(query = q, limit = limit).data.map { it.toMedia(server) }
     }
 
     private suspend fun serverUrl(): String =
@@ -300,6 +326,7 @@ class HomeRepository(
             seasonNumber  = seasonNumber,
             episodeNumber = episodeNumber,
             durationSec   = totalSec,
+            isFavorite    = userData?.isFavorite == true,
         )
     }
 
@@ -413,6 +440,13 @@ data class MediaItem(
     val logoInitials: String? = null,
     val logoBg:       String? = null,
     val logoFg:       String? = null,
+    /**
+     * Whether the authenticated user has marked this item as a favourite.
+     * Driven by user_data.is_favorite from the server; toggled via
+     * POST /me/progress/{id}/favorite. Defaults to false so rails that
+     * don't bother fetching user_data (Trending, LiveNow) keep working.
+     */
+    val isFavorite:   Boolean = false,
 )
 
 data class HomeData(

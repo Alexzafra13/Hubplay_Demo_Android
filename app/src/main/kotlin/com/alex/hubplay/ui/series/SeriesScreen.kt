@@ -27,6 +27,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
@@ -67,6 +69,7 @@ import com.alex.hubplay.R
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.ui.components.BackPill
 import com.alex.hubplay.ui.components.HeroCtaButton
+import com.alex.hubplay.ui.components.HeroIconButton
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.AccentSoft
 import com.alex.hubplay.ui.theme.BgBase
@@ -111,10 +114,11 @@ fun SeriesScreen(
                     )
                 } else {
                     SeriesHeroFull(
-                        data           = ui.data!!,
-                        onPlay         = { id, resume -> onPlayEpisode(id, resume) },
-                        onShowEpisodes = { showEpisodes = true },
-                        onBack         = onBack,
+                        data             = ui.data!!,
+                        onPlay           = { id, resume -> onPlayEpisode(id, resume) },
+                        onShowEpisodes   = { showEpisodes = true },
+                        onBack           = onBack,
+                        onToggleFavorite = viewModel::toggleFavorite,
                     )
                 }
             }
@@ -126,10 +130,11 @@ fun SeriesScreen(
 
 @Composable
 private fun SeriesHeroFull(
-    data:           SeriesData,
-    onPlay:         (itemId: String, resumePosSec: Long) -> Unit,
-    onShowEpisodes: () -> Unit,
-    onBack:         () -> Unit,
+    data:             SeriesData,
+    onPlay:           (itemId: String, resumePosSec: Long) -> Unit,
+    onShowEpisodes:   () -> Unit,
+    onBack:           () -> Unit,
+    onToggleFavorite: () -> Unit,
 ) {
     val series = data.series
 
@@ -218,6 +223,21 @@ private fun SeriesHeroFull(
                 letterSpacing = 2.sp,
             )
         }
+
+        // ── Favourite heart, top-right ─────────────────────────────────────
+        // Series-level toggle — same item id the backend stores user_data
+        // against, so a heart here matches what the user sees from the web.
+        HeroIconButton(
+            icon               = if (series?.isFavorite == true) Icons.Default.Favorite
+                                 else                            Icons.Default.FavoriteBorder,
+            contentDescription = if (series?.isFavorite == true) "Quitar de favoritos"
+                                 else                            "Añadir a favoritos",
+            onClick            = onToggleFavorite,
+            modifier           = Modifier
+                .align(Alignment.TopEnd)
+                .padding(end = 24.dp, top = 20.dp)
+                .zIndex(10f),
+        )
 
         // ── Info column on the left half ──────────────────────────────────
         Column(

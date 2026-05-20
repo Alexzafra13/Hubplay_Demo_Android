@@ -127,6 +127,33 @@ class SeriesViewModel(
     }
 
     /**
+     * Toggle the favourite flag on the series itself. Episodes and
+     * seasons share the same series-level heart — semantically a user
+     * "favourites Breaking Bad", not "favourites S03E07". Optimistic
+     * with a revert on failure, same pattern as DetailViewModel.
+     */
+    fun toggleFavorite() {
+        val current = _ui.value.data?.series ?: return
+        val optimistic = current.copy(isFavorite = !current.isFavorite)
+        _ui.value = _ui.value.copy(
+            data = _ui.value.data?.copy(series = optimistic),
+        )
+        viewModelScope.launch {
+            runCatching { repository.toggleItemFavorite(current.id) }
+                .onSuccess { actual ->
+                    val data = _ui.value.data ?: return@launch
+                    _ui.value = _ui.value.copy(
+                        data = data.copy(series = optimistic.copy(isFavorite = actual)),
+                    )
+                }
+                .onFailure {
+                    val data = _ui.value.data ?: return@launch
+                    _ui.value = _ui.value.copy(data = data.copy(series = current))
+                }
+        }
+    }
+
+    /**
      * User picked a different season. If we don't have those episodes
      * cached yet, fetch them; otherwise just flip the selection.
      */

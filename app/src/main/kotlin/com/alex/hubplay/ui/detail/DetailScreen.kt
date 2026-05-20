@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
@@ -88,16 +90,22 @@ fun DetailScreen(
         when {
             ui.isLoading       -> CenteredSpinner()
             ui.error != null   -> ErrorBanner(message = ui.error!!, onRetry = viewModel::load)
-            ui.item != null    -> HeroFull(item = ui.item!!, onPlay = onPlay, onBack = onBack)
+            ui.item != null    -> HeroFull(
+                item             = ui.item!!,
+                onPlay           = onPlay,
+                onBack           = onBack,
+                onToggleFavorite = viewModel::toggleFavorite,
+            )
         }
     }
 }
 
 @Composable
 private fun HeroFull(
-    item:   MediaItem,
-    onPlay: (String, Long) -> Unit,
-    onBack: () -> Unit,
+    item:             MediaItem,
+    onPlay:           (String, Long) -> Unit,
+    onBack:           () -> Unit,
+    onToggleFavorite: () -> Unit,
 ) {
     // Backdrop ↔ trailer crossfade — same machinery as the SeriesScreen.
     var trailerRevealed by remember(item.id) { mutableStateOf(false) }
@@ -172,21 +180,32 @@ private fun HeroFull(
             )
         }
 
-        // ── 3-dots more-options, top-right ─────────────────────────────────
-        // Living up here (mirror of the back pill's position) keeps the
-        // poster + Play block clean and unambiguous below, and reads as
-        // "section-level options" rather than "actions on this item",
-        // which suits the kind of menu that's going here anyway (marcar
-        // visto, info del archivo, eliminar descarga, etc.).
-        HeroIconButton(
-            icon               = Icons.Default.MoreVert,
-            contentDescription = "Más opciones",
-            onClick            = { /* TODO: overflow menu (marcar visto, info, eliminar) */ },
-            modifier           = Modifier
+        // ── Top-right action stack: heart + 3-dots ─────────────────────────
+        // The heart is paired with the overflow up here rather than next
+        // to Play because favouriting is "section-level" — a property of
+        // the item that persists across sessions, not an action that
+        // changes the immediate playback intent.
+        Row(
+            modifier              = Modifier
                 .align(Alignment.TopEnd)
                 .padding(end = 24.dp, top = 20.dp)
                 .zIndex(10f),
-        )
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+        ) {
+            HeroIconButton(
+                icon               = if (item.isFavorite) Icons.Default.Favorite
+                                     else                 Icons.Default.FavoriteBorder,
+                contentDescription = if (item.isFavorite) "Quitar de favoritos"
+                                     else                 "Añadir a favoritos",
+                onClick            = onToggleFavorite,
+            )
+            HeroIconButton(
+                icon               = Icons.Default.MoreVert,
+                contentDescription = "Más opciones",
+                onClick            = { /* TODO: overflow menu (marcar visto, info, eliminar) */ },
+            )
+        }
 
         // ── Two-column layout: poster + Play left, info + secondary right
         Row(

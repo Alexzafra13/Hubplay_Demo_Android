@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.EpgProgram
 import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.LiveTvRepository
+import com.alex.hubplay.data.ProgressReporter
 import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.player.ClientCapabilities
 import kotlinx.coroutines.delay
@@ -46,6 +47,14 @@ class PlayerViewModel(
     private val _ui = MutableStateFlow(PlayerUiState(itemId = itemId))
     val ui: StateFlow<PlayerUiState> = _ui.asStateFlow()
 
+    /**
+     * Reports playback position back to the server every ~10s, on pause,
+     * and on dispose. Constructed lazily after [resolve] decides whether
+     * the id is a VOD item (reporter enabled) or a live channel (left
+     * null — live streams have no concept of progress).
+     */
+    private var progressReporter: ProgressReporter? = null
+
     init {
         viewModelScope.launch { resolve(itemId, resumePosSec) }
     }
@@ -67,6 +76,10 @@ class PlayerViewModel(
             val isDirectPlay = info.method == "direct_play"
             val streamUrl    = if (isDirectPlay) "/api/v1/stream/$targetItemId/direct"
                                else              "/api/v1/stream/$targetItemId/master.m3u8"
+            // VOD items report progress. Live channels are constructed
+            // farther down with reporter = null because /me/progress
+            // makes no sense for an endless live stream.
+            progressReporter = ProgressReporter(api, viewModelScope, targetItemId)
             _ui.update {
                 it.copy(
                     mode        = PlayerMode.Vod,
@@ -136,6 +149,33 @@ class PlayerViewModel(
     fun playChannel(channel: LiveChannel) {
         if (_ui.value.liveChannel?.id == channel.id) return
         switchToChannel(channel)
+    }
+
+    // ─── Progress reporting (VOD only) ──────────────────────────────────────
+    //
+    // The screen drives this with a 5s polling loop over the ExoPlayer's
+    // current position. The reporter handles its own throttling (10s
+    // between writes) and the 95 % markPlayed trigger. We expose two
+    // entry points so the screen doesn't need to know about ticks units,
+    // throttle windows, or completion semantics.
+
+    /** Called every few seconds from the PlayerScreen polling loop. */
+    fun onPlaybackTick(positionMs: Long, durationMs: Long, isPlaying: Boolean) {
+        val reporter = progressReporter ?: return
+        reporter.reportPosition(
+            positionSec = positionMs / 1000L,
+            durationSec = (durationMs / 1000L).coerceAtLeast(0L),
+            isPlaying   = isPlaying,
+        )
+    }
+
+    /**
+     * Final progress write on dispose. Run from the screen's
+     * DisposableEffect so backing out of the player still persists the
+     * latest position to /me/progress.
+     */
+    fun onPlaybackDispose(positionMs: Long) {
+        progressReporter?.flush(positionSec = positionMs / 1000L, completed = false)
     }
 
     /**

@@ -6,7 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.DeviceCodeRepository
 import com.alex.hubplay.data.DeviceCodeStart
 import com.alex.hubplay.data.DeviceCodeStatus
+import com.alex.hubplay.data.LanDiscovery
+import com.alex.hubplay.data.LanServer
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,40 +17,93 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Drives the Login screen. Two stages:
+ * Drives the Login screen.
  *
- *  Stage 1 — server URL: user types `https://hubplay.duckdns.org`,
- *  taps Continue. We POST /auth/device/start to get a user_code.
+ *  Stage 1 — server URL: user types a URL or taps a discovered LAN server,
+ *  then Continue → POST /auth/device/start.
+ *  Stage 2 — pairing wait: poll /auth/device/poll while the user approves
+ *  the code from another device (either by scanning the QR or typing the
+ *  short user_code).
  *
- *  Stage 2 — pairing wait: we display the user_code and poll the
- *  server. When the server flips to "approved" we store the tokens
- *  via DeviceCodeRepository and the host composable navigates Home.
- *
- *  Errors are surfaced as a string in [LoginUiState.error]; the screen
- *  renders them as a snackbar/banner without going back to stage 1
- *  (so the user can retry without retyping the URL).
+ *  mDNS discovery starts on init() and keeps running across both stages
+ *  (cheap, push-driven, no battery cost while idle). It stops when this
+ *  ViewModel is cleared.
  */
 class LoginViewModel(
     private val deviceCodeRepository: DeviceCodeRepository,
+    private val lanDiscovery:         LanDiscovery,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
     private var pollingJob: Job? = null
+    private val discoveryJob: Job
+
+    /**
+     * Auto-skip stage 1 when there's exactly one HubPlay server on the
+     * LAN — same idea as Steam Link picking the only PC it finds. Set
+     * to true once after the grace window so a user who explicitly
+     * cancels pairing isn't yanked back into the same server again.
+     */
+    @Volatile private var autoSkipConsumed: Boolean = false
+
+    init {
+        discoveryJob = viewModelScope.launch {
+            _uiState.update { it.copy(lanSearching = true) }
+            lanDiscovery.discover().collect { entry ->
+                _uiState.update { state ->
+                    if (state.lanDiscovery.any { it.url == entry.url }) state
+                    else state.copy(lanDiscovery = state.lanDiscovery + entry)
+                }
+            }
+        }
+        viewModelScope.launch { armAutoSkip() }
+    }
+
+    /**
+     * Waits [AUTO_SKIP_GRACE_MS] after construction so mDNS has time to
+     * surface more than one candidate (we don't want to commit to the
+     * first announcer if a second is arriving 200 ms behind). Then, if
+     * exactly one entry was discovered AND the user hasn't typed
+     * anything AND we're still on stage 1, jump straight to pairing.
+     */
+    private suspend fun armAutoSkip() {
+        delay(AUTO_SKIP_GRACE_MS)
+        val state = _uiState.value
+        if (autoSkipConsumed)                                return
+        if (state.stage != LoginStage.ServerUrl)             return
+        if (state.serverUrl.isNotBlank())                    return
+        if (state.lanDiscovery.size != 1)                    return
+        autoSkipConsumed = true
+        pickServer(state.lanDiscovery.first().url, fromAuto = true)
+    }
 
     fun onServerUrlChange(url: String) {
+        // Any typing cancels the auto-skip race — user wants control.
+        autoSkipConsumed = true
         _uiState.update { it.copy(serverUrl = url, error = null) }
     }
 
-    fun onContinueClicked() {
-        val raw = _uiState.value.serverUrl.trim()
-        val normalized = normalizeUrl(raw) ?: run {
+    /**
+     * Drives stage 1 → stage 2 for both code paths: the user tapping a
+     * LAN card / Continue, and the auto-skip when there's a single LAN
+     * server. The [fromAuto] flag toggles a UI hint so the screen can
+     * render "Conectando con HubPlay…" instead of a generic spinner.
+     */
+    fun pickServer(url: String, fromAuto: Boolean = false) {
+        val normalized = normalizeServerUrl(url) ?: run {
             _uiState.update { it.copy(error = "URL inválida") }
             return
         }
-
-        _uiState.update { it.copy(isStarting = true, error = null) }
+        _uiState.update {
+            it.copy(
+                serverUrl     = normalized,
+                isStarting    = true,
+                error         = null,
+                autoConnected = fromAuto,
+            )
+        }
         viewModelScope.launch {
             val result = runCatching { deviceCodeRepository.start(normalized) }
             result.fold(
@@ -64,18 +120,35 @@ class LoginViewModel(
                 },
                 onFailure = { err ->
                     _uiState.update {
-                        it.copy(isStarting = false, error = err.message ?: "Error de conexión")
+                        it.copy(
+                            isStarting    = false,
+                            autoConnected = false,
+                            error         = err.message ?: "Error de conexión",
+                        )
                     }
                 },
             )
         }
     }
 
+    /** Continue button on the URL input — kept as a thin alias of pickServer. */
+    fun onContinueClicked() {
+        pickServer(_uiState.value.serverUrl)
+    }
+
     fun onCancelPairing() {
         pollingJob?.cancel()
         pollingJob = null
+        // Cancelling means "I want to pick another server" — never
+        // auto-skip back into the same one we just left.
+        autoSkipConsumed = true
         _uiState.update {
-            it.copy(stage = LoginStage.ServerUrl, pairingStart = null, pollStatus = null)
+            it.copy(
+                stage         = LoginStage.ServerUrl,
+                pairingStart  = null,
+                pollStatus    = null,
+                autoConnected = false,
+            )
         }
     }
 
@@ -84,11 +157,6 @@ class LoginViewModel(
         pollingJob = viewModelScope.launch {
             deviceCodeRepository.poll(start).collect { status ->
                 _uiState.update { it.copy(pollStatus = status) }
-                if (status is DeviceCodeStatus.Approved) {
-                    // Host composable observes the AuthState flow and
-                    // pops to Home — this VM doesn't navigate directly
-                    // so it stays decoupled from NavController.
-                }
             }
         }
     }
@@ -98,37 +166,68 @@ class LoginViewModel(
      * `http://192.168.1.50:8096`, etc. Returns null if it can't be
      * parsed into something that has at least a host. Strips trailing
      * slashes so the BaseUrlInterceptor's substitution is clean.
+     *
+     * Visible for tests.
      */
-    private fun normalizeUrl(input: String): String? {
-        if (input.isBlank()) return null
-        val withScheme = if (input.startsWith("http://") || input.startsWith("https://")) {
-            input
-        } else {
-            "https://$input"
-        }
-        return runCatching { java.net.URI(withScheme).toURL() }
-            .getOrNull()
-            ?.toString()
-            ?.trimEnd('/')
-    }
+    internal fun normalizeUrl(input: String): String? = normalizeServerUrl(input)
 
     companion object {
-        fun factory(repository: DeviceCodeRepository) = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return LoginViewModel(repository) as T
+        /**
+         * Grace window before auto-skip considers "only one server" to
+         * be the final count. Long enough that mDNS announcers arriving
+         * within a few hundred ms of each other all get counted; short
+         * enough that the user doesn't notice the wait on a single-server
+         * LAN.
+         */
+        private const val AUTO_SKIP_GRACE_MS = 1_200L
+
+        fun factory(repository: DeviceCodeRepository, lanDiscovery: LanDiscovery) =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    return LoginViewModel(repository, lanDiscovery) as T
+                }
             }
-        }
     }
 }
 
+/**
+ * Pulled out as a top-level helper so tests can exercise it without
+ * spinning up a ViewModel (which drags Android lifecycle dependencies).
+ */
+internal fun normalizeServerUrl(input: String): String? {
+    if (input.isBlank()) return null
+    val trimmed = input.trim()
+    val withScheme = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        trimmed
+    } else {
+        "https://$trimmed"
+    }
+    val parsed = runCatching { java.net.URI(withScheme) }.getOrNull() ?: return null
+    if (parsed.host.isNullOrBlank()) return null
+    // Force the URI through toURL() to validate the scheme/host combo
+    // then trim trailing slashes — BaseUrlInterceptor concatenates with
+    // a leading `/` so doubled slashes break the path rewrite.
+    val url = runCatching { parsed.toURL() }.getOrNull() ?: return null
+    return url.toString().trimEnd('/')
+}
+
 data class LoginUiState(
-    val serverUrl:    String = "",
-    val isStarting:   Boolean = false,
-    val stage:        LoginStage = LoginStage.ServerUrl,
-    val pairingStart: DeviceCodeStart? = null,
-    val pollStatus:   DeviceCodeStatus? = null,
-    val error:        String? = null,
+    val serverUrl:     String = "",
+    val isStarting:    Boolean = false,
+    val stage:         LoginStage = LoginStage.ServerUrl,
+    val pairingStart:  DeviceCodeStart? = null,
+    val pollStatus:    DeviceCodeStatus? = null,
+    val error:         String? = null,
+    val lanSearching:  Boolean = false,
+    val lanDiscovery:  List<LanServer> = emptyList(),
+    /**
+     * True when stage 1 was skipped automatically because a single LAN
+     * server was the obvious pick. Drives the "Conectando con HubPlay…"
+     * overlay so the user sees the auto-decision happen rather than a
+     * naked spinner.
+     */
+    val autoConnected: Boolean = false,
 )
 
 enum class LoginStage { ServerUrl, Pairing }

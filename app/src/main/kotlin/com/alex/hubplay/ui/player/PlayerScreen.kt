@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -88,8 +89,28 @@ fun PlayerScreen(
         }
     }
 
+    // 5s polling loop that feeds the VM's ProgressReporter. The reporter
+    // does its own throttling/dedup — we just need to push positions
+    // often enough that the 10s write window captures live activity.
+    // No-op while not in VOD mode (reporter is null inside the VM).
+    LaunchedEffect(ui.mode) {
+        if (ui.mode != PlayerMode.Vod) return@LaunchedEffect
+        while (true) {
+            val pos = player.exoPlayer.currentPosition
+            val dur = player.exoPlayer.duration.let { if (it > 0) it else 0L }
+            viewModel.onPlaybackTick(pos, dur, player.exoPlayer.isPlaying)
+            kotlinx.coroutines.delay(5_000L)
+        }
+    }
+
     DisposableEffect(Unit) {
-        onDispose { player.release() }
+        onDispose {
+            // Capture the final position BEFORE releasing the player —
+            // exoPlayer.currentPosition returns 0 after release().
+            val finalPos = player.exoPlayer.currentPosition
+            viewModel.onPlaybackDispose(finalPos)
+            player.release()
+        }
     }
 
     val isLive = ui.mode == PlayerMode.Live
@@ -132,6 +153,25 @@ fun PlayerScreen(
                     imageVector       = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Volver",
                     tint              = Color.White,
+                )
+            }
+            // Audio + subtitle picker — only relevant for VOD HLS (live
+            // IPTV streams typically expose a single audio track).
+            var showTrackSheet by remember { mutableStateOf(false) }
+            IconButton(
+                onClick  = { showTrackSheet = true },
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+            ) {
+                Icon(
+                    imageVector        = Icons.Outlined.ClosedCaption,
+                    contentDescription = "Audio y subtítulos",
+                    tint               = Color.White,
+                )
+            }
+            if (showTrackSheet) {
+                TrackSelectionSheet(
+                    player    = player.exoPlayer,
+                    onDismiss = { showTrackSheet = false },
                 )
             }
             BackHandler(onBack = onBack)

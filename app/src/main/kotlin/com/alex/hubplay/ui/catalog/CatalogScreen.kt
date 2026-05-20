@@ -54,6 +54,7 @@ fun CatalogScreen(
     onRetry:     () -> Unit,
     onTabSelected: (Tab) -> Unit,
     onLogOut:    () -> Unit,
+    onSettings:  () -> Unit = {},
     cardContent: @Composable (MediaItem) -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = BgBase) {
@@ -61,8 +62,8 @@ fun CatalogScreen(
             TopNav(
                 selectedTab   = selectedTab,
                 onTabSelected = onTabSelected,
-                onSearch      = { /* search modal — next sprint */ },
                 onLogOut      = onLogOut,
+                onSettings    = onSettings,
             )
             Text(
                 text       = title,

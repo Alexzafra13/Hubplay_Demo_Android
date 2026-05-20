@@ -69,6 +69,15 @@ android {
     sourceSets["main"].kotlin.srcDirs(
         layout.buildDirectory.dir("generated/openapi/src/main/kotlin"),
     )
+
+    // Tests live in src/test/kotlin rather than the default
+    // src/test/java — Kotlin's plugin picks it up automatically with
+    // modern AGP, but declaring it explicitly removes any IDE doubt.
+    sourceSets["test"].kotlin.srcDirs("src/test/kotlin")
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 // ─── OpenAPI client generation ───────────────────────────────────────────────
@@ -159,10 +168,15 @@ dependencies {
     implementation(libs.retrofit.converter.moshi)
     implementation(libs.retrofit.converter.scalars)
     implementation(libs.okhttp)
+    implementation(libs.okhttp.sse)            // /me/events SSE stream
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.moshi)
     implementation(libs.moshi.kotlin)
     ksp(libs.moshi.kotlin.codegen)
+
+    // ── QR generation (login pairing screen — encodes
+    //     verification_uri_complete so the web client can scan it)
+    implementation(libs.zxing.core)
 
     // ── Media3 / ExoPlayer (HLS)
     implementation(libs.media3.exoplayer)
@@ -186,6 +200,10 @@ dependencies {
 
     // ── Tests
     testImplementation(libs.junit)
+    testImplementation(libs.truth)
+    testImplementation(libs.turbine)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockwebserver)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)
 }

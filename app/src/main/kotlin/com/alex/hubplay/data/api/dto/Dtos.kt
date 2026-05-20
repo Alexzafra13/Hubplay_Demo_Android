@@ -433,3 +433,39 @@ data class WatchBeaconPayload(
 data class WatchBeaconResponse(
     val data: WatchBeaconPayload? = null,
 )
+
+// ─── Item progress + favourite + search ──────────────────────────────────────
+
+/**
+ * Body for `PUT /me/progress/{itemId}`. Ticks are 100-nanosecond units
+ * (10_000_000 per second), the Jellyfin/Emby legacy unit the backend
+ * stores natively in user_data.position_ticks.
+ *
+ * `completed` is set to true on natural end-of-stream — the server keeps
+ * the row but flips the played flag. The client also POSTs
+ * `/me/progress/{id}/played` separately on 95%+ so the play count bumps
+ * even when the user navigates away before EOF.
+ */
+@JsonClass(generateAdapter = true)
+data class UpdateProgressRequest(
+    @Json(name = "position_ticks") val positionTicks: Long,
+    val completed:                                    Boolean? = null,
+)
+
+/** Wire shape of `POST /me/progress/{itemId}/favorite`. */
+@JsonClass(generateAdapter = true)
+data class ItemFavoriteTogglePayload(
+    @Json(name = "item_id")     val itemId:     String? = null,
+    @Json(name = "is_favorite") val isFavorite: Boolean = false,
+)
+
+@JsonClass(generateAdapter = true)
+data class ItemFavoriteToggleResponse(
+    val data: ItemFavoriteTogglePayload? = null,
+)
+
+/** `GET /items/search` reuses the LatestResponse data envelope shape. */
+@JsonClass(generateAdapter = true)
+data class SearchResponse(
+    val data: List<ItemSummaryDto> = emptyList(),
+)
