@@ -1,16 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Splash / pre-Compose theme. Once Compose attaches its own
-         MaterialTheme, this only governs window chrome (status bar,
-         navigation bar). DayNight follows the system setting. -->
+    <!-- Main app theme. Once Compose attaches its own MaterialTheme,
+         this only governs window chrome (status / nav bars). DayNight
+         follows the system setting. -->
     <style name="Theme.HubPlay" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Splash bg matches the app's color-bg-base CSS token from
-             web/src/styles/globals.css so the splash to first
-             composable transition has no flash of pure-black. -->
-        <item name="android:windowSplashScreenBackground">#07090E</item>
         <item name="android:statusBarColor" tools:targetApi="21">@android:color/transparent</item>
         <item name="android:navigationBarColor" tools:targetApi="21">@android:color/transparent</item>
         <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
+    </style>
+
+    <!-- Splash theme. Launches the Activity with a branded splash —
+         dark background matching the app's BgBase + centred brand mark
+         in the accent colour. Backported to API 26+ via
+         androidx.core:core-splashscreen, so the experience is identical
+         on Android 12+ (native) and older devices (library shim).
+
+         Why a separate theme: the main Theme.HubPlay inherits from
+         Material3.NoActionBar which doesn't define windowSplashScreen*
+         attributes. Putting the splash on its own theme keeps the
+         post-splash theme clean (no splash-only state lingering after
+         Activity onCreate).
+
+         Why the icon size is 144dp: SplashScreen library expects the
+         vector to be CENTERED inside a 288dp canvas with ~40 % padding,
+         so the actual artwork is 144dp tall. brand_mark.xml is square
+         and already sized to that — see drawable/brand_mark.xml. -->
+    <style name="Theme.HubPlay.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#07090E</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/brand_mark</item>
+        <item name="windowSplashScreenIconBackgroundColor">#07090E</item>
+        <item name="postSplashScreenTheme">@style/Theme.HubPlay</item>
     </style>
 </resources>

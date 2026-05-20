@@ -230,6 +230,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.vm.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.core.splashscreen)   // splash backport for API < 31
 
     // ── Material Design XML resources — needed so the Activity's
     //     android:theme="@style/Theme.HubPlay" can inherit from

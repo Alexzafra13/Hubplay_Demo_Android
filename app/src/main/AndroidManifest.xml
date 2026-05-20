@@ -48,7 +48,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:theme="@style/Theme.HubPlay">
+            android:theme="@style/Theme.HubPlay.Splash">
             <!-- Phone / tablet launcher entry. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
