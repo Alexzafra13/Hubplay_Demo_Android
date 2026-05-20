@@ -59,6 +59,16 @@ class HomeViewModel(
         replay = 0, extraBufferCapacity = 16,
     )
 
+    /**
+     * Collapses bursts of `/me/events` notifications into a single
+     * refresh. Declared BEFORE `init` so the init block can subscribe
+     * to it without tripping a forward-reference null access — Kotlin
+     * runs property initialisers and init blocks in source order.
+     */
+    private val rebuildDebouncer = MutableSharedFlow<Unit>(
+        replay = 0, extraBufferCapacity = 8,
+    )
+
     init {
         refresh()
         focusBus
@@ -87,9 +97,6 @@ class HomeViewModel(
             .launchIn(viewModelScope)
     }
 
-    private val rebuildDebouncer = MutableSharedFlow<Unit>(
-        replay = 0, extraBufferCapacity = 8,
-    )
 
     fun refresh() {
         _ui.value = _ui.value.copy(isLoading = true, error = null)
