@@ -35,6 +35,10 @@
     <string name="login_continue">Continue</string>
     <string name="login_pairing_title">Pair this device</string>
     <string name="login_pairing_subtitle">Pick how to link: scan the QR from an already-connected device, or enter the code manually.</string>
+    <string name="login_pairing_step_url">On your phone or browser, open:</string>
+    <string name="login_pairing_step_code">Then type this code</string>
+    <string name="login_pairing_or">or</string>
+    <string name="login_pairing_qr_secondary">Scan with your phone</string>
     <string name="login_pairing_qr_title">Scan the QR</string>
     <string name="login_pairing_qr_help">From a device already connected to this server: Settings → Devices → Scan code.</string>
     <string name="login_pairing_code_title">Or enter the code</string>
