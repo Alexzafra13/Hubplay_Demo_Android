@@ -104,17 +104,18 @@ fun LiveTvScreen(
                     subtitle = "Añade un origen M3U desde la app web para empezar a ver TV en directo.",
                 )
                 else -> MainLayout(
-                    ui           = ui,
-                    now          = now,
-                    authState    = authState,
-                    okHttpClient = okHttpClient,
-                    onFilter     = viewModel::setFilter,
-                    onFocused    = { ch -> viewModel.setFocusedChannel(ch.id) },
-                    onPlay       = { ch ->
+                    ui             = ui,
+                    now            = now,
+                    authState      = authState,
+                    okHttpClient   = okHttpClient,
+                    onFilter       = viewModel::setFilter,
+                    onFocused      = { ch -> viewModel.setFocusedChannel(ch.id) },
+                    onPlay         = { ch ->
                         viewModel.recordWatch(ch.id)
                         onPlayChannel(ch.id)
                     },
-                    onToggleFav  = { ch -> viewModel.toggleFavorite(ch.id) },
+                    onToggleFav    = { ch -> viewModel.toggleFavorite(ch.id) },
+                    onOpenSettings = onSettings,
                 )
             }
         }
@@ -123,14 +124,15 @@ fun LiveTvScreen(
 
 @Composable
 private fun MainLayout(
-    ui:           LiveTvUiState,
-    now:          Instant,
-    authState:    AuthState,
-    okHttpClient: okhttp3.OkHttpClient,
-    onFilter:     (ChannelFilter) -> Unit,
-    onFocused:    (LiveChannel) -> Unit,
-    onPlay:       (LiveChannel) -> Unit,
-    onToggleFav:  (LiveChannel) -> Unit,
+    ui:             LiveTvUiState,
+    now:            Instant,
+    authState:      AuthState,
+    okHttpClient:   okhttp3.OkHttpClient,
+    onFilter:       (ChannelFilter) -> Unit,
+    onFocused:      (LiveChannel) -> Unit,
+    onPlay:         (LiveChannel) -> Unit,
+    onToggleFav:    (LiveChannel) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // ── Hero spans the full width above everything ──────────────
@@ -155,11 +157,13 @@ private fun MainLayout(
                 .fillMaxWidth(),
         ) {
             LiveTvSidebar(
-                groups          = ui.groups,
-                selectedFilter  = ui.filter,
-                favoritesCount  = ui.favorites.size,
-                onFilterChanged = onFilter,
-                modifier        = Modifier.fillMaxHeight(),
+                groups            = ui.groups,
+                selectedFilter    = ui.filter,
+                favoritesCount    = ui.favorites.size,
+                onFilterChanged   = onFilter,
+                onReorderChannels = { /* TODO: dedicated reorder screen — see sesion notes */ },
+                onOpenSettings    = onOpenSettings,
+                modifier          = Modifier.fillMaxHeight(),
             )
 
             Box(

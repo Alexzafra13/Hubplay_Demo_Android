@@ -263,10 +263,11 @@ fun HubplayNavGraph(
                 ),
             )
             PlayerScreen(
-                viewModel    = viewModel,
-                authState    = authState,
-                okHttpClient = container.mainOkHttp,
-                onBack       = { navController.popBackStack() },
+                viewModel      = viewModel,
+                authState      = authState,
+                okHttpClient   = container.mainOkHttp,
+                idleController = container.idleController,
+                onBack         = { navController.popBackStack() },
             )
         }
     }

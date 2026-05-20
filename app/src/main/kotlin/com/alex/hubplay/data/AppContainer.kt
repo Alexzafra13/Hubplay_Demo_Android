@@ -6,6 +6,13 @@ import com.alex.hubplay.data.api.AuthApi
 import com.alex.hubplay.data.api.HubplayApi
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -98,6 +105,34 @@ class AppContainer(context: Context) {
      * sync of Continue Watching, played/unplayed and favourites.
      */
     val meEventsStream: MeEventsStream = MeEventsStream(mainOkHttp, tokenStore, moshi)
+
+    /**
+     * App-lifetime coroutine scope for background tasks that outlive any
+     * single ViewModel — screensaver refresh, future telemetry uploads.
+     * SupervisorJob so one failing child doesn't take the rest with it.
+     */
+    private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Idle detection driving the in-app screensaver. */
+    val idleController: IdleController = IdleController(appScope)
+
+    /** Backdrop pool the screensaver crossfades between. */
+    val screensaverImageSource: ScreensaverImageSource = ScreensaverImageSource(homeRepository)
+
+    init {
+        // Keep the screensaver pool in sync with the paired session — on
+        // login (or server switch) we re-fetch so the slideshow matches
+        // the user's actual library. distinctUntilChangedBy avoids
+        // re-fetching on every token refresh.
+        authStateFlow
+            .distinctUntilChangedBy { it.serverUrl to it.isAuthenticated }
+            .onEach { state ->
+                if (state.isAuthenticated) {
+                    appScope.launch { runCatching { screensaverImageSource.refresh() } }
+                }
+            }
+            .launchIn(appScope)
+    }
 
     private fun loggingInterceptor() = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BASIC
