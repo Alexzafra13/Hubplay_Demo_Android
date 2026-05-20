@@ -32,16 +32,22 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
  * remembered against `(payload, sizePx, fgColor, bgColor)` so recompositions
  * (e.g. the polling status ticker) don't re-encode every frame.
  *
- * Why error-correction level H? The composable paints a centered white
- * card around the code, which can occlude a tiny logo overlay if we add
- * one later. H tolerates up to ~30% obstruction; cheap insurance given
- * the payload here is short.
+ * Why ECC level M (not H)? Higher EC = more modules in the matrix =
+ * smaller modules per painted dp. The display is a clean TV / monitor
+ * (no occlusion, no print damage, no fingerprints), so the 15% redundancy
+ * of M is plenty and we trade the 30%-ish extra modules of H for visibly
+ * chunkier blocks — easier for a phone camera to grab from across the
+ * room, which is the typical scanning distance to a TV.
+ *
+ * Default size bumped from 220 → 280 dp for the same reason: a TV is a
+ * far-field display, the QR has to be physically large enough that each
+ * module is several mm wide at the user's seating distance.
  */
 @Composable
 fun QrCode(
     payload:   String,
     modifier:  Modifier = Modifier,
-    size:      Dp       = 220.dp,
+    size:      Dp       = 280.dp,
     fgColor:   Color    = Color.Black,
     bgColor:   Color    = Color.White,
     padding:   Dp       = 12.dp,
@@ -71,7 +77,7 @@ fun QrCode(
 
 private fun encodeQr(payload: String, sizePx: Int, fgArgb: Int, bgArgb: Int): Bitmap {
     val hints = mapOf(
-        EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H,
+        EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
         EncodeHintType.MARGIN           to 0,        // we add our own padding via Box
         EncodeHintType.CHARACTER_SET    to "UTF-8",
     )
