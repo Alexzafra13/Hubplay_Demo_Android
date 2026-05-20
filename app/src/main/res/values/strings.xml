@@ -176,4 +176,32 @@
     <string name="settings_profile_help">Cambia al perfil de otro miembro de la cuenta sin cerrar sesión.</string>
     <string name="settings_action_change_profile">Cambiar perfil</string>
     <string name="settings_label_active_profile">Activo</string>
+
+    <!-- TOFU certificate trust dialog (login + global) -->
+    <string name="cert_dialog_title">¿Confiar en este servidor?</string>
+    <string name="cert_dialog_intro">Vamos a conectar a este servidor por primera vez. Tu Android todavía no lo conoce.</string>
+    <string name="cert_dialog_caveat">Si es tu propio servidor, puedes confiar en él y guardarlo. La próxima vez entrarás sin esta pantalla.</string>
+    <string name="cert_dialog_show_details">Ver detalles del certificado</string>
+    <string name="cert_dialog_hide_details">Ocultar detalles</string>
+    <string name="cert_dialog_label_reason">Motivo</string>
+    <string name="cert_dialog_label_issuer">Emitido por</string>
+    <string name="cert_dialog_label_validity">Validez</string>
+    <string name="cert_dialog_label_fingerprint">Huella SHA-256</string>
+    <string name="cert_dialog_validity_until">Válido hasta el %1$s</string>
+    <string name="cert_dialog_reason_unknown_issuer">Tu Android no reconoce a la autoridad que firmó este certificado.</string>
+    <string name="cert_dialog_reason_expired">El certificado ha caducado.</string>
+    <string name="cert_dialog_reason_not_yet_valid">El certificado todavía no es válido. ¿La fecha del dispositivo está bien?</string>
+    <string name="cert_dialog_reason_hostname">El nombre del servidor no coincide con el del certificado.</string>
+    <string name="cert_dialog_reason_other">No se pudo validar la cadena del certificado.</string>
+    <string name="cert_dialog_action_trust">Confiar y conectar</string>
+    <string name="cert_dialog_action_cancel">Cancelar</string>
+
+    <!-- Trusted servers list (Settings → Trusted servers) -->
+    <string name="settings_section_trusted">Servidores de confianza</string>
+    <string name="settings_action_trusted_servers">Servidores de confianza…</string>
+    <string name="settings_trusted_help">Lista de certificados que aceptaste manualmente desde el diálogo de confianza. Si borras uno, la próxima conexión a ese servidor volverá a pedir confirmación.</string>
+    <string name="trusted_screen_title">Servidores de confianza</string>
+    <string name="trusted_screen_empty">Todavía no has aceptado ningún certificado manualmente.</string>
+    <string name="trusted_added_at">Añadido el %1$s</string>
+    <string name="trusted_action_forget">Olvidar</string>
 </resources>

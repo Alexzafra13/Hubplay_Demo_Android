@@ -176,4 +176,32 @@
     <string name="settings_profile_help">Switch to another household member\'s profile without signing out.</string>
     <string name="settings_action_change_profile">Change profile</string>
     <string name="settings_label_active_profile">Active</string>
+
+    <!-- TOFU certificate trust dialog (login + global) -->
+    <string name="cert_dialog_title">Trust this server?</string>
+    <string name="cert_dialog_intro">You\'re connecting to this server for the first time. Your Android doesn\'t recognise it yet.</string>
+    <string name="cert_dialog_caveat">If this is your own server, you can trust and save it. Next time you\'ll skip this screen.</string>
+    <string name="cert_dialog_show_details">Show certificate details</string>
+    <string name="cert_dialog_hide_details">Hide details</string>
+    <string name="cert_dialog_label_reason">Reason</string>
+    <string name="cert_dialog_label_issuer">Issued by</string>
+    <string name="cert_dialog_label_validity">Validity</string>
+    <string name="cert_dialog_label_fingerprint">SHA-256 fingerprint</string>
+    <string name="cert_dialog_validity_until">Valid until %1$s</string>
+    <string name="cert_dialog_reason_unknown_issuer">Your Android doesn\'t recognise the authority that signed this certificate.</string>
+    <string name="cert_dialog_reason_expired">The certificate has expired.</string>
+    <string name="cert_dialog_reason_not_yet_valid">The certificate isn\'t valid yet. Is the device\'s date set correctly?</string>
+    <string name="cert_dialog_reason_hostname">The server name doesn\'t match the certificate.</string>
+    <string name="cert_dialog_reason_other">Could not validate the certificate chain.</string>
+    <string name="cert_dialog_action_trust">Trust and connect</string>
+    <string name="cert_dialog_action_cancel">Cancel</string>
+
+    <!-- Trusted servers list (Settings → Trusted servers) -->
+    <string name="settings_section_trusted">Trusted servers</string>
+    <string name="settings_action_trusted_servers">Trusted servers…</string>
+    <string name="settings_trusted_help">Certificates you accepted manually from the trust dialog. If you remove one, the next connection to that server will prompt again.</string>
+    <string name="trusted_screen_title">Trusted servers</string>
+    <string name="trusted_screen_empty">You haven\'t manually accepted any certificate yet.</string>
+    <string name="trusted_added_at">Added on %1$s</string>
+    <string name="trusted_action_forget">Forget</string>
 </resources>

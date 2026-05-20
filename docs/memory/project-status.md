@@ -1,12 +1,94 @@
 # Estado del proyecto — HubPlay Android
 
 > **Última sesión**: 2026-05-20 — rama `claude/kotlin-project-review-faLKV`
-> (multi-perfil "Who's watching?").
+> (TOFU certificate pinning + login UX fixes).
 > **Estado**: feature-complete contra la lista priorizada por el usuario,
-> ahora con gating multi-perfil tras login. CI verde sobre 8.10.2 + Java
-> 17 con detekt en modo soft (deuda viva sigue pendiente). EPG grid y
-> "Recientemente visto" siguen abiertos.
+> ahora robusto frente a certs que el OS no reconoce (Let's Encrypt ECDSA
+> en Android <14, self-signed, CAs privadas). CI verde sobre 8.10.2 + Java
+> 17 con detekt en modo soft.
 > **Leer este fichero al inicio de cada sesión** para retomar contexto.
+
+---
+
+## 🔐 Sesión 2026-05-20 (tarde) — TOFU certificate pinning
+
+Aparece "Chain validation failed" en TV con certs LE válidos: la cadena
+ECDSA encadena a **ISRG Root X2** que **sólo está en el trust store de
+Android ≥14**. La mayoría de Android TV está en 9-13 → fallo determinista
+en certs perfectamente legítimos.
+
+### Decisión: TOFU al estilo Nextcloud
+
+Tras research (Jellyfin/HA/Bitwarden rechazan, Plex usa `*.plex.direct`,
+Nextcloud hace TOFU con pinning por host), se elige **trust-on-first-use
++ pinning persistido por host**:
+
+- Por defecto, trust del OS (95% de los casos no ven nada).
+- Si OS rechaza pero hay pin guardado y el cert es byte-equal → acepta
+  en silencio.
+- Si no hay pin → publica `CertChallenge` y la UI muestra un diálogo con
+  subject/issuer/SHA-256/fechas/razón. User → Confiar → pin guardado +
+  auto-retry.
+
+Descartado bundlear roots LE (queda viejo, no cubre CAs privadas /
+self-signed).
+
+### Componentes nuevos
+
+- `data/CertPinStore.kt`: persistencia JSON en `filesDir/cert-pins.json`,
+  keyed by host (lowercased ROOT locale), guarda DER + huella + metadatos.
+  `matches(host, cert)` compara byte-equal antes de aceptar el pin.
+- `data/CertChallenge.kt`: `CertChallenge` data + `CertFailureReason`
+  enum (UnknownIssuer / Expired / NotYetValid / HostnameMismatch / Other)
+  + `CertChallengeBus` (pending `StateFlow` + accepted `SharedFlow`).
+- `data/PinnedCertTrustManager.kt`: `X509ExtendedTrustManager` que
+  delega al sistema y, en CertificateException, clasifica + publica al
+  bus. `PinnedHostnameVerifier` análogo para que un pin byte-equal
+  también bypassee el OK hostname verifier (caso IP / CN raro).
+- `ui/components/CertTrustDialog.kt`: AlertDialog Compose con todos los
+  campos. Trust no es el botón visualmente primario (focus por defecto
+  en Cancel) para que un OK distraído no acepte un cert hostil.
+- `ui/settings/TrustedServersScreen.kt` + ViewModel: lista de pins
+  acumulados, con huella visible y botón "Olvidar" por host.
+- Route nueva `Route.TrustedServers` + entrada en Settings.
+
+### Cableado
+
+- `AppContainer`: comparte `PinnedCertTrustManager` + `PinnedHostnameVerifier`
+  + `SSLSocketFactory` entre `refreshClient` y `mainOkHttp`. ExoPlayer
+  ya usa `mainOkHttp` vía `OkHttpDataSource.Factory(okHttpClient)` en
+  `HubplayPlayer` y `ChannelPreviewPlayer` → la confianza fluye al
+  reproductor de vídeo sin cambios.
+- `LoginViewModel`: nueva dependencia `CertChallengeBus`, observa
+  `pending` para mostrar diálogo y `accepted` para auto-retry de
+  `pickServer(serverUrl)` cuando el host del cert aceptado coincide
+  con el de la URL en pantalla.
+- `LoginScreen`: renderiza `CertTrustDialog` cuando `ui.certChallenge`
+  está set.
+
+### Limitación conocida
+
+El diálogo SOLO se muestra desde LoginScreen. Si el cert rota mientras
+el usuario está paireado (cada ~90 días con LE), las peticiones del
+Home / Player fallan con error genérico. Recovery path: Settings →
+Cerrar sesión → Login → Continue (la URL queda prefilled) → diálogo
+sale al re-pegar el cert. Mejora futura: subir el diálogo al root
+(`HubplayApp`) y observar el bus globalmente.
+
+### Otros fixes de la sesión
+
+- `LoginViewModel` ahora apaga el spinner "Buscando servidores en tu
+  red…" a los 6s (antes infinito porque mDNS es push-driven).
+- `friendlyConnectError` traduce stack TLS / network ("Chain validation
+  failed", "Trust anchor not found", UnknownHostException, etc.) a
+  copy castellano accionable en lugar del jargon JDK.
+- `LoginViewModel.pickServer` ahora loguea el cause chain completo a
+  `WARN/LoginVM` para diagnóstico vía `adb logcat`.
+- `ProfileRepository.list()` devuelve sealed `ProfileListResult` (Ok /
+  Unauthorized / Failed) en vez de tragar excepciones con
+  `runCatching{}.getOrNull()`. `WhoIsWatchingViewModel` auto-bouncea a
+  Login en `Unauthorized` (Retry loop on 401 es inútil) y la pantalla
+  gana un botón "Cerrar sesión" además del Retry.
 
 ---
 
