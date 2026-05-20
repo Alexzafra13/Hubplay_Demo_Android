@@ -181,6 +181,23 @@ class LoginViewModel(
         pickServer(_uiState.value.serverUrl)
     }
 
+    /**
+     * Re-arm the "Buscando en tu red…" indicator for another window.
+     * mDNS discovery itself never stops (we kicked it off on init and
+     * it's still listening underneath), so this is mostly a UX
+     * affordance — gives the user an explicit "try again" instead of
+     * silently waiting on a process they can't see. Particularly
+     * useful when testing in the Android Studio emulator, whose NAT
+     * eats multicast traffic so the LAN search reliably finds nothing.
+     */
+    fun restartLanSearch() {
+        _uiState.update { it.copy(lanSearching = true) }
+        viewModelScope.launch {
+            delay(LAN_SEARCH_TIMEOUT_MS)
+            _uiState.update { it.copy(lanSearching = false) }
+        }
+    }
+
     /** User tapped "Confiar y conectar" in the TOFU dialog. */
     fun acceptCertChallenge(challenge: CertChallenge) {
         certChallengeBus.accept(challenge)

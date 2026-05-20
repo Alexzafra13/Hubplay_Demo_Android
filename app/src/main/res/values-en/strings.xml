@@ -46,6 +46,8 @@
     <string name="login_error_generic">Connection error. Check the URL and try again.</string>
     <string name="login_lan_discovered">Servers on your network</string>
     <string name="login_lan_searching">Looking for servers on your network…</string>
+    <string name="login_lan_no_results">No servers found on your local network.</string>
+    <string name="login_lan_search_again">Search again</string>
     <string name="login_other_server">Another server?</string>
     <string name="login_auto_connecting">Connecting to HubPlay…</string>
 
