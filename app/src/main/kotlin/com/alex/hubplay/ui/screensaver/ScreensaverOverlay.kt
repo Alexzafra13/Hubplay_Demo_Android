@@ -8,11 +8,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
@@ -110,45 +107,43 @@ fun ScreensaverOverlay(
             KenBurnsBackdrop(slide = slide)
         }
 
-        // Cinematic vignette — bottom gets darker so the title text
-        // and clock read against the image regardless of which scene
-        // is showing.
+        // Cinematic vignette — top + bottom get darker so the brand
+        // wordmark (top-start) and clock (bottom-end) read against any
+        // image. We render two gradients so the middle of the frame
+        // stays open for the art itself.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0.0f to Color.Transparent,
-                        0.55f to Color.Transparent,
-                        1.0f to Color.Black.copy(alpha = 0.78f),
+                        0.00f to Color.Black.copy(alpha = 0.55f),
+                        0.18f to Color.Transparent,
+                        0.82f to Color.Transparent,
+                        1.00f to Color.Black.copy(alpha = 0.72f),
                     ),
                 ),
         )
 
-        // ── Title block (bottom-center, fades in after a beat) ─────────
-        SlideCaption(
-            slide    = current,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 48.dp, start = 64.dp, end = 64.dp),
-        )
-
-        // ── Brand watermark, bottom-start
+        // ── Brand watermark, top-start ─────────────────────────────────
+        // Repositioned per UX feedback: bigger, top-left corner so it
+        // reads as the cinema room's identity rather than a footnote.
+        // Title/year captions were removed in the same pass — the art
+        // is supposed to feel ambient, not annotated.
         Image(
             painter            = painterResource(R.drawable.brand_wordmark),
             contentDescription = null,
             modifier           = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 32.dp, bottom = 28.dp)
-                .height(22.dp)
-                .alpha(0.55f),
+                .align(Alignment.TopStart)
+                .padding(start = 40.dp, top = 32.dp)
+                .height(38.dp)
+                .alpha(0.85f),
         )
 
         // ── Clock, bottom-end
         ClockBadge(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 32.dp, bottom = 28.dp),
+                .padding(end = 40.dp, bottom = 32.dp),
         )
     }
 }
@@ -187,39 +182,6 @@ private fun KenBurnsBackdrop(slide: ScreensaverSlide) {
                 translationX = with(density) { tx.value.dp.toPx() }
             },
     )
-}
-
-@Composable
-private fun SlideCaption(slide: ScreensaverSlide, modifier: Modifier = Modifier) {
-    // Stagger the caption fade-in so the image owns the first second
-    // of attention. Re-keys on slide.id so each new image gets its own
-    // fade.
-    val alpha = remember(slide.id) { Animatable(0f) }
-    LaunchedEffect(slide.id) {
-        delay(1_500L)
-        alpha.animateTo(1f, animationSpec = tween(800))
-    }
-
-    Column(
-        modifier            = modifier.fillMaxWidth().alpha(alpha.value),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text       = slide.title,
-            color      = Color.White,
-            fontSize   = 28.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines   = 1,
-        )
-        slide.year?.let {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text     = it.toString(),
-                color    = Color.White.copy(alpha = 0.72f),
-                fontSize = 14.sp,
-            )
-        }
-    }
 }
 
 @Composable
