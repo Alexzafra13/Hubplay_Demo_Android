@@ -58,6 +58,16 @@ class LoginViewModel(
                 }
             }
         }
+        // mDNS discovery is push-driven and never "finishes" by itself, so
+        // a naive UI would show the "Buscando…" spinner forever on a LAN
+        // that has nothing to announce (router blocks multicast, remote
+        // user, etc.). Flip lanSearching off after a fixed window — the
+        // discoveryJob keeps running underneath so a late arrival still
+        // populates the list.
+        viewModelScope.launch {
+            delay(LAN_SEARCH_TIMEOUT_MS)
+            _uiState.update { it.copy(lanSearching = false) }
+        }
         viewModelScope.launch { armAutoSkip() }
     }
 
@@ -123,7 +133,7 @@ class LoginViewModel(
                         it.copy(
                             isStarting    = false,
                             autoConnected = false,
-                            error         = err.message ?: "Error de conexión",
+                            error         = friendlyConnectError(err, normalized),
                         )
                     }
                 },
@@ -181,6 +191,13 @@ class LoginViewModel(
          */
         private const val AUTO_SKIP_GRACE_MS = 1_200L
 
+        /**
+         * After this many ms with no hits we drop the "Buscando en tu red…"
+         * indicator. Discovery itself keeps running so a delayed announcer
+         * still surfaces — only the UI hint goes quiet.
+         */
+        private const val LAN_SEARCH_TIMEOUT_MS = 6_000L
+
         fun factory(repository: DeviceCodeRepository, lanDiscovery: LanDiscovery) =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -189,6 +206,60 @@ class LoginViewModel(
                 }
             }
     }
+}
+
+/**
+ * Translate the raw exception coming out of `/auth/device/start` into a
+ * short, actionable message instead of dumping JDK-internal jargon
+ * ("Chain validation failed", "Trust anchor for certification path not
+ * found", "Hostname not verified") at the user.
+ *
+ * We deliberately do NOT offer a "trust anyway" escape hatch — a self-
+ * hosted media server with a bad cert is most likely a deployment
+ * mistake the user can fix, and silently bypassing TLS would hand any
+ * downstream proxy the bearer token in cleartext.
+ *
+ * Pulled out as a top-level helper so tests can exercise it without
+ * standing up the OkHttp / Retrofit chain.
+ */
+internal fun friendlyConnectError(err: Throwable, attemptedUrl: String): String {
+    // Walk the cause chain once — TLS/network failures are usually
+    // wrapped two levels deep (OkHttp → SSLException → CertPath…).
+    var cur: Throwable? = err
+    val seen = mutableSetOf<Throwable>()
+    while (cur != null && seen.add(cur)) {
+        val name = cur::class.java.simpleName
+        val msg  = cur.message.orEmpty()
+        when {
+            name.contains("SSLPeerUnverified") ||
+            name.contains("CertPath")          ||
+            name.contains("Certificate")       ||
+            "trust anchor" in msg.lowercase()  ||
+            "chain validation" in msg.lowercase() -> {
+                val isHttps = attemptedUrl.startsWith("https://", ignoreCase = true)
+                return if (isHttps) {
+                    "El servidor presentó un certificado que Android no pudo validar. " +
+                        "Comprueba que la URL es correcta y que el certificado es válido."
+                } else {
+                    "Error de certificado al contactar con el servidor."
+                }
+            }
+            name.contains("SSLHandshake") -> {
+                return "No se pudo establecer una conexión segura con el servidor. " +
+                    "Revisa la URL y vuelve a intentarlo."
+            }
+            name.contains("UnknownHost") -> {
+                return "No se pudo resolver el host. Comprueba la URL y tu conexión."
+            }
+            name.contains("ConnectException") ||
+            name.contains("SocketTimeout")    ||
+            name.contains("ConnectTimeout") -> {
+                return "No se pudo conectar al servidor. Comprueba que esté encendido y accesible."
+            }
+        }
+        cur = cur.cause
+    }
+    return err.message?.takeIf { it.isNotBlank() } ?: "Error de conexión"
 }
 
 /**
