@@ -47,6 +47,10 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Defensive: framework can dispatch a stray event during very
+        // early lifecycle (config change race, intent re-dispatch) before
+        // onCreate has run. `lateinit` would throw — just fall through.
+        if (!::container.isInitialized) return super.dispatchKeyEvent(event)
         val wasIdle = container.idleController.state.value.isIdle
         container.idleController.onInteraction()
         // Consume the wake-up press so the underlying screen doesn't
@@ -57,6 +61,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (!::container.isInitialized) return super.dispatchTouchEvent(event)
         val wasIdle = container.idleController.state.value.isIdle
         container.idleController.onInteraction()
         if (wasIdle && event.action == MotionEvent.ACTION_DOWN) return true
