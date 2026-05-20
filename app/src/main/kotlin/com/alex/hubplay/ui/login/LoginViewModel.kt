@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.alex.hubplay.data.CertChallenge
+import com.alex.hubplay.data.CertChallengeBus
 import com.alex.hubplay.data.DeviceCodeRepository
 import com.alex.hubplay.data.DeviceCodeStart
 import com.alex.hubplay.data.DeviceCodeStatus
@@ -33,6 +35,7 @@ import kotlinx.coroutines.launch
 class LoginViewModel(
     private val deviceCodeRepository: DeviceCodeRepository,
     private val lanDiscovery:         LanDiscovery,
+    private val certChallengeBus:     CertChallengeBus,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -70,6 +73,26 @@ class LoginViewModel(
             _uiState.update { it.copy(lanSearching = false) }
         }
         viewModelScope.launch { armAutoSkip() }
+
+        // Mirror the global cert-challenge bus into our UI state so the
+        // Login screen renders the TOFU dialog. Auto-retry on accept:
+        // the user just told us "yes, trust this cert" — the next call
+        // through the same OkHttp client now succeeds, so re-running
+        // pickServer with the stored URL completes the pairing without
+        // them having to press Continue again.
+        viewModelScope.launch {
+            certChallengeBus.pending.collect { ch ->
+                _uiState.update { it.copy(certChallenge = ch) }
+            }
+        }
+        viewModelScope.launch {
+            certChallengeBus.accepted.collect { ch ->
+                val url = _uiState.value.serverUrl
+                if (url.isNotBlank() && extractHost(url).equals(ch.host, ignoreCase = true)) {
+                    pickServer(url)
+                }
+            }
+        }
     }
 
     /**
@@ -158,6 +181,22 @@ class LoginViewModel(
         pickServer(_uiState.value.serverUrl)
     }
 
+    /** User tapped "Confiar y conectar" in the TOFU dialog. */
+    fun acceptCertChallenge(challenge: CertChallenge) {
+        certChallengeBus.accept(challenge)
+        // Don't clear the error yet — auto-retry might fail for another
+        // reason. The collector above wipes it on retry success / new
+        // failure. We DO clear the pending challenge so the dialog goes
+        // away immediately; the bus's compareAndSet handles the race.
+        _uiState.update { it.copy(certChallenge = null, error = null, isStarting = true) }
+    }
+
+    /** User tapped "Cancelar" in the TOFU dialog. */
+    fun dismissCertChallenge() {
+        certChallengeBus.dismiss()
+        _uiState.update { it.copy(certChallenge = null) }
+    }
+
     fun onCancelPairing() {
         pollingJob?.cancel()
         pollingJob = null
@@ -212,15 +251,22 @@ class LoginViewModel(
          */
         private const val LAN_SEARCH_TIMEOUT_MS = 6_000L
 
-        fun factory(repository: DeviceCodeRepository, lanDiscovery: LanDiscovery) =
-            object : ViewModelProvider.Factory {
+        fun factory(
+            repository:       DeviceCodeRepository,
+            lanDiscovery:     LanDiscovery,
+            certChallengeBus: CertChallengeBus,
+        ) = object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return LoginViewModel(repository, lanDiscovery) as T
+                    return LoginViewModel(repository, lanDiscovery, certChallengeBus) as T
                 }
             }
     }
 }
+
+/** Used by the auto-retry hook to compare bus.host against the typed URL. */
+private fun extractHost(url: String): String =
+    runCatching { java.net.URI(url).host.orEmpty() }.getOrNull().orEmpty()
 
 /**
  * Translate the raw exception coming out of `/auth/device/start` into a
@@ -307,6 +353,11 @@ data class LoginUiState(
     val error:         String? = null,
     val lanSearching:  Boolean = false,
     val lanDiscovery:  List<LanServer> = emptyList(),
+    /**
+     * Set when [PinnedCertTrustManager] published an "unknown cert"
+     * challenge for the URL the user is trying. Drives the TOFU dialog.
+     */
+    val certChallenge: CertChallenge? = null,
     /**
      * True when stage 1 was skipped automatically because a single LAN
      * server was the obvious pick. Drives the "Conectando con HubPlay…"

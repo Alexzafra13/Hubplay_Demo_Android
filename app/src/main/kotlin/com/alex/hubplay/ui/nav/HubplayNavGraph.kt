@@ -33,6 +33,8 @@ import com.alex.hubplay.ui.series.SeriesScreen
 import com.alex.hubplay.ui.series.SeriesViewModel
 import com.alex.hubplay.ui.settings.SettingsScreen
 import com.alex.hubplay.ui.settings.SettingsViewModel
+import com.alex.hubplay.ui.settings.TrustedServersScreen
+import com.alex.hubplay.ui.settings.TrustedServersViewModel
 import com.alex.hubplay.ui.whoiswatching.WhoIsWatchingScreen
 import com.alex.hubplay.ui.whoiswatching.WhoIsWatchingViewModel
 
@@ -54,6 +56,7 @@ fun HubplayNavGraph(
                 factory = LoginViewModel.factory(
                     container.deviceCodeRepository,
                     container.lanDiscovery,
+                    container.certChallengeBus,
                 ),
             )
             LoginScreen(
@@ -269,12 +272,24 @@ fun HubplayNavGraph(
                 }
             }
             SettingsScreen(
-                viewModel           = vm,
-                onBack              = { navController.popBackStack() },
-                onLogOut            = logOut,
-                onForgetServer      = forgetServer,
-                onChangeProfile     = changeProfile,
-                onReorderChannels   = openChannelOrder,
+                viewModel             = vm,
+                onBack                = { navController.popBackStack() },
+                onLogOut              = logOut,
+                onForgetServer        = forgetServer,
+                onChangeProfile       = changeProfile,
+                onReorderChannels     = openChannelOrder,
+                onOpenTrustedServers  = { navController.navigate(Route.TrustedServers.path) },
+            )
+        }
+
+        // ── Trusted servers (TOFU pin list) ──────────────────────────
+        composable(Route.TrustedServers.path) {
+            val vm = viewModel<TrustedServersViewModel>(
+                factory = TrustedServersViewModel.factory(container.certPinStore),
+            )
+            TrustedServersScreen(
+                viewModel = vm,
+                onBack    = { navController.popBackStack() },
             )
         }
 

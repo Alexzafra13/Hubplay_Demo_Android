@@ -19,6 +19,8 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
 
 /**
  * Manual DI container — see HubplayApp.kt for the rationale (no Hilt
@@ -40,11 +42,38 @@ class AppContainer(context: Context) {
         .build()
 
     /**
+     * App-lifetime coroutine scope for background tasks that outlive any
+     * single ViewModel — screensaver refresh, future telemetry uploads,
+     * cert-pin file writes triggered by the dialog. SupervisorJob so one
+     * failing child doesn't take the rest with it.
+     */
+    private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * TOFU certificate pinning store + the bus the trust manager uses to
+     * surface "unknown cert, want to trust?" to the UI. Both clients
+     * (refresh + main) and any ExoPlayer OkHttpDataSource we wire up
+     * must share the same TrustManager / HostnameVerifier — otherwise
+     * the HLS segment fetches bypass our pin store and hard-fail on the
+     * same cert the user just accepted in the dialog.
+     */
+    val certPinStore:     CertPinStore     = CertPinStore(context.applicationContext)
+    val certChallengeBus: CertChallengeBus = CertChallengeBus(certPinStore, appScope)
+    private val pinnedTrustManager: PinnedCertTrustManager =
+        PinnedCertTrustManager(certPinStore, certChallengeBus)
+    private val pinnedHostnameVerifier = PinnedHostnameVerifier(certPinStore)
+    private val pinnedSslSocketFactory = SSLContext.getInstance("TLS")
+        .apply { init(null, arrayOf<TrustManager>(pinnedTrustManager), null) }
+        .socketFactory
+
+    /**
      * Bare OkHttp + Retrofit for the refresh endpoint. NO AuthInterceptor
      * to avoid recursing back into itself when a refresh returns 401.
      */
     private val refreshClient: OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(BaseUrlInterceptor(tokenStore))
+        .sslSocketFactory(pinnedSslSocketFactory, pinnedTrustManager)
+        .hostnameVerifier(pinnedHostnameVerifier)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .also { if (BuildConfig.DEBUG) it.addInterceptor(loggingInterceptor()) }
@@ -69,6 +98,8 @@ class AppContainer(context: Context) {
     val mainOkHttp: OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(BaseUrlInterceptor(tokenStore))
         .addInterceptor(AuthInterceptor(tokenStore, refreshAuthApi))
+        .sslSocketFactory(pinnedSslSocketFactory, pinnedTrustManager)
+        .hostnameVerifier(pinnedHostnameVerifier)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.SECONDS)   // 0 = no timeout — required for SSE
         .also { if (BuildConfig.DEBUG) it.addInterceptor(loggingInterceptor()) }
@@ -121,13 +152,6 @@ class AppContainer(context: Context) {
      * sync of Continue Watching, played/unplayed and favourites.
      */
     val meEventsStream: MeEventsStream = MeEventsStream(mainOkHttp, tokenStore, moshi)
-
-    /**
-     * App-lifetime coroutine scope for background tasks that outlive any
-     * single ViewModel — screensaver refresh, future telemetry uploads.
-     * SupervisorJob so one failing child doesn't take the rest with it.
-     */
-    private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Idle detection driving the in-app screensaver. */
     val idleController: IdleController = IdleController(appScope)

@@ -18,6 +18,7 @@ sealed class Route(val path: String) {
     data object Search  : Route("search")
     data object Settings: Route("settings")
     data object ChannelOrder: Route("channel-order")
+    data object TrustedServers: Route("trusted-servers")
 
     /** Item detail / browse-then-play surface (movies). */
     data object Detail : Route("detail/{itemId}") {

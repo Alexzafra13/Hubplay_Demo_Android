@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LinkOff
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.SwitchAccount
@@ -65,12 +66,13 @@ import com.alex.hubplay.ui.theme.BgBase
  */
 @Composable
 fun SettingsScreen(
-    viewModel:           SettingsViewModel,
-    onBack:              () -> Unit,
-    onLogOut:            () -> Unit,
-    onForgetServer:      () -> Unit,
-    onChangeProfile:     () -> Unit = {},
-    onReorderChannels:   () -> Unit = {},
+    viewModel:             SettingsViewModel,
+    onBack:                () -> Unit,
+    onLogOut:              () -> Unit,
+    onForgetServer:        () -> Unit,
+    onChangeProfile:       () -> Unit = {},
+    onReorderChannels:     () -> Unit = {},
+    onOpenTrustedServers:  () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsState()
     var showCrashDialog by remember { mutableStateOf(false) }
@@ -162,6 +164,20 @@ fun SettingsScreen(
                             label   = stringResource(R.string.settings_action_reorder_channels),
                             icon    = Icons.Filled.SwapVert,
                             onClick = onReorderChannels,
+                        )
+                    }
+
+                    SectionCard(title = stringResource(R.string.settings_section_trusted), icon = Icons.Outlined.Shield) {
+                        Text(
+                            text  = stringResource(R.string.settings_trusted_help),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        SecondaryAction(
+                            label   = stringResource(R.string.settings_action_trusted_servers),
+                            icon    = Icons.Outlined.Shield,
+                            onClick = onOpenTrustedServers,
                         )
                     }
 
