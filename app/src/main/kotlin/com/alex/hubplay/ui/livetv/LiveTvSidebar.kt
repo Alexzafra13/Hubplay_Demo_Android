@@ -13,11 +13,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,11 +61,13 @@ import com.alex.hubplay.ui.theme.TextSecondary
  */
 @Composable
 fun LiveTvSidebar(
-    groups:         List<String>,
-    selectedFilter: ChannelFilter,
-    favoritesCount: Int,
-    onFilterChanged: (ChannelFilter) -> Unit,
-    modifier:       Modifier = Modifier,
+    groups:           List<String>,
+    selectedFilter:   ChannelFilter,
+    favoritesCount:   Int,
+    onFilterChanged:  (ChannelFilter) -> Unit,
+    onReorderChannels: () -> Unit = {},
+    onOpenSettings:    () -> Unit = {},
+    modifier:         Modifier = Modifier,
 ) {
     val items = remember(groups, favoritesCount) {
         buildList {
@@ -75,28 +81,62 @@ fun LiveTvSidebar(
         }
     }
 
-    LazyColumn(
-        modifier              = modifier
+    Column(
+        modifier = modifier
             .width(SIDEBAR_WIDTH)
             .background(BgBase),
-        contentPadding        = PaddingValues(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
-        verticalArrangement   = Arrangement.spacedBy(2.dp),
     ) {
-        items(items, key = { it.key }) { item ->
-            val (label, isSelected, isStar) = when (item) {
-                is SidebarItem.Builtin -> Triple(item.label, selectedFilter == item.filter, item.isStar)
-                is SidebarItem.Group   -> Triple(item.name, (selectedFilter as? ChannelFilter.Group)?.name == item.name, false)
+        // Scrollable filter list takes the available height …
+        LazyColumn(
+            modifier              = Modifier.weight(1f),
+            contentPadding        = PaddingValues(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 4.dp),
+            verticalArrangement   = Arrangement.spacedBy(2.dp),
+        ) {
+            items(items, key = { it.key }) { item ->
+                val (label, isSelected, isStar) = when (item) {
+                    is SidebarItem.Builtin -> Triple(item.label, selectedFilter == item.filter, item.isStar)
+                    is SidebarItem.Group   -> Triple(item.name, (selectedFilter as? ChannelFilter.Group)?.name == item.name, false)
+                }
+                SidebarRow(
+                    label    = label,
+                    isStar   = isStar,
+                    selected = isSelected,
+                    leadingIcon = null,
+                    onClick  = {
+                        onFilterChanged(when (item) {
+                            is SidebarItem.Builtin -> item.filter
+                            is SidebarItem.Group   -> ChannelFilter.Group(item.name)
+                        })
+                    },
+                )
             }
+        }
+        // … and the bottom block lives outside the LazyColumn so the
+        // Settings + Reorder entries stay anchored to the sidebar's foot
+        // even when the filter list scrolls. TV-friendly: D-pad ↓ from
+        // the last filter naturally lands here without leaving the
+        // sidebar's focus column.
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            HorizontalDivider(
+                color    = TextSecondary.copy(alpha = 0.18f),
+                modifier = Modifier.padding(vertical = 6.dp),
+            )
             SidebarRow(
-                label    = label,
-                isStar   = isStar,
-                selected = isSelected,
-                onClick  = {
-                    onFilterChanged(when (item) {
-                        is SidebarItem.Builtin -> item.filter
-                        is SidebarItem.Group   -> ChannelFilter.Group(item.name)
-                    })
-                },
+                label       = "Reordenar canales",
+                isStar      = false,
+                selected    = false,
+                leadingIcon = Icons.Filled.SwapVert,
+                onClick     = onReorderChannels,
+            )
+            SidebarRow(
+                label       = "Ajustes",
+                isStar      = false,
+                selected    = false,
+                leadingIcon = Icons.Filled.Settings,
+                onClick     = onOpenSettings,
             )
         }
     }
@@ -104,10 +144,11 @@ fun LiveTvSidebar(
 
 @Composable
 private fun SidebarRow(
-    label:    String,
-    isStar:   Boolean,
-    selected: Boolean,
-    onClick:  () -> Unit,
+    label:       String,
+    isStar:      Boolean,
+    selected:    Boolean,
+    leadingIcon: androidx.compose.ui.graphics.vector.ImageVector?,
+    onClick:     () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
@@ -138,14 +179,25 @@ private fun SidebarRow(
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (isStar) {
-            Icon(
-                imageVector       = Icons.Filled.Star,
-                contentDescription = null,
-                tint              = if (selected) OnAccent else Accent,
-                modifier          = Modifier.size(13.dp),
-            )
-            Spacer(Modifier.width(8.dp))
+        when {
+            isStar -> {
+                Icon(
+                    imageVector        = Icons.Filled.Star,
+                    contentDescription = null,
+                    tint               = if (selected) OnAccent else Accent,
+                    modifier           = Modifier.size(13.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            leadingIcon != null -> {
+                Icon(
+                    imageVector        = leadingIcon,
+                    contentDescription = null,
+                    tint               = fg,
+                    modifier           = Modifier.size(15.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+            }
         }
         Text(
             text       = label,

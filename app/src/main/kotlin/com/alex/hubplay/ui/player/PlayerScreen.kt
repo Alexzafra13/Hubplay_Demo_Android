@@ -69,16 +69,26 @@ private const val AUTO_HIDE_MS = 4_500L
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
-    viewModel:    PlayerViewModel,
-    authState:    AuthState,
-    okHttpClient: OkHttpClient,
-    onBack:       () -> Unit,
+    viewModel:       PlayerViewModel,
+    authState:       AuthState,
+    okHttpClient:    OkHttpClient,
+    idleController:  com.alex.hubplay.data.IdleController,
+    onBack:          () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsState()
     val context = LocalContext.current
 
     val player = remember { HubplayPlayer(context, authState, okHttpClient) }
     val playerState by player.state.collectAsState()
+
+    // While the player is up, the in-app screensaver must stay off: the
+    // user IS watching, idle timer would be wrong. Paired with
+    // PlayerView.keepScreenOn below which handles the OS-level
+    // screensaver / daydream.
+    DisposableEffect(Unit) {
+        idleController.setSuspended(true)
+        onDispose { idleController.setSuspended(false) }
+    }
 
     // Re-play whenever startParams changes — covers both the first
     // resolve AND surfChannel switching to a new channel without
@@ -130,6 +140,11 @@ fun PlayerScreen(
                     useController = !isLive
                     controllerShowTimeoutMs = 4_000
                     controllerAutoShow      = true
+                    // Tells the OS to suppress screen-dim / daydream
+                    // while this View is visible. Without it Android TV
+                    // boxes return to the launcher after ~5 min even
+                    // mid-movie, which has been the bug.
+                    keepScreenOn = true
                 }
             },
             update = { view ->
