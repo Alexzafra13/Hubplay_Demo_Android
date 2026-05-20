@@ -1,5 +1,6 @@
 package com.alex.hubplay.data
 
+import android.util.Log
 import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.dto.ProfileSummaryDto
 import com.alex.hubplay.data.api.dto.SwitchProfileRequest
@@ -41,17 +42,27 @@ class ProfileRepository(
     /**
      * Snapshot of the profile tree (parent + children).
      *
-     * - `null` → fetch failed (network / server error). Caller should
-     *   surface an error state with retry, NOT auto-skip to Home —
-     *   we don't know if the account has 1 or 12 profiles.
-     * - empty  → server returned a legit empty list. Treat as solo +
-     *   nothing to pick, fall through to Home.
-     * - 1+     → render the picker.
+     * - [ProfileListResult.Ok]           → render the picker (or auto-skip on ≤ 1).
+     * - [ProfileListResult.Unauthorized] → bearer is dead and the refresh
+     *   chain failed (the interceptor wiped tokens already). Caller must
+     *   bounce the user back to Login — Retry would just loop on 401.
+     * - [ProfileListResult.Failed]       → transient (network blip,
+     *   5xx). Caller surfaces an error state with Retry + an escape
+     *   hatch back to Login so the user is never trapped.
      */
-    suspend fun list(): List<Profile>? {
+    suspend fun list(): ProfileListResult {
         val server = readServerUrl().orEmpty()
-        val response = runCatching { api.listProfiles() }.getOrNull() ?: return null
-        return response.data?.map { it.toDomain(server) }.orEmpty()
+        return try {
+            val response = api.listProfiles()
+            ProfileListResult.Ok(response.data?.map { it.toDomain(server) }.orEmpty())
+        } catch (e: HttpException) {
+            Log.w(TAG, "listProfiles HTTP ${e.code()}", e)
+            if (e.code() == 401) ProfileListResult.Unauthorized
+            else ProfileListResult.Failed(e.message())
+        } catch (e: Exception) {
+            Log.w(TAG, "listProfiles network/parse failure", e)
+            ProfileListResult.Failed(e.message ?: "network error")
+        }
     }
 
     /**
@@ -136,3 +147,11 @@ sealed class SwitchResult {
     data object NotAllowed : SwitchResult()
     data class Failure(val message: String) : SwitchResult()
 }
+
+sealed class ProfileListResult {
+    data class Ok(val profiles: List<Profile>) : ProfileListResult()
+    data object Unauthorized : ProfileListResult()
+    data class Failed(val message: String) : ProfileListResult()
+}
+
+private const val TAG = "ProfileRepository"
