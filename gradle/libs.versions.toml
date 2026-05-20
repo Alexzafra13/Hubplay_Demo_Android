@@ -7,6 +7,10 @@ agp                = "8.7.3"          # Oct 2024, last 8.7.x patch
 kotlin             = "2.0.21"         # paired with Compose Compiler 2.0.21
 ksp                = "2.0.21-1.0.28"  # paired with Kotlin 2.0.21
 openapiGenerator   = "7.10.0"         # paired with Gradle 8.x
+# gradle-play-publisher — uploads signed AABs to the Play Console via
+# Google's API. 3.12.1 is the latest stable that supports AGP 8.7.x
+# without dragging us into AGP 9 / Kotlin 2.1+ territory.
+playPublisher     = "3.12.1"
 
 # ─── AndroidX core ──────────────────────────────────────────────────────────
 coreKtx            = "1.15.0"
@@ -130,3 +134,4 @@ kotlin-android      = { id = "org.jetbrains.kotlin.android",  version.ref = "kot
 kotlin-compose      = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp                 = { id = "com.google.devtools.ksp",       version.ref = "ksp" }
 openapi-generator   = { id = "org.openapi.generator",         version.ref = "openapiGenerator" }
+play-publisher      = { id = "com.github.triplet.play",       version.ref = "playPublisher" }

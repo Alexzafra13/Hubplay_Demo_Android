@@ -6,7 +6,34 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.openapi.generator)
+    // Play publisher is applied unconditionally — its tasks (publishBundle,
+    // publishApks, …) are only INVOKED from the release workflow, which
+    // is the only place the service-account JSON lives. Locally `assembleDebug`
+    // never touches the plugin's task graph, so applying it is free.
+    alias(libs.plugins.play.publisher)
 }
+
+// ─── Env-driven release metadata ─────────────────────────────────────────────
+//
+// All three values are read from the environment so the keystore + signing
+// passwords never touch the repo. Local builds without these env vars still
+// work: the release buildType falls back to UNSIGNED (handy for diff'ing
+// release-mode behaviour against debug without needing the real keystore).
+//
+//   RELEASE_KEYSTORE_PATH       — absolute path to the .jks file on disk
+//                                 (the workflow base64-decodes the secret
+//                                 into a temp file and exports this var)
+//   RELEASE_KEYSTORE_PASSWORD   — keystore password
+//   RELEASE_KEY_ALIAS           — alias inside the keystore (default: upload)
+//   RELEASE_KEY_PASSWORD        — password for that key
+//   VERSION_CODE                — monotonically-increasing int (Play Store rule);
+//                                 the workflow derives it from the git tag
+//                                 (v1.2.3 → 10203). Falls back to the hardcoded
+//                                 value below when unset, so debug builds work.
+//   VERSION_NAME                — display string ("1.2.3"); falls back to the
+//                                 hardcoded value when unset.
+val releaseKeystorePath = System.getenv("RELEASE_KEYSTORE_PATH").orEmpty()
+val hasReleaseKeystore  = releaseKeystorePath.isNotBlank() && file(releaseKeystorePath).exists()
 
 android {
     namespace = "com.alex.hubplay"
@@ -16,10 +43,26 @@ android {
         applicationId    = "com.alex.hubplay"
         minSdk           = 26   // Android 8.0 — covers ~95% of devices and unlocks Media3
         targetSdk        = 35
-        versionCode      = 3
-        versionName      = "0.2.0"
+        versionCode      = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 3
+        versionName      = System.getenv("VERSION_NAME") ?: "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        // The release signing config is wired conditionally: present only
+        // when the workflow has decoded a keystore into the path pointed
+        // at by RELEASE_KEYSTORE_PATH. Otherwise we skip the block so a
+        // local `assembleRelease` produces an unsigned AAB rather than
+        // failing the configuration phase with a missing-file error.
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile     = file(releaseKeystorePath)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias      = System.getenv("RELEASE_KEY_ALIAS") ?: "upload"
+                keyPassword   = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -35,6 +78,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -207,3 +253,33 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)
 }
+
+// ─── Play Store publishing ───────────────────────────────────────────────────
+//
+// The `play` extension is configured here but the actual upload tasks
+// (`publishReleaseBundle`, `promoteReleaseArtifact`) only run when the
+// release workflow invokes them. Local invocations of those tasks fail
+// fast with a clear message when PLAY_SERVICE_ACCOUNT_JSON isn't set,
+// instead of producing a half-uploaded bundle.
+//
+// Defaults that nudge us toward the safe path:
+//   - track = "internal" so a tag push never lands directly in
+//     production. Promotion to alpha → beta → production is a manual
+//     button in the Play Console (or a `workflow_dispatch` of release.yml
+//     with the `track` input set to something else).
+//   - defaultToAppBundles = true so the upload task produces an .aab
+//     (Play Store requires it for new apps since Aug 2021), never a
+//     legacy .apk.
+//   - releaseStatus = "draft" so the upload shows up in the Play Console
+//     but isn't pushed to testers until a human reviews and clicks
+//     "Send for review". Once you trust the pipeline, flip to "completed".
+play {
+    val credsPath = System.getenv("PLAY_SERVICE_ACCOUNT_JSON_PATH")
+    if (!credsPath.isNullOrBlank() && file(credsPath).exists()) {
+        serviceAccountCredentials.set(file(credsPath))
+    }
+    track.set("internal")
+    defaultToAppBundles.set(true)
+    releaseStatus.set(com.github.triplet.gradle.androidpublisher.ReleaseStatus.DRAFT)
+}
+

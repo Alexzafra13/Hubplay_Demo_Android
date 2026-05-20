@@ -1,0 +1,7 @@
+Versión inicial de HubPlay para Android.
+
+- Emparejamiento por código o QR con tu servidor HubPlay.
+- Descubrimiento automático de servidores en tu red.
+- Reproducción de películas, series y TV en directo.
+- Sincronización de progreso entre dispositivos.
+- Búsqueda en el catálogo y favoritos.

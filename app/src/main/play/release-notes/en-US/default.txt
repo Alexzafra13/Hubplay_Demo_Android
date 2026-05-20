@@ -1,0 +1,7 @@
+Initial release of HubPlay for Android.
+
+- Pair with your HubPlay server via short code or QR.
+- Automatic discovery of servers on your local network.
+- Movies, TV shows and live TV playback.
+- Cross-device progress sync.
+- Catalogue search and favourites.
