@@ -22,8 +22,11 @@ import com.alex.hubplay.data.api.dto.TrendingResponse
 import com.alex.hubplay.data.api.dto.UpdateProgressRequest
 import com.alex.hubplay.data.api.dto.WatchBeaconResponse
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
@@ -33,80 +36,99 @@ import java.util.concurrent.atomic.AtomicInteger
  * one-shot markPlayed. Uses a fake HubplayApi so we can count calls
  * deterministically without spinning up MockWebServer for each test.
  *
- * Note: ProgressReporter throttles on wall-clock time (System.currentTimeMillis)
- * rather than the kotlinx-coroutines TestDispatcher's virtual time, so we
- * sleep real milliseconds in the few tests that exercise the cooldown.
- * Wall-clock dependency is documented in ProgressReporter's KDoc; these
- * tests are the canary if anyone changes the throttle source.
+ * Dispatcher choice — runTest with [UnconfinedTestDispatcher]:
+ *
+ *  The first version of these tests used the default StandardTestDispatcher
+ *  + backgroundScope + advanceUntilIdle(). Every assertion that expected
+ *  a write count > 0 failed with `expected: N, but was: 0` — the
+ *  scheduler wasn't running the secondary launches inside the
+ *  Reporter's `launchUnique` (an outer scope.launch that itself does
+ *  scope.launch inside a Mutex.withLock). The chain doesn't survive
+ *  the standard scheduler's lazy advancement reliably.
+ *
+ *  UnconfinedTestDispatcher runs every launch eagerly until first
+ *  suspension. The Reporter's chain has no real suspensions in the
+ *  FakeApi path, so everything completes inline before assertPosition
+ *  returns. No `advanceUntilIdle` dance, no flaky ordering.
+ *
+ *  Trade-off: we lose the ability to test "throttle window > 10 s
+ *  without 10 s of real wall clock" — but the throttle logic uses
+ *  System.currentTimeMillis() not the scheduler, so virtual time
+ *  wouldn't have helped anyway. Those tests would need to inject a
+ *  Clock abstraction; deferred until we actually need them.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProgressReporterTest {
 
     @Test
-    fun `first reportPosition writes immediately`() = runTest {
+    fun `first reportPosition writes immediately`() = runTest(UnconfinedTestDispatcher()) {
         val api = FakeApi()
-        val reporter = ProgressReporter(api, backgroundScope, "item-1")
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val reporter = ProgressReporter(api, scope, "item-1")
 
         reporter.reportPosition(positionSec = 30, durationSec = 6000, isPlaying = true)
-        advanceUntilIdle()
 
         assertThat(api.updateProgressCalls.get()).isEqualTo(1)
         assertThat(api.lastPositionTicks).isEqualTo(30L * TICKS_PER_SECOND)
         assertThat(api.markPlayedCalls.get()).isEqualTo(0)
+        scope.cancel()
     }
 
     @Test
-    fun `paused player never writes regardless of position changes`() = runTest {
+    fun `paused player never writes regardless of position changes`() = runTest(UnconfinedTestDispatcher()) {
         val api = FakeApi()
-        val reporter = ProgressReporter(api, backgroundScope, "item-2")
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val reporter = ProgressReporter(api, scope, "item-2")
 
         reporter.reportPosition(positionSec = 30,  durationSec = 6000, isPlaying = false)
         reporter.reportPosition(positionSec = 60,  durationSec = 6000, isPlaying = false)
         reporter.reportPosition(positionSec = 120, durationSec = 6000, isPlaying = false)
-        advanceUntilIdle()
 
         assertThat(api.updateProgressCalls.get()).isEqualTo(0)
+        scope.cancel()
     }
 
     @Test
-    fun `flush bypasses throttle and writes the supplied position`() = runTest {
+    fun `flush bypasses throttle and writes the supplied position`() = runTest(UnconfinedTestDispatcher()) {
         val api = FakeApi()
-        val reporter = ProgressReporter(api, backgroundScope, "item-3")
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val reporter = ProgressReporter(api, scope, "item-3")
 
         reporter.reportPosition(positionSec = 10, durationSec = 6000, isPlaying = true)
-        advanceUntilIdle()
         reporter.flush(positionSec = 42, completed = false)
-        advanceUntilIdle()
 
         assertThat(api.updateProgressCalls.get()).isEqualTo(2)
         assertThat(api.lastPositionTicks).isEqualTo(42L * TICKS_PER_SECOND)
+        scope.cancel()
     }
 
     @Test
-    fun `crossing 95 percent fires markPlayed and skips the position write`() = runTest {
+    fun `crossing 95 percent fires markPlayed and skips the position write`() = runTest(UnconfinedTestDispatcher()) {
         val api = FakeApi()
-        val reporter = ProgressReporter(api, backgroundScope, "item-4")
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val reporter = ProgressReporter(api, scope, "item-4")
 
         // duration = 100s; position 95s = 95% → triggers markPlayed branch.
         reporter.reportPosition(positionSec = 95, durationSec = 100, isPlaying = true)
-        advanceUntilIdle()
 
         assertThat(api.markPlayedCalls.get()).isEqualTo(1)
         // The branch returns BEFORE calling updateProgress.
         assertThat(api.updateProgressCalls.get()).isEqualTo(0)
+        scope.cancel()
     }
 
     @Test
-    fun `markPlayed fires exactly once even on repeated near-end reports`() = runTest {
+    fun `markPlayed fires exactly once even on repeated near-end reports`() = runTest(UnconfinedTestDispatcher()) {
         val api = FakeApi()
-        val reporter = ProgressReporter(api, backgroundScope, "item-5")
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val reporter = ProgressReporter(api, scope, "item-5")
 
         repeat(3) {
             reporter.reportPosition(positionSec = 97, durationSec = 100, isPlaying = true)
-            advanceUntilIdle()
         }
 
         assertThat(api.markPlayedCalls.get()).isEqualTo(1)
+        scope.cancel()
     }
 
     /**
