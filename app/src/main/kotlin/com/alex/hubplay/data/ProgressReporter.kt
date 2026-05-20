@@ -32,9 +32,10 @@ import kotlinx.coroutines.sync.withLock
  * markPlayed-sent flag) MUST reset.
  */
 class ProgressReporter(
-    private val api:    HubplayApi,
-    private val scope:  CoroutineScope,
-    private val itemId: String,
+    private val api:        HubplayApi,
+    private val scope:      CoroutineScope,
+    private val itemId:     String,
+    private val timeSource: TimeSource = TimeSource.SYSTEM,
 ) {
 
     private val mutex = Mutex()
@@ -73,7 +74,7 @@ class ProgressReporter(
 
         if (!isPlaying) return
 
-        val now      = System.currentTimeMillis()
+        val now      = timeSource.nowMs()
         val moved    = lastWrittenPositionSec < 0 ||
                        kotlin.math.abs(positionSec - lastWrittenPositionSec) >= 1
         val cooled   = now - lastWrittenAtMs >= WRITE_INTERVAL_MS
@@ -94,7 +95,7 @@ class ProgressReporter(
         if (positionSec < 0) return
         if (positionSec == lastWrittenPositionSec && !completed) return
         lastWrittenPositionSec = positionSec
-        lastWrittenAtMs        = System.currentTimeMillis()
+        lastWrittenAtMs        = timeSource.nowMs()
         launchUnique { writePosition(positionSec, completed) }
     }
 

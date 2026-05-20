@@ -131,6 +131,58 @@ class ProgressReporterTest {
         scope.cancel()
     }
 
+    // ─── Throttle window tests (require a controllable clock) ──────────────
+    //
+    // Previously these couldn't exist because the Reporter read
+    // System.currentTimeMillis() directly. With the TimeSource injection
+    // we can now advance virtual wall clock between calls and prove the
+    // throttle behaves correctly — both that it SUPPRESSES writes inside
+    // the window and that it ALLOWS them once the window elapses.
+
+    @Test
+    fun `second report within the 10s throttle window is suppressed`() = runTest(UnconfinedTestDispatcher()) {
+        val api = FakeApi()
+        val time = MutableTimeSource(initialMs = 1_000_000L)
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val reporter = ProgressReporter(api, scope, "item-6", time)
+
+        reporter.reportPosition(positionSec = 30, durationSec = 6000, isPlaying = true)
+        assertThat(api.updateProgressCalls.get()).isEqualTo(1)
+
+        // 5 s later → inside the 10 s cooldown → should NOT write.
+        time.advanceMs(5_000L)
+        reporter.reportPosition(positionSec = 35, durationSec = 6000, isPlaying = true)
+        assertThat(api.updateProgressCalls.get()).isEqualTo(1)
+
+        scope.cancel()
+    }
+
+    @Test
+    fun `report past the 10s throttle window writes again`() = runTest(UnconfinedTestDispatcher()) {
+        val api = FakeApi()
+        val time = MutableTimeSource(initialMs = 1_000_000L)
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val reporter = ProgressReporter(api, scope, "item-7", time)
+
+        reporter.reportPosition(positionSec = 30, durationSec = 6000, isPlaying = true)
+        assertThat(api.updateProgressCalls.get()).isEqualTo(1)
+
+        // 11 s later → throttle elapsed → write should happen.
+        time.advanceMs(11_000L)
+        reporter.reportPosition(positionSec = 41, durationSec = 6000, isPlaying = true)
+        assertThat(api.updateProgressCalls.get()).isEqualTo(2)
+        assertThat(api.lastPositionTicks).isEqualTo(41L * TICKS_PER_SECOND)
+
+        scope.cancel()
+    }
+
+    /** Test double: a TimeSource whose value the test advances manually. */
+    private class MutableTimeSource(initialMs: Long) : TimeSource {
+        @Volatile private var nowMs: Long = initialMs
+        override fun nowMs(): Long = nowMs
+        fun advanceMs(delta: Long) { nowMs += delta }
+    }
+
     /**
      * Minimal HubplayApi that counts the two endpoints under test and
      * defaults the rest to "throw if anyone calls it". Defining the
