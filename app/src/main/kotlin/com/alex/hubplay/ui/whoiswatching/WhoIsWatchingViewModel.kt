@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.Profile
+import com.alex.hubplay.data.ProfileListResult
 import com.alex.hubplay.data.ProfileRepository
 import com.alex.hubplay.data.SwitchResult
 import kotlinx.coroutines.channels.Channel
@@ -45,40 +46,55 @@ class WhoIsWatchingViewModel(
     fun load() {
         viewModelScope.launch {
             _ui.update { it.copy(isLoading = true, error = null) }
-            val profiles = profileRepo.list()
-            when {
-                profiles == null -> {
-                    // Network failure — keep the user here with a retry
-                    // affordance rather than dumping them on a Home
-                    // that's about to render error states too.
+            when (val result = profileRepo.list()) {
+                is ProfileListResult.Unauthorized -> {
+                    // Bearer is dead and the refresh chain already failed
+                    // (interceptor wiped tokens). Retry would just loop
+                    // on 401 — kick the user back to Login instead.
+                    _effects.send(Effect.SignOut)
+                }
+                is ProfileListResult.Failed -> {
+                    // Transient (network / 5xx). Surface a Retry + an
+                    // explicit Sign-out escape so the user is never
+                    // trapped on this screen.
                     _ui.update {
-                        it.copy(isLoading = false, profiles = emptyList(), error = "load failed")
+                        it.copy(isLoading = false, profiles = emptyList(), error = result.message)
                     }
                 }
-                profiles.isEmpty() -> {
-                    // Solo deploy with no profile rows. The current
-                    // bearer is already the only identity available.
-                    _effects.send(Effect.SkipToHome)
-                }
-                profiles.size == 1 -> {
-                    val solo = profiles.single()
-                    profileRepo.pinCurrentAsActive(solo.id, solo.displayName)
-                    _effects.send(Effect.SkipToHome)
-                }
-                else -> {
-                    _ui.update {
-                        it.copy(
-                            isLoading      = false,
-                            profiles       = profiles,
-                            error          = null,
-                            pendingProfile = null,
-                            pinError       = false,
-                            switching      = false,
-                        )
+                is ProfileListResult.Ok -> {
+                    val profiles = result.profiles
+                    when {
+                        profiles.isEmpty() -> {
+                            // Solo deploy with no profile rows. The current
+                            // bearer is already the only identity available.
+                            _effects.send(Effect.SkipToHome)
+                        }
+                        profiles.size == 1 -> {
+                            val solo = profiles.single()
+                            profileRepo.pinCurrentAsActive(solo.id, solo.displayName)
+                            _effects.send(Effect.SkipToHome)
+                        }
+                        else -> {
+                            _ui.update {
+                                it.copy(
+                                    isLoading      = false,
+                                    profiles       = profiles,
+                                    error          = null,
+                                    pendingProfile = null,
+                                    pinError       = false,
+                                    switching      = false,
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    /** Manual escape hatch from the error state. */
+    fun signOut() {
+        viewModelScope.launch { _effects.send(Effect.SignOut) }
     }
 
     fun select(profile: Profile) {
@@ -155,4 +171,11 @@ sealed class Effect {
 
     /** User picked a profile and the token swap succeeded. */
     data object NavigateHome : Effect()
+
+    /**
+     * Bearer is dead (auto-detected 401 with no refresh path), or the
+     * user hit the "Sign out" escape on the error state. Caller wipes
+     * tokens and bounces to Login.
+     */
+    data object SignOut : Effect()
 }

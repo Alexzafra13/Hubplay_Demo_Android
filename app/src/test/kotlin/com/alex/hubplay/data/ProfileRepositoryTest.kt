@@ -69,7 +69,8 @@ class ProfileRepositoryTest {
         ))
         val repo = newRepo(api, server = "https://hub.example")
 
-        val profiles = repo.list()!!
+        val result = repo.list() as ProfileListResult.Ok
+        val profiles = result.profiles
 
         assertThat(profiles).hasSize(2)
         assertThat(profiles[0].id).isEqualTo("p1")
@@ -86,25 +87,37 @@ class ProfileRepositoryTest {
     }
 
     @Test
-    fun `list returns null on api failure so caller can surface retry`() = runTest {
+    fun `list returns Failed on transient api failure so caller can surface retry`() = runTest {
         val api = FakeApi(throwOnList = true)
         val repo = newRepo(api)
 
-        // Distinguish "fetch failed" (null) from "server returned 0
-        // profiles" (empty list). Without the distinction, a flaky
-        // network would silently dump the user on a Home that's about
-        // to render the same network error.
-        assertThat(repo.list()).isNull()
+        // Transient failures (network blip, 5xx) keep the user on the
+        // picker with a Retry. Distinct from Unauthorized (401), which
+        // is unrecoverable from this surface and bounces to Login.
+        assertThat(repo.list()).isInstanceOf(ProfileListResult.Failed::class.java)
     }
 
     @Test
-    fun `list returns empty list when server reports no profiles`() = runTest {
+    fun `list returns Unauthorized on 401 so caller can bounce to Login`() = runTest {
+        val api = FakeApi(listThrows = http401())
+        val repo = newRepo(api)
+
+        // The interceptor already tried to refresh and wiped the
+        // tokens — surfacing this distinctly lets the VM kick the user
+        // straight back to Login instead of looping on Retry.
+        assertThat(repo.list()).isEqualTo(ProfileListResult.Unauthorized)
+    }
+
+    @Test
+    fun `list returns empty Ok when server reports no profiles`() = runTest {
         val api = FakeApi(profiles = emptyList())
         val repo = newRepo(api)
 
-        // Empty != null. Empty means "solo deploy, no picker needed";
-        // null means "we don't know, retry".
-        assertThat(repo.list()).isEmpty()
+        // Empty means "solo deploy, no picker needed"; Failed/Unauthorized
+        // are the error branches. Three distinct outcomes, three distinct
+        // call-site behaviours.
+        val result = repo.list() as ProfileListResult.Ok
+        assertThat(result.profiles).isEmpty()
     }
 
     @Test
@@ -202,6 +215,7 @@ class ProfileRepositoryTest {
     private class FakeApi(
         private val profiles:     List<ProfileSummaryDto> = emptyList(),
         private val throwOnList:  Boolean                 = false,
+        private val listThrows:   HttpException?          = null,
         private val switchResult: SwitchProfileResponse?  = null,
         private val switchThrows: HttpException?          = null,
     ) : HubplayApi {
@@ -210,6 +224,7 @@ class ProfileRepositoryTest {
             private set
 
         override suspend fun listProfiles(): ProfilesResponse {
+            listThrows?.let { throw it }
             if (throwOnList) throw RuntimeException("network")
             return ProfilesResponse(data = profiles)
         }

@@ -72,8 +72,9 @@ import com.alex.hubplay.ui.theme.TextSecondary
  */
 @Composable
 fun WhoIsWatchingScreen(
-    viewModel:    WhoIsWatchingViewModel,
+    viewModel:      WhoIsWatchingViewModel,
     onNavigateHome: () -> Unit,
+    onSignOut:      () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsState()
 
@@ -82,6 +83,7 @@ fun WhoIsWatchingScreen(
             when (effect) {
                 Effect.NavigateHome,
                 Effect.SkipToHome -> onNavigateHome()
+                Effect.SignOut    -> onSignOut()
             }
         }
     }
@@ -93,7 +95,10 @@ fun WhoIsWatchingScreen(
         ) {
             when {
                 ui.isLoading -> LoadingState()
-                ui.error != null && ui.profiles.isEmpty() -> ErrorState(onRetry = viewModel::load)
+                ui.error != null && ui.profiles.isEmpty() -> ErrorState(
+                    onRetry   = viewModel::load,
+                    onSignOut = viewModel::signOut,
+                )
                 else -> ProfileGrid(
                     profiles  = ui.profiles,
                     switching = ui.switching,
@@ -127,7 +132,7 @@ private fun LoadingState() {
 }
 
 @Composable
-private fun ErrorState(onRetry: () -> Unit) {
+private fun ErrorState(onRetry: () -> Unit, onSignOut: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text       = stringResource(R.string.who_error),
@@ -137,8 +142,13 @@ private fun ErrorState(onRetry: () -> Unit) {
             modifier   = Modifier.widthIn(max = 480.dp),
         )
         Spacer(Modifier.height(20.dp))
-        Button(onClick = onRetry) {
-            Text(stringResource(R.string.action_retry))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(onClick = onRetry) {
+                Text(stringResource(R.string.action_retry))
+            }
+            TextButton(onClick = onSignOut) {
+                Text(stringResource(R.string.settings_action_logout))
+            }
         }
     }
 }

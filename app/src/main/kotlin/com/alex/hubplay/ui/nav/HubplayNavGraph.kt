@@ -82,6 +82,17 @@ fun HubplayNavGraph(
                         popUpTo(Route.WhoIsWatching.path) { inclusive = true }
                     }
                 },
+                onSignOut       = {
+                    // Wipe bearer + refresh + active-profile flag and
+                    // drop the user back on Login. Mirrors the logOut
+                    // closure defined further down for the Home-side
+                    // screens, but pops the picker off the back stack
+                    // so back-press doesn't bounce them right back in.
+                    container.tokenStore.clearBlocking()
+                    navController.navigate(Route.Login.path) {
+                        popUpTo(Route.WhoIsWatching.path) { inclusive = true }
+                    }
+                },
             )
         }
 
