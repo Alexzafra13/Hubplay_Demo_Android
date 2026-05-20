@@ -573,9 +573,12 @@ private fun QrOptionCard(payload: String, modifier: Modifier = Modifier) {
             modifier         = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center,
         ) {
+            // 280 dp + ECC level M (default in QrCode) — see KDoc on
+            // QrCode for the trade-off. Phones across the living room
+            // need chunkier modules than 220 dp / H provided.
             QrCode(
                 payload  = payload,
-                size     = 220.dp,
+                size     = 280.dp,
                 fgColor  = Color.Black,
                 bgColor  = Color.White,
             )
