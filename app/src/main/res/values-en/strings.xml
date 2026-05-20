@@ -178,21 +178,21 @@
     <string name="settings_label_active_profile">Active</string>
 
     <!-- TOFU certificate trust dialog (login + global) -->
-    <string name="cert_dialog_title">Verify the server</string>
-    <string name="cert_dialog_intro">%1$s\'s certificate isn\'t signed by an authority your Android trusts. Check the details before continuing.</string>
-    <string name="cert_dialog_label_host">Server</string>
-    <string name="cert_dialog_label_subject">Issued to</string>
-    <string name="cert_dialog_label_issuer">Issuer</string>
-    <string name="cert_dialog_label_fingerprint">SHA-256 fingerprint</string>
-    <string name="cert_dialog_label_validity">Validity</string>
+    <string name="cert_dialog_title">Trust this server?</string>
+    <string name="cert_dialog_intro">You\'re connecting to this server for the first time. Your Android doesn\'t recognise it yet.</string>
+    <string name="cert_dialog_caveat">If this is your own server, you can trust and save it. Next time you\'ll skip this screen.</string>
+    <string name="cert_dialog_show_details">Show certificate details</string>
+    <string name="cert_dialog_hide_details">Hide details</string>
     <string name="cert_dialog_label_reason">Reason</string>
-    <string name="cert_dialog_validity_range">From %1$s to %2$s</string>
-    <string name="cert_dialog_reason_unknown_issuer">Certificate authority unknown on this device</string>
-    <string name="cert_dialog_reason_expired">Certificate expired</string>
-    <string name="cert_dialog_reason_not_yet_valid">Certificate not yet valid (device clock wrong?)</string>
-    <string name="cert_dialog_reason_hostname">Hostname doesn\'t match the certificate</string>
-    <string name="cert_dialog_reason_other">Could not validate the chain</string>
-    <string name="cert_dialog_warning">Only trust this certificate if you recognise the fingerprint. If someone is intercepting your connection they may be impersonating your server.</string>
+    <string name="cert_dialog_label_issuer">Issued by</string>
+    <string name="cert_dialog_label_validity">Validity</string>
+    <string name="cert_dialog_label_fingerprint">SHA-256 fingerprint</string>
+    <string name="cert_dialog_validity_until">Valid until %1$s</string>
+    <string name="cert_dialog_reason_unknown_issuer">Your Android doesn\'t recognise the authority that signed this certificate.</string>
+    <string name="cert_dialog_reason_expired">The certificate has expired.</string>
+    <string name="cert_dialog_reason_not_yet_valid">The certificate isn\'t valid yet. Is the device\'s date set correctly?</string>
+    <string name="cert_dialog_reason_hostname">The server name doesn\'t match the certificate.</string>
+    <string name="cert_dialog_reason_other">Could not validate the certificate chain.</string>
     <string name="cert_dialog_action_trust">Trust and connect</string>
     <string name="cert_dialog_action_cancel">Cancel</string>
 
