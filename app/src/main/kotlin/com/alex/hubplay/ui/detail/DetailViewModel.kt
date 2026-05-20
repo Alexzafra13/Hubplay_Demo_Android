@@ -39,6 +39,28 @@ class DetailViewModel(
         }
     }
 
+    /**
+     * Toggle the favourite heart. Optimistic — we flip the local UI
+     * immediately so the icon animates without a round-trip, then call
+     * the server. On failure we revert. The server emits a
+     * `user.favorite.toggled` event which Home picks up later for its
+     * own refresh — that's a separate flow from the local revert path.
+     */
+    fun toggleFavorite() {
+        val current = _ui.value.item ?: return
+        val optimistic = current.copy(isFavorite = !current.isFavorite)
+        _ui.value = _ui.value.copy(item = optimistic)
+        viewModelScope.launch {
+            runCatching { repository.toggleItemFavorite(current.id) }
+                .onSuccess { actual ->
+                    _ui.value = _ui.value.copy(item = optimistic.copy(isFavorite = actual))
+                }
+                .onFailure {
+                    _ui.value = _ui.value.copy(item = current) // revert
+                }
+        }
+    }
+
     companion object {
         fun factory(repository: HomeRepository, itemId: String) =
             object : ViewModelProvider.Factory {
