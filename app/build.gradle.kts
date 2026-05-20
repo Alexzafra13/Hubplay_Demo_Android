@@ -69,6 +69,15 @@ android {
     sourceSets["main"].kotlin.srcDirs(
         layout.buildDirectory.dir("generated/openapi/src/main/kotlin"),
     )
+
+    // Tests live in src/test/kotlin rather than the default
+    // src/test/java — Kotlin's plugin picks it up automatically with
+    // modern AGP, but declaring it explicitly removes any IDE doubt.
+    sourceSets["test"].kotlin.srcDirs("src/test/kotlin")
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 // ─── OpenAPI client generation ───────────────────────────────────────────────
