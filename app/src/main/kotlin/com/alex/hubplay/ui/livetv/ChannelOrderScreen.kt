@@ -105,13 +105,25 @@ fun ChannelOrderScreen(
                         title    = stringResource(R.string.livetv_empty_title),
                         subtitle = stringResource(R.string.livetv_empty_subtitle),
                     )
-                else -> Content(
-                    ui              = ui,
-                    onSelectLibrary = viewModel::selectLibrary,
-                    onMoveUp        = { libId, index -> viewModel.moveUp(libId, index) },
-                    onMoveDown      = { libId, index -> viewModel.moveDown(libId, index) },
-                    onToggleHidden  = { libId, channelId -> viewModel.toggleHidden(libId, channelId) },
-                )
+                else -> {
+                    // Transient errors (failed PUTs after the initial load
+                    // succeeded) surface as a dismissable banner above the
+                    // list, so the user knows the last edit didn't stick
+                    // even though earlier edits did.
+                    if (ui.error != null && ui.libraries.isNotEmpty()) {
+                        TransientErrorBanner(
+                            message    = ui.error!!,
+                            onDismiss  = viewModel::clearError,
+                        )
+                    }
+                    Content(
+                        ui              = ui,
+                        onSelectLibrary = viewModel::selectLibrary,
+                        onMoveUp        = { libId, index -> viewModel.moveUp(libId, index) },
+                        onMoveDown      = { libId, index -> viewModel.moveDown(libId, index) },
+                        onToggleHidden  = { libId, channelId -> viewModel.toggleHidden(libId, channelId) },
+                    )
+                }
             }
         }
     }
@@ -162,7 +174,7 @@ private fun Content(
                             position   = index + 1,
                             isFirst    = index == 0,
                             isLast     = index == channels.lastIndex,
-                            isHidden   = ui.isHidden(channel.id),
+                            isHidden   = channel.hidden,
                             onMoveUp   = { onMoveUp(libId, index) },
                             onMoveDown = { onMoveDown(libId, index) },
                             onToggleHidden = { onToggleHidden(libId, channel.id) },
@@ -394,6 +406,32 @@ private fun ActionButton(
             tint               = tint,
             modifier           = Modifier.size(18.dp),
         )
+    }
+}
+
+@Composable
+private fun TransientErrorBanner(message: String, onDismiss: () -> Unit) {
+    Row(
+        modifier              = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.errorContainer)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text     = message,
+            color    = MaterialTheme.colorScheme.onErrorContainer,
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        TextButton(onClick = onDismiss) {
+            Text(stringResource(R.string.action_close))
+        }
     }
 }
 

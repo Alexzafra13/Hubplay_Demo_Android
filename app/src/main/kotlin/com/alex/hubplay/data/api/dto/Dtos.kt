@@ -363,12 +363,46 @@ data class ChannelDto(
     val country:                           String? = null,
     @Json(name = "is_active")              val isActive:      Boolean = true,
     @Json(name = "health_status")          val healthStatus:  String? = null,
+    /**
+     * Only populated when the list is requested with `?include_hidden=true`
+     * (the personalisation panel). Bare list calls leave it `false`
+     * because the backend has already filtered hidden channels out.
+     */
+    val hidden:                            Boolean = false,
+    @Json(name = "user_position")          val userPosition:  Int? = null,
 )
 
 @JsonClass(generateAdapter = true)
 data class ChannelsResponse(
     val data: List<ChannelDto>? = null,
 )
+
+/**
+ * Body for PUT /me/iptv/channels/order. The backend's contract is to
+ * REPLACE the full per-user overlay in one go: anything not in
+ * [orderedChannelIds] (and not in [hiddenChannelIds]) loses its override
+ * row and falls back to the admin default position.
+ */
+@JsonClass(generateAdapter = true)
+data class ChannelOrderRequest(
+    @Json(name = "ordered_channel_ids") val orderedChannelIds: List<String>,
+    @Json(name = "hidden_channel_ids")  val hiddenChannelIds:  List<String>,
+)
+
+/** Body for PUT /me/iptv/channels/{channelId}/visibility. */
+@JsonClass(generateAdapter = true)
+data class ChannelVisibilityRequest(
+    val hidden: Boolean,
+)
+
+/** Common `{ "data": { "status": "ok" } }` envelope returned by status endpoints. */
+@JsonClass(generateAdapter = true)
+data class StatusResponse(
+    val data: StatusPayload? = null,
+) {
+    @JsonClass(generateAdapter = true)
+    data class StatusPayload(val status: String? = null)
+}
 
 @JsonClass(generateAdapter = true)
 data class GroupsResponse(

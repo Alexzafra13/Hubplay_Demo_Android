@@ -167,29 +167,37 @@ queremos a medio plazo.
 
 ### Próxima sesión candidata (Live TV polish)
 
-1. ~~**Pantalla de reorder canales + hide canales**~~ — **HECHO** (rama `claude/kotlin-app-development-s0o78`).
-   - `data/ChannelOrderStore.kt` — DataStore separado (`hubplay_channel_prefs`),
-     un blob JSON-Moshi keyed por `"$serverUrl|$libraryId"` con `(order, hidden)`.
-   - `ChannelOrderStore.applyPrefs` (filtra hidden) + `applyPrefsForOrderView`
-     (mantiene hidden) — pure helpers cubiertos por 8 tests en
-     `ChannelOrderStoreTest.kt`.
-   - `LiveTvViewModel`: cachea `channelsByLibrary` pre-filter durante
-     `fetchInventory`. Observa `prefsFlow` (con `drop(1)` para saltar el
-     replay inicial) y re-aplica en memoria cuando el usuario edita —
-     sin refetch de red.
-   - `ChannelOrderViewModel` + `ChannelOrderScreen` — botones ↑/↓ y
-     ojo (hide/show) por fila, picker de biblioteca cuando hay >1, botón
-     "Restablecer". Hidden visible en la pantalla (greyed out) para
-     poder revertir.
-   - Entradas:
-     - Sidebar Live TV `onReorderChannels` (placeholder ya wired).
-     - Settings → nueva sección "Personalización" (`Icons.Outlined.Tune`).
-   - Decisión UX: opté por botones explícitos ↑/↓/ojo en vez del
-     "OK enters move mode" sketcheado en el placeholder — más
-     descubrible, igual de usable con D-pad, menos focus management.
-     Si en práctica se siente lento con cientos de canales, el modo
-     mover puede añadirse luego.
-   - Backend pending: `/me/channels/order` (su `docs/memory/per-user-channel-order-pending.md`). Cuando shippee, ChannelOrderStore se vuelve cache local con sync vía SSE.
+1. ~~**Pantalla de reorder + hide canales con sync multidispositivo**~~ — **HECHO** (rama `claude/kotlin-app-development-s0o78`).
+   - **Backend ya estaba**: `PUT /me/iptv/channels/order`,
+     `PUT /me/iptv/channels/{id}/visibility`, `DELETE /me/iptv/channels/order`.
+     El listado normal (`/libraries/{id}/channels`) ya aplica el overlay
+     del usuario server-side (`GetChannelsForUser`), y con
+     `?include_hidden=true` devuelve todos los canales (con `hidden`
+     flag) para la pantalla de personalización.
+   - **Android `HubplayApi`**: 3 endpoints añadidos a mano (no via OpenAPI;
+     las rutas no están documentadas todavía en `openapi.yaml` del backend).
+     Extendido `listChannels` con `?include_hidden`.
+   - **`LiveTvRepository`** — wrappers `fetchChannelsForPersonalisation`,
+     `replaceChannelOrder`, `setChannelVisibility`, `resetChannelOrder`.
+     `LiveChannel` ahora lleva `hidden: Boolean`, `userPosition: Int?`.
+   - **`ChannelOrderViewModel`** — server-first:
+     - Carga via personalisation view (todos los canales con flag hidden).
+     - Toggle hide: optimista + `PUT visibility` (per-channel, payload chico),
+       rollback en fallo.
+     - Move ↑/↓: optimista + `PUT order` debounced 300ms (coalesce de holds rápidos).
+     - Reset: `DELETE order` y refetch.
+   - **`LiveTvViewModel`** — drop del overlay local. La lista que vuelve
+     del backend ya viene en orden personalizado. Observa
+     `ChannelOrderStore.prefsFlow` con `drop(1)` como señal de
+     "edit happened, refetch ahora".
+   - **`ChannelOrderStore`** — pasa de source-of-truth a cache write-through
+     + bus de señal. Mismo blob JSON (`hubplay_channel_prefs`). Los helpers
+     `applyPrefs` se eliminaron (yagn).
+   - **Sync multidispositivo**: TV1 edita → backend persiste. TV2 al
+     entrar a Live TV ve el orden nuevo automáticamente (server lo devuelve
+     con overlay aplicado). NO hay live-push: para que TV2 vea el cambio
+     en el mismo segundo, faltaría añadir un evento SSE
+     `channel.order.updated` en backend y suscribir en `MeEventsStream`.
 
 2. **"Recientemente visto"** filtro auto-generado en sidebar Live TV.
    - Storage: lista circular en DataStore (últimos 20 channel IDs vistos).

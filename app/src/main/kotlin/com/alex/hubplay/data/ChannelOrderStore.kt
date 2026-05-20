@@ -12,23 +12,28 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /**
- * Per-library channel preferences — custom order + hidden set.
+ * Local write-through cache + refresh-signal bus for the per-user
+ * channel overlay. The backend is the source of truth — see
+ * `/api/v1/me/iptv/channels/order` and friends — and this store mirrors
+ * the post-write state purely for two reasons:
  *
- * Lives in its own DataStore (separate from [TokenStore]) so logout
- * doesn't wipe channel ordering — users who switch tokens against the
- * same server expect their reorder to survive. "Forget server" doesn't
- * clear this either today; a stale entry just goes unread (its
- * `serverUrl` key never matches the new session).
+ *  1. **Signal channel**: `ChannelOrderViewModel` writes through here
+ *     after each successful backend call. `LiveTvViewModel` observes
+ *     `prefsFlow` and uses any emission as a "refetch" trigger — the
+ *     contents don't matter, only the Flow tick does.
+ *  2. **Offline mirror**: the persisted blob holds the last known good
+ *     state per `serverUrl|libraryId`. We don't currently apply it
+ *     locally (the backend list call already returns the personalised
+ *     view), but keeping it written-through means a future offline-grace
+ *     pass can fall back to it without a schema migration.
  *
  * Storage shape — one JSON blob keyed by `"$serverUrl|$libraryId"`:
  *   { "https://hubplay.local|abc": { "order": ["c2","c1"], "hidden": ["c3"] } }
  *
- * Why a single blob (and not dynamic preference keys per library):
- * a) the dataset is tiny (tens of libraries × ~hundreds of IDs);
- * b) one read/write covers the whole UI atomically;
- * c) when the backend ships `/me/channels/order` (see backend's
- *    `docs/memory/per-user-channel-order-pending.md`) this store
- *    becomes the local cache and a single blob is easier to mirror.
+ * Logout keeps these prefs (per-token tokens drop, the user's channel
+ * preferences belong to the server identity, not the auth session).
+ * "Forget server" leaves stale entries behind because no caller looks
+ * them up against a different `serverUrl`.
  */
 class ChannelOrderStore(private val context: Context) {
 
@@ -96,46 +101,6 @@ class ChannelOrderStore(private val context: Context) {
 
         internal fun buildKey(serverUrl: String, libraryId: String): String =
             "${serverUrl.trimEnd('/')}|$libraryId"
-
-        /**
-         * Apply [prefs] to a freshly fetched channel list. Pure function so
-         * the policy is unit-testable without DataStore plumbing.
-         *
-         *  - Hidden IDs drop out.
-         *  - Known IDs (those in `prefs.order`) move to the front in saved
-         *    order. Unknown IDs (e.g. new channels added server-side after
-         *    the last reorder) keep their incoming relative position at the
-         *    tail, so a freshly-added channel doesn't silently rocket to
-         *    the top because its lookup index is `Int.MAX_VALUE` while
-         *    everything else is already pinned.
-         */
-        fun applyPrefs(channels: List<LiveChannel>, prefs: ChannelPrefs): List<LiveChannel> {
-            val hidden  = prefs.hidden.toSet()
-            val visible = channels.filter { it.id !in hidden }
-            return sortByOrder(visible, prefs.order)
-        }
-
-        /**
-         * Like [applyPrefs] but DOES NOT drop hidden channels — used by the
-         * reorder screen, which must keep them in view so the user can
-         * unhide them. Sort is identical: stored order wins, unknowns at
-         * the tail in their incoming relative order.
-         */
-        fun applyPrefsForOrderView(channels: List<LiveChannel>, prefs: ChannelPrefs): List<LiveChannel> =
-            sortByOrder(channels, prefs.order)
-
-        private fun sortByOrder(channels: List<LiveChannel>, order: List<String>): List<LiveChannel> {
-            if (order.isEmpty()) return channels
-            val orderIndex = order.withIndex().associate { (i, id) -> id to i }
-            return channels.withIndex()
-                .sortedWith(
-                    compareBy(
-                        { orderIndex[it.value.id] ?: Int.MAX_VALUE },
-                        { it.index },
-                    ),
-                )
-                .map { it.value }
-        }
     }
 }
 

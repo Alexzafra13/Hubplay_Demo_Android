@@ -3,6 +3,8 @@ package com.alex.hubplay.data
 import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.dto.BulkScheduleRequest
 import com.alex.hubplay.data.api.dto.ChannelDto
+import com.alex.hubplay.data.api.dto.ChannelOrderRequest
+import com.alex.hubplay.data.api.dto.ChannelVisibilityRequest
 import com.alex.hubplay.data.api.dto.EPGProgramDto
 import java.time.Instant
 import java.time.format.DateTimeParseException
@@ -37,6 +39,39 @@ class LiveTvRepository(
         return api.listChannels(libraryId).data.orEmpty()
             .filter { it.isActive }
             .map { it.toDomain(server) }
+    }
+
+    /**
+     * Channels for the personalisation panel: includes channels the user
+     * has hidden (so they're toggleable in the UI) and arrives ordered
+     * by the user's overlay. Backend already applies admin curation
+     * (admin-hidden channels stay filtered).
+     */
+    suspend fun fetchChannelsForPersonalisation(libraryId: String): List<LiveChannel> {
+        val server = serverUrl()
+        return api.listChannels(libraryId, active = false, includeHidden = true).data.orEmpty()
+            .map { it.toDomain(server) }
+    }
+
+    /**
+     * Atomically replace the caller's full per-user channel order +
+     * hidden overlay on the backend. Channels not in either list lose
+     * their override row and fall back to the admin default.
+     */
+    suspend fun replaceChannelOrder(orderedIds: List<String>, hiddenIds: List<String>) {
+        api.replaceChannelOrder(
+            ChannelOrderRequest(orderedChannelIds = orderedIds, hiddenChannelIds = hiddenIds),
+        )
+    }
+
+    /** Inline hide/show for a single channel — narrower than full replace. */
+    suspend fun setChannelVisibility(channelId: String, hidden: Boolean) {
+        api.setChannelVisibility(channelId, ChannelVisibilityRequest(hidden = hidden))
+    }
+
+    /** Wipe the caller's overlay; the next channel fetch returns admin defaults. */
+    suspend fun resetChannelOrder() {
+        api.resetChannelOrder()
     }
 
     /**
@@ -116,6 +151,8 @@ class LiveTvRepository(
         libraryId     = libraryId.orEmpty(),
         isActive      = isActive,
         healthStatus  = healthStatus.orEmpty(),
+        hidden        = hidden,
+        userPosition  = userPosition,
     )
 
     private fun EPGProgramDto.toDomain(): EpgProgram? {
@@ -176,6 +213,15 @@ data class LiveChannel(
     val isActive:      Boolean,
     /** "ok" | "degraded" | "dead" — UI may hide dead channels. */
     val healthStatus:  String,
+    /**
+     * Whether the caller has marked this channel hidden in their personal
+     * overlay. Only meaningful for responses to the personalisation view
+     * (`?include_hidden=true`); regular list calls don't surface hidden
+     * channels at all.
+     */
+    val hidden:        Boolean = false,
+    /** User's saved position from their personal overlay. Null when unset. */
+    val userPosition:  Int? = null,
 )
 
 @androidx.compose.runtime.Immutable

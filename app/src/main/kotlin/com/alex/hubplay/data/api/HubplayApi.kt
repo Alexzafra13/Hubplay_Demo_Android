@@ -2,6 +2,8 @@ package com.alex.hubplay.data.api
 
 import com.alex.hubplay.data.api.dto.BulkScheduleRequest
 import com.alex.hubplay.data.api.dto.BulkScheduleResponse
+import com.alex.hubplay.data.api.dto.ChannelOrderRequest
+import com.alex.hubplay.data.api.dto.ChannelVisibilityRequest
 import com.alex.hubplay.data.api.dto.ChannelsResponse
 import com.alex.hubplay.data.api.dto.ChildrenResponse
 import com.alex.hubplay.data.api.dto.ContinueWatchingResponse
@@ -16,6 +18,7 @@ import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.NextUpResponse
 import com.alex.hubplay.data.api.dto.SearchResponse
+import com.alex.hubplay.data.api.dto.StatusResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
 import com.alex.hubplay.data.api.dto.UpdateProgressRequest
@@ -133,12 +136,47 @@ interface HubplayApi {
 
     // ─── IPTV: channels + EPG + favorites ───────────────────────────────────
 
-    /** GET /api/v1/libraries/{id}/channels — every channel in an IPTV library. */
+    /**
+     * GET /api/v1/libraries/{id}/channels — every channel in an IPTV library.
+     *
+     * For authenticated callers the backend already applies the user's
+     * personal order + hidden overlay on top of the admin defaults
+     * (`GetChannelsForUser` on the server). `include_hidden=true` flips
+     * to the personalisation view: ALL rows (including the ones the
+     * user has hidden) come back ordered by the user's overlay so the
+     * reorder screen can show them.
+     */
     @GET("libraries/{id}/channels")
     suspend fun listChannels(
         @Path("id") libraryId: String,
         @Query("active") active: Boolean = true,
+        @Query("include_hidden") includeHidden: Boolean = false,
     ): ChannelsResponse
+
+    /**
+     * PUT /api/v1/me/iptv/channels/order — atomically replace the
+     * caller's full per-user order + hidden overlay.
+     *
+     * Channels NOT in `ordered_channel_ids` (and not hidden) lose their
+     * override row and fall back to the admin default position.
+     */
+    @PUT("me/iptv/channels/order")
+    suspend fun replaceChannelOrder(@Body body: ChannelOrderRequest): StatusResponse
+
+    /** DELETE /api/v1/me/iptv/channels/order — wipe overrides; restore admin defaults. */
+    @DELETE("me/iptv/channels/order")
+    suspend fun resetChannelOrder(): StatusResponse
+
+    /**
+     * PUT /api/v1/me/iptv/channels/{channelId}/visibility — inline
+     * single-channel hide toggle. Used when the user taps the eye icon
+     * on one row instead of touching the global ordering.
+     */
+    @PUT("me/iptv/channels/{channelId}/visibility")
+    suspend fun setChannelVisibility(
+        @Path("channelId") channelId: String,
+        @Body body: ChannelVisibilityRequest,
+    ): StatusResponse
 
     /** GET /api/v1/libraries/{id}/channels/groups — group_name strings for filter chips. */
     @GET("libraries/{id}/channels/groups")

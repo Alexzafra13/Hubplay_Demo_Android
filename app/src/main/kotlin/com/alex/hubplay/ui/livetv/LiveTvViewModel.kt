@@ -8,7 +8,6 @@ import com.alex.hubplay.data.ChannelOrderStore
 import com.alex.hubplay.data.EpgProgram
 import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.LiveTvRepository
-import com.alex.hubplay.data.TokenStore
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -30,7 +29,10 @@ import java.time.Instant
  * What it owns:
  *  1. **Inventory** — every channel in every IPTV library the user can
  *     access, plus the group_name list (for filter chips) and the
- *     favourites set.
+ *     favourites set. The backend already applies the caller's per-user
+ *     channel order + hidden overlay before responding, so we don't
+ *     re-sort or filter client-side — that gives us multi-device sync
+ *     for free.
  *  2. **EPG window** — bulk schedule for all visible channels covering
  *     now-1h .. now+6h. Refreshed every 5 minutes so late-arriving EPG
  *     and rolled-over slots stay in sync.
@@ -48,31 +50,23 @@ import java.time.Instant
  *  - Channels with `healthStatus == "dead"` are still listed today so
  *    the user can verify the state matches reality. We can hide them
  *    later behind a setting.
+ *  - Reorder edits made on the personalisation screen trigger a refetch
+ *    via the [ChannelOrderStore] flow: the store is used as a pure
+ *    signalling channel today, not as a source of truth (the backend is).
  */
 class LiveTvViewModel(
     private val repository:        LiveTvRepository,
     private val channelOrderStore: ChannelOrderStore,
-    private val tokenStore:        TokenStore,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(LiveTvUiState(isLoading = true))
     val ui: StateFlow<LiveTvUiState> = _ui.asStateFlow()
 
-    /**
-     * Pre-filter snapshot of every channel grouped by library, captured
-     * during [fetchInventory]. We need this to re-apply prefs when the
-     * user edits ordering / visibility on the reorder screen and comes
-     * back — without it, channels they just unhid wouldn't reappear
-     * because the public `channels` list excludes them by design.
-     */
-    private var channelsByLibrary: Map<String, List<LiveChannel>> = emptyMap()
-    private var serverUrlCached: String = ""
-
     init {
         load()
         startNowTicker()
         startScheduleRefresher()
-        observePrefChanges()
+        observeOrderEdits()
     }
 
     fun load() {
@@ -171,38 +165,22 @@ class LiveTvViewModel(
         }
 
         // 2) Fan out: channels + groups per library, plus favourites once.
+        //    The channels endpoint already returns the user-personalised
+        //    view (admin overlay + per-user order + hidden filter applied
+        //    server-side), so we keep the response order verbatim — no
+        //    further sorting or filtering on this side. That's what makes
+        //    multi-device sync transparent: TV2 sees TV1's order on next
+        //    list call without the client knowing anything about overlays.
         val channelDeferreds = libraries.map { lib ->
-            async { lib to repository.fetchChannels(lib.id) }
+            async { repository.fetchChannels(lib.id) }
         }
         val groupDeferreds = libraries.map { lib ->
             async { repository.fetchGroups(lib.id) }
         }
         val favoritesDeferred = async { repository.fetchFavoriteIds() }
 
-        val serverUrl = tokenStore.snapshot().serverUrl?.trimEnd('/').orEmpty()
-
-        // 3) Per-library: normalize → default-sort by channel number/name.
-        //    We pre-sort per library so "unknown" channels (added
-        //    server-side after the last reorder) keep the LCN order at
-        //    the tail of each library, not the arbitrary server response
-        //    order. The prefs (order + hidden) are applied as a second
-        //    pass below — the unfiltered per-library map is cached on the
-        //    VM so the reorder screen's writes can be re-applied without
-        //    a refetch.
-        val rawPerLibrary = channelDeferreds.awaitAll().associate { (lib, rawChannels) ->
-            lib.id to rawChannels
-                .map { ch -> ch.copy(groupName = normalizeGroup(ch.groupName)) }
-                .sortedWith(
-                    compareBy(
-                        { ch -> ch.number.takeIf { n -> n > 0 } ?: Int.MAX_VALUE },
-                        { ch -> ch.name.lowercase() },
-                    ),
-                )
-        }
-        channelsByLibrary = rawPerLibrary
-        serverUrlCached   = serverUrl
-
-        val channels = applyPrefsToCachedChannels()
+        val channels = channelDeferreds.awaitAll().flatten()
+            .map { ch -> ch.copy(groupName = normalizeGroup(ch.groupName)) }
 
         val groups = groupDeferreds.awaitAll().flatten()
             .map { normalizeGroup(it) }
@@ -210,7 +188,7 @@ class LiveTvViewModel(
             .distinct()
         val favorites = favoritesDeferred.await()
 
-        // 4) Bulk schedule. One round-trip even with hundreds of channels.
+        // 3) Bulk schedule. One round-trip even with hundreds of channels.
         val schedule = if (channels.isEmpty()) {
             emptyMap()
         } else {
@@ -223,31 +201,17 @@ class LiveTvViewModel(
     }
 
     /**
-     * Reapply the latest persisted prefs to the cached pre-filter per-
-     * library lists. Returns the flattened display list.
+     * The reorder screen writes a cache entry through [ChannelOrderStore]
+     * on every successful backend write — we treat that emission as a
+     * signal to refetch from the server, picking up the freshly-persisted
+     * order/hidden state. `drop(1)` skips the Flow's initial replay so we
+     * don't refetch immediately after our own [load].
      */
-    private suspend fun applyPrefsToCachedChannels(): List<LiveChannel> {
-        if (channelsByLibrary.isEmpty()) return emptyList()
-        return channelsByLibrary.flatMap { (libId, raw) ->
-            val prefs = channelOrderStore.snapshotFor(serverUrlCached, libId)
-            ChannelOrderStore.applyPrefs(raw, prefs)
-        }
-    }
-
-    /**
-     * Pick up edits the user makes on the reorder screen without forcing
-     * a network refetch. We drop the first emission because it's the
-     * Flow's initial replay — the value [fetchInventory] already used.
-     */
-    private fun observePrefChanges() {
+    private fun observeOrderEdits() {
         channelOrderStore.prefsFlow
             .distinctUntilChanged()
             .drop(1)
-            .onEach {
-                if (channelsByLibrary.isEmpty()) return@onEach
-                val refreshed = applyPrefsToCachedChannels()
-                _ui.update { it.copy(channels = refreshed) }
-            }
+            .onEach { load() }
             .launchIn(viewModelScope)
     }
 
@@ -319,11 +283,10 @@ class LiveTvViewModel(
         fun factory(
             repository:        LiveTvRepository,
             channelOrderStore: ChannelOrderStore,
-            tokenStore:        TokenStore,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return LiveTvViewModel(repository, channelOrderStore, tokenStore) as T
+                return LiveTvViewModel(repository, channelOrderStore) as T
             }
         }
     }
