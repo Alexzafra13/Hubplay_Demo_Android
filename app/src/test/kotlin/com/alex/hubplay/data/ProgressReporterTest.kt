@@ -3,6 +3,8 @@ package com.alex.hubplay.data
 import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.dto.BulkScheduleRequest
 import com.alex.hubplay.data.api.dto.BulkScheduleResponse
+import com.alex.hubplay.data.api.dto.ChannelOrderRequest
+import com.alex.hubplay.data.api.dto.ChannelVisibilityRequest
 import com.alex.hubplay.data.api.dto.ChannelsResponse
 import com.alex.hubplay.data.api.dto.ChildrenResponse
 import com.alex.hubplay.data.api.dto.ContinueWatchingResponse
@@ -17,6 +19,7 @@ import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.NextUpResponse
 import com.alex.hubplay.data.api.dto.SearchResponse
+import com.alex.hubplay.data.api.dto.StatusResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
 import com.alex.hubplay.data.api.dto.UpdateProgressRequest
@@ -214,8 +217,11 @@ class ProgressReporterTest {
         override suspend fun getChildren(itemId: String): ChildrenResponse    = TODO()
         override suspend fun getNextUp(): NextUpResponse                      = TODO()
         override suspend fun getStreamInfo(itemId: String, capabilities: String): StreamInfoResponse = TODO()
-        override suspend fun listChannels(libraryId: String, active: Boolean): ChannelsResponse = TODO()
+        override suspend fun listChannels(libraryId: String, active: Boolean, includeHidden: Boolean): ChannelsResponse = TODO()
         override suspend fun listChannelGroups(libraryId: String): GroupsResponse = TODO()
+        override suspend fun replaceChannelOrder(body: ChannelOrderRequest): StatusResponse = TODO()
+        override suspend fun resetChannelOrder(): StatusResponse = TODO()
+        override suspend fun setChannelVisibility(channelId: String, body: ChannelVisibilityRequest): StatusResponse = TODO()
         override suspend fun bulkSchedule(body: BulkScheduleRequest): BulkScheduleResponse = TODO()
         override suspend fun listFavoriteChannelIds(): FavoriteIdsResponse    = TODO()
         override suspend fun addFavoriteChannel(channelId: String): FavoriteToggleResponse = TODO()

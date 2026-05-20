@@ -5,14 +5,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.ChannelOrderStore
-import com.alex.hubplay.data.ChannelPrefs
 import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.LiveLibrary
 import com.alex.hubplay.data.LiveTvRepository
 import com.alex.hubplay.data.TokenStore
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,23 +21,30 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Backs the Channel Order screen — lets the user reorder channels within
- * a single library and mark channels as hidden so they disappear from
- * Live TV.
+ * Backs the Channel Order screen.
  *
- * Storage model: persisted by [ChannelOrderStore] keyed by `serverUrl|libraryId`.
- * Hidden channels are remembered, not removed — they reappear if the user
- * unhides them, including for channels currently in the hidden state on
- * load (we ALWAYS show every channel returned by the backend in this
- * screen, regardless of the hidden flag).
+ * Source of truth: the **backend**. We load the personalisation view
+ * (`GET /libraries/{id}/channels?include_hidden=true`) which already
+ * returns channels in the user's saved order with the `hidden` flag set
+ * per row. Edits push to the backend via:
+ *
+ *   - `PUT /me/iptv/channels/{channelId}/visibility` for hide/show (small body)
+ *   - `PUT /me/iptv/channels/order` for reorder (full overlay replace, debounced)
+ *   - `DELETE /me/iptv/channels/order` for "Restablecer"
+ *
+ * Sync to other devices comes for free because the list endpoint already
+ * applies the overlay server-side — TV2 will see TV1's edits on the next
+ * navigation to Live TV (we don't have an SSE event for order yet).
  *
  * UI semantics:
- *  - Edits are optimistic: `_ui` updates immediately, the store write is
- *    fired-and-forgotten (errors are logged but not surfaced — DataStore
- *    on-disk failures are rare enough that the recovery story is "reload").
- *  - One library shown at a time when there's > 1; the picker is part of
- *    the screen (most users have one IPTV library so we skip the picker
- *    automatically).
+ *  - Edits are **optimistic**: local state flips immediately, then the
+ *    backend call runs. On HTTP failure we roll back so the UI matches
+ *    what the server actually persisted. Errors land in [ChannelOrderUiState.error]
+ *    so the screen can surface a banner instead of going silently wrong.
+ *  - Reorder writes are **debounced** (300ms). Holding ↓ on a row to
+ *    move it down 20 places fires one PUT, not twenty.
+ *  - After each successful backend write we touch [ChannelOrderStore]
+ *    to signal `LiveTvViewModel` to refetch its inventory.
  */
 class ChannelOrderViewModel(
     private val repository: LiveTvRepository,
@@ -46,6 +54,9 @@ class ChannelOrderViewModel(
 
     private val _ui = MutableStateFlow(ChannelOrderUiState(isLoading = true))
     val ui: StateFlow<ChannelOrderUiState> = _ui.asStateFlow()
+
+    /** Coalesces rapid reorder taps into one PUT — see [scheduleOrderPersist]. */
+    private val pendingPersists = mutableMapOf<String, Job>()
 
     init { load() }
 
@@ -61,7 +72,6 @@ class ChannelOrderViewModel(
                             serverUrl        = snapshot.serverUrl,
                             libraries        = snapshot.libraries,
                             channelsByLib    = snapshot.channelsByLib,
-                            prefsByLib       = snapshot.prefsByLib,
                             // Preserve the user's library selection across reloads
                             // when possible — otherwise default to the first library.
                             selectedLibraryId =
@@ -88,122 +98,138 @@ class ChannelOrderViewModel(
 
     /** Move the channel at [index] up by one position (no-op when already at top). */
     fun moveUp(libraryId: String, index: Int) {
-        mutateOrder(libraryId) { ids ->
-            if (index <= 0 || index >= ids.size) return@mutateOrder ids
-            ids.toMutableList().apply {
-                add(index - 1, removeAt(index))
-            }
+        mutateOrder(libraryId) { channels ->
+            if (index <= 0 || index >= channels.size) channels
+            else channels.toMutableList().apply { add(index - 1, removeAt(index)) }
         }
     }
 
     /** Move the channel at [index] down by one position (no-op when already at bottom). */
     fun moveDown(libraryId: String, index: Int) {
-        mutateOrder(libraryId) { ids ->
-            if (index < 0 || index >= ids.lastIndex) return@mutateOrder ids
-            ids.toMutableList().apply {
-                add(index + 1, removeAt(index))
-            }
+        mutateOrder(libraryId) { channels ->
+            if (index < 0 || index >= channels.lastIndex) channels
+            else channels.toMutableList().apply { add(index + 1, removeAt(index)) }
         }
     }
 
     fun toggleHidden(libraryId: String, channelId: String) {
-        val currentPrefs = _ui.value.prefsByLib[libraryId] ?: ChannelPrefs()
-        val nowHidden = channelId !in currentPrefs.hidden
-        val nextHidden =
-            if (nowHidden) currentPrefs.hidden + channelId
-            else           currentPrefs.hidden - channelId
-        val nextPrefs = currentPrefs.copy(hidden = nextHidden.distinct())
-        _ui.update { it.copy(prefsByLib = it.prefsByLib + (libraryId to nextPrefs)) }
+        val channels   = _ui.value.channelsByLib[libraryId] ?: return
+        val target     = channels.firstOrNull { it.id == channelId } ?: return
+        val nextHidden = !target.hidden
+        // Optimistic flip.
+        val updatedList = channels.map { ch ->
+            if (ch.id == channelId) ch.copy(hidden = nextHidden) else ch
+        }
+        _ui.update { it.copy(channelsByLib = it.channelsByLib + (libraryId to updatedList)) }
         viewModelScope.launch {
-            val server = _ui.value.serverUrl
-            runCatching { store.setHidden(server, libraryId, channelId, nowHidden) }
-                .onFailure { Log.w(TAG, "setHidden($channelId, $nowHidden) failed", it) }
+            runCatching { repository.setChannelVisibility(channelId, nextHidden) }
+                .onSuccess { signalLiveTvRefresh(libraryId) }
+                .onFailure { err ->
+                    Log.w(TAG, "setChannelVisibility($channelId, $nextHidden) failed", err)
+                    // Roll back the optimistic flip.
+                    _ui.update {
+                        val current = it.channelsByLib[libraryId].orEmpty()
+                        val reverted = current.map { ch ->
+                            if (ch.id == channelId) ch.copy(hidden = !nextHidden) else ch
+                        }
+                        it.copy(
+                            channelsByLib = it.channelsByLib + (libraryId to reverted),
+                            error         = err.message ?: "No se pudo cambiar la visibilidad del canal",
+                        )
+                    }
+                }
         }
     }
 
     /** Reset both order and hidden for [libraryId] back to backend defaults. */
     fun resetLibrary(libraryId: String) {
-        // Snapshot the currently-hidden IDs BEFORE clearing UI state — we
-        // need them to undo each hidden flag in the persisted blob.
-        val hiddenSnapshot = _ui.value.prefsByLib[libraryId]?.hidden.orEmpty()
-        _ui.update { it.copy(prefsByLib = it.prefsByLib + (libraryId to ChannelPrefs())) }
         viewModelScope.launch {
-            val server = _ui.value.serverUrl
-            runCatching { store.setOrder(server, libraryId, emptyList()) }
-                .onFailure { Log.w(TAG, "reset order failed", it) }
-            for (id in hiddenSnapshot) {
-                runCatching { store.setHidden(server, libraryId, id, hidden = false) }
-                    .onFailure { Log.w(TAG, "reset hidden $id failed", it) }
-            }
+            runCatching { repository.resetChannelOrder() }
+                .onSuccess {
+                    signalLiveTvRefresh(libraryId)
+                    // Refetch so the screen mirrors the post-reset server state
+                    // exactly (admin defaults). Cheaper than rebuilding it locally.
+                    load()
+                }
+                .onFailure { err ->
+                    Log.w(TAG, "resetChannelOrder failed", err)
+                    _ui.update {
+                        it.copy(error = err.message ?: "No se pudo restablecer el orden")
+                    }
+                }
+        }
+    }
+
+    private fun mutateOrder(
+        libraryId: String,
+        transform: (List<LiveChannel>) -> List<LiveChannel>,
+    ) {
+        val current = _ui.value.channelsByLib[libraryId] ?: return
+        val next    = transform(current)
+        if (next === current || next == current) return
+        _ui.update { it.copy(channelsByLib = it.channelsByLib + (libraryId to next)) }
+        scheduleOrderPersist(libraryId)
+    }
+
+    /**
+     * Coalesce rapid edits within [ORDER_DEBOUNCE_MS] of each other into
+     * one backend write. We cancel the in-flight job for the library and
+     * start a new one each time; only the last one runs to completion
+     * and PUTs the latest snapshot.
+     */
+    private fun scheduleOrderPersist(libraryId: String) {
+        pendingPersists.remove(libraryId)?.cancel()
+        pendingPersists[libraryId] = viewModelScope.launch {
+            delay(ORDER_DEBOUNCE_MS)
+            val current = _ui.value.channelsByLib[libraryId].orEmpty()
+            val ordered = current.map { it.id }
+            val hidden  = current.filter { it.hidden }.map { it.id }
+            runCatching { repository.replaceChannelOrder(ordered, hidden) }
+                .onSuccess { signalLiveTvRefresh(libraryId) }
+                .onFailure { err ->
+                    Log.w(TAG, "replaceChannelOrder failed", err)
+                    _ui.update {
+                        it.copy(error = err.message ?: "No se pudo guardar el orden")
+                    }
+                }
+            pendingPersists.remove(libraryId)
         }
     }
 
     /**
-     * Applies [transform] to the current saved order. We compute the
-     * "current order" by composing the stored order (if any) over the
-     * default sequence — the result is a stable list of every channel
-     * ID we know about, in the order the user currently sees them.
+     * Bump the [ChannelOrderStore] so the main LiveTv VM observes a
+     * change and refetches. We persist an empty marker entry keyed by
+     * the library — the contents don't matter, only the flow emission.
      */
-    private fun mutateOrder(
-        libraryId: String,
-        transform: (List<String>) -> List<String>,
-    ) {
-        val current = orderedIds(libraryId)
-        val next = transform(current)
-        if (next == current) return
-        val currentPrefs = _ui.value.prefsByLib[libraryId] ?: ChannelPrefs()
-        val nextPrefs    = currentPrefs.copy(order = next)
-        _ui.update { it.copy(prefsByLib = it.prefsByLib + (libraryId to nextPrefs)) }
-        viewModelScope.launch {
-            val server = _ui.value.serverUrl
-            runCatching { store.setOrder(server, libraryId, next) }
-                .onFailure { Log.w(TAG, "setOrder failed", it) }
-        }
-    }
-
-    private fun orderedIds(libraryId: String): List<String> {
-        val channels = _ui.value.channelsByLib[libraryId].orEmpty()
-        val prefs    = _ui.value.prefsByLib[libraryId] ?: ChannelPrefs()
-        val ordered  = ChannelOrderStore.applyPrefsForOrderView(channels, prefs)
-        return ordered.map { it.id }
+    private suspend fun signalLiveTvRefresh(libraryId: String) {
+        val server = _ui.value.serverUrl
+        runCatching { store.setOrder(server, libraryId, _ui.value.channelsByLib[libraryId].orEmpty().map { it.id }) }
+            .onFailure { Log.w(TAG, "store signal write failed", it) }
     }
 
     private suspend fun fetch(): Snapshot = coroutineScope {
         val serverUrl = tokenStore.snapshot().serverUrl?.trimEnd('/').orEmpty()
         val libraries = repository.fetchLiveLibraries()
         val channelsByLib = libraries
-            .map { lib -> async { lib.id to repository.fetchChannels(lib.id) } }
+            .map { lib -> async { lib.id to repository.fetchChannelsForPersonalisation(lib.id) } }
             .awaitAll()
-            .associate { (id, list) ->
-                id to list.sortedWith(
-                    compareBy(
-                        { ch -> ch.number.takeIf { n -> n > 0 } ?: Int.MAX_VALUE },
-                        { ch -> ch.name.lowercase() },
-                    ),
-                )
-            }
-        val prefsByLib = store.snapshot()
-            .mapNotNull { (key, prefs) ->
-                // Keys are "serverUrl|libraryId"; only surface entries that
-                // belong to the current server. Stray entries from previously
-                // paired servers stay in the blob untouched.
-                val parts = key.split('|', limit = 2)
-                if (parts.size != 2 || parts[0] != serverUrl) null
-                else parts[1] to prefs
-            }
             .toMap()
-        Snapshot(serverUrl, libraries, channelsByLib, prefsByLib)
+        Snapshot(serverUrl, libraries, channelsByLib)
+    }
+
+    fun clearError() {
+        _ui.update { it.copy(error = null) }
     }
 
     private data class Snapshot(
         val serverUrl:     String,
         val libraries:     List<LiveLibrary>,
         val channelsByLib: Map<String, List<LiveChannel>>,
-        val prefsByLib:    Map<String, ChannelPrefs>,
     )
 
     companion object {
-        private const val TAG = "ChannelOrderVM"
+        private const val TAG                = "ChannelOrderVM"
+        private const val ORDER_DEBOUNCE_MS  = 300L
 
         fun factory(
             repository: LiveTvRepository,
@@ -225,23 +251,15 @@ data class ChannelOrderUiState(
     val serverUrl:          String = "",
     val libraries:          List<LiveLibrary> = emptyList(),
     val channelsByLib:      Map<String, List<LiveChannel>> = emptyMap(),
-    val prefsByLib:         Map<String, ChannelPrefs> = emptyMap(),
     val selectedLibraryId:  String? = null,
 ) {
     /**
-     * The full list of channels for the focused library, sorted by the
-     * user's saved order (and showing hidden ones — hidden is a flag, not
-     * removal, in this screen).
+     * Channels for the focused library, exactly as the backend returned
+     * them (ordered by the user's overlay; hidden channels included so
+     * the user can unhide them).
      */
     val displayChannels: List<LiveChannel> get() {
         val libId = selectedLibraryId ?: return emptyList()
-        val channels = channelsByLib[libId].orEmpty()
-        val prefs    = prefsByLib[libId] ?: ChannelPrefs()
-        return ChannelOrderStore.applyPrefsForOrderView(channels, prefs)
-    }
-
-    fun isHidden(channelId: String): Boolean {
-        val libId = selectedLibraryId ?: return false
-        return (prefsByLib[libId]?.hidden ?: emptyList()).contains(channelId)
+        return channelsByLib[libId].orEmpty()
     }
 }
