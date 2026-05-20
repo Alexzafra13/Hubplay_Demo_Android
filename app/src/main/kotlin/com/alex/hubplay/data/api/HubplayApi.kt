@@ -10,12 +10,15 @@ import com.alex.hubplay.data.api.dto.FavoriteToggleResponse
 import com.alex.hubplay.data.api.dto.GroupsResponse
 import com.alex.hubplay.data.api.dto.HomeLayoutResponse
 import com.alex.hubplay.data.api.dto.ItemDetailResponse
+import com.alex.hubplay.data.api.dto.ItemFavoriteToggleResponse
 import com.alex.hubplay.data.api.dto.LatestResponse
 import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.NextUpResponse
+import com.alex.hubplay.data.api.dto.SearchResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
+import com.alex.hubplay.data.api.dto.UpdateProgressRequest
 import com.alex.hubplay.data.api.dto.WatchBeaconResponse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -169,4 +172,58 @@ interface HubplayApi {
     /** POST /api/v1/channels/{channelId}/watch — beacon (records last-watched). */
     @POST("channels/{channelId}/watch")
     suspend fun recordChannelWatch(@Path("channelId") channelId: String): WatchBeaconResponse
+
+    // ─── Playback progress / favourites for items ───────────────────────────
+
+    /**
+     * PUT /api/v1/me/progress/{itemId}
+     *
+     * Persists the current playback position so Continue Watching and
+     * Next Up reflect reality across devices. Body carries
+     * `position_ticks` in 100-ns ticks (10_000_000 per second — Jellyfin
+     * legacy unit the backend uses everywhere) and an optional
+     * `completed` flag the client sets true on natural end-of-stream.
+     *
+     * Returns 204 No Content — `Unit` is the right Retrofit return.
+     */
+    @PUT("me/progress/{itemId}")
+    suspend fun updateProgress(
+        @Path("itemId") itemId: String,
+        @Body           body:   UpdateProgressRequest,
+    )
+
+    /**
+     * POST /api/v1/me/progress/{itemId}/played — marks fully played.
+     * Bumps `play_count`, clears `position_ticks`, removes the item from
+     * Continue Watching. Idempotent.
+     */
+    @POST("me/progress/{itemId}/played")
+    suspend fun markPlayed(@Path("itemId") itemId: String)
+
+    /** POST /api/v1/me/progress/{itemId}/unplayed — undo for the Detail screen. */
+    @POST("me/progress/{itemId}/unplayed")
+    suspend fun markUnplayed(@Path("itemId") itemId: String)
+
+    /**
+     * POST /api/v1/me/progress/{itemId}/favorite
+     *
+     * Toggles the favourite flag on a movie / series / episode (NOT a
+     * live channel — those use the favorites/channels routes). Response
+     * shape: `{ data: { item_id, is_favorite } }`.
+     */
+    @POST("me/progress/{itemId}/favorite")
+    suspend fun toggleItemFavorite(@Path("itemId") itemId: String): ItemFavoriteToggleResponse
+
+    // ─── Search ─────────────────────────────────────────────────────────────
+
+    /**
+     * GET /api/v1/items/search?q=… — full-text catalogue search. The
+     * backend returns the same ItemSummary shape as `/items` so the UI
+     * reuses MediaCard / Detail navigation without translation.
+     */
+    @GET("items/search")
+    suspend fun searchItems(
+        @Query("q")     query: String,
+        @Query("limit") limit: Int = 60,
+    ): SearchResponse
 }

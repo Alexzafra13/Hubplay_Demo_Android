@@ -88,8 +88,28 @@ fun PlayerScreen(
         }
     }
 
+    // 5s polling loop that feeds the VM's ProgressReporter. The reporter
+    // does its own throttling/dedup — we just need to push positions
+    // often enough that the 10s write window captures live activity.
+    // No-op while not in VOD mode (reporter is null inside the VM).
+    LaunchedEffect(ui.mode) {
+        if (ui.mode != PlayerMode.Vod) return@LaunchedEffect
+        while (true) {
+            val pos = player.exoPlayer.currentPosition
+            val dur = player.exoPlayer.duration.let { if (it > 0) it else 0L }
+            viewModel.onPlaybackTick(pos, dur, player.exoPlayer.isPlaying)
+            kotlinx.coroutines.delay(5_000L)
+        }
+    }
+
     DisposableEffect(Unit) {
-        onDispose { player.release() }
+        onDispose {
+            // Capture the final position BEFORE releasing the player —
+            // exoPlayer.currentPosition returns 0 after release().
+            val finalPos = player.exoPlayer.currentPosition
+            viewModel.onPlaybackDispose(finalPos)
+            player.release()
+        }
     }
 
     val isLive = ui.mode == PlayerMode.Live
