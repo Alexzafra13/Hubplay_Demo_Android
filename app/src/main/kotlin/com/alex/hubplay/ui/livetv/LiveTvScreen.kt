@@ -77,13 +77,14 @@ import java.time.Instant
  */
 @Composable
 fun LiveTvScreen(
-    viewModel:     LiveTvViewModel,
-    authState:     AuthState,
-    okHttpClient:  okhttp3.OkHttpClient,
-    onPlayChannel: (String) -> Unit,
-    onTabSelected: (Tab) -> Unit,
-    onLogOut:      () -> Unit,
-    onSettings:    () -> Unit = {},
+    viewModel:         LiveTvViewModel,
+    authState:         AuthState,
+    okHttpClient:      okhttp3.OkHttpClient,
+    onPlayChannel:     (String) -> Unit,
+    onTabSelected:     (Tab) -> Unit,
+    onLogOut:          () -> Unit,
+    onSettings:        () -> Unit = {},
+    onReorderChannels: () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsState()
     val now = Instant.ofEpochMilli(ui.nowEpoch)
@@ -106,18 +107,19 @@ fun LiveTvScreen(
                     subtitle = stringResource(R.string.livetv_empty_subtitle),
                 )
                 else -> MainLayout(
-                    ui             = ui,
-                    now            = now,
-                    authState      = authState,
-                    okHttpClient   = okHttpClient,
-                    onFilter       = viewModel::setFilter,
-                    onFocused      = { ch -> viewModel.setFocusedChannel(ch.id) },
-                    onPlay         = { ch ->
+                    ui                = ui,
+                    now               = now,
+                    authState         = authState,
+                    okHttpClient      = okHttpClient,
+                    onFilter          = viewModel::setFilter,
+                    onFocused         = { ch -> viewModel.setFocusedChannel(ch.id) },
+                    onPlay            = { ch ->
                         viewModel.recordWatch(ch.id)
                         onPlayChannel(ch.id)
                     },
-                    onToggleFav    = { ch -> viewModel.toggleFavorite(ch.id) },
-                    onOpenSettings = onSettings,
+                    onToggleFav       = { ch -> viewModel.toggleFavorite(ch.id) },
+                    onOpenSettings    = onSettings,
+                    onReorderChannels = onReorderChannels,
                 )
             }
         }
@@ -126,15 +128,16 @@ fun LiveTvScreen(
 
 @Composable
 private fun MainLayout(
-    ui:             LiveTvUiState,
-    now:            Instant,
-    authState:      AuthState,
-    okHttpClient:   okhttp3.OkHttpClient,
-    onFilter:       (ChannelFilter) -> Unit,
-    onFocused:      (LiveChannel) -> Unit,
-    onPlay:         (LiveChannel) -> Unit,
-    onToggleFav:    (LiveChannel) -> Unit,
-    onOpenSettings: () -> Unit,
+    ui:                LiveTvUiState,
+    now:               Instant,
+    authState:         AuthState,
+    okHttpClient:      okhttp3.OkHttpClient,
+    onFilter:          (ChannelFilter) -> Unit,
+    onFocused:         (LiveChannel) -> Unit,
+    onPlay:            (LiveChannel) -> Unit,
+    onToggleFav:       (LiveChannel) -> Unit,
+    onOpenSettings:    () -> Unit,
+    onReorderChannels: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // ── Hero spans the full width above everything ──────────────
@@ -163,7 +166,7 @@ private fun MainLayout(
                 selectedFilter    = ui.filter,
                 favoritesCount    = ui.favorites.size,
                 onFilterChanged   = onFilter,
-                onReorderChannels = { /* TODO: dedicated reorder screen — see sesion notes */ },
+                onReorderChannels = onReorderChannels,
                 onOpenSettings    = onOpenSettings,
                 modifier          = Modifier.fillMaxHeight(),
             )

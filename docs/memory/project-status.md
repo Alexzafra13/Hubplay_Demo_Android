@@ -1,11 +1,11 @@
 # Estado del proyecto — HubPlay Android
 
-> **Última sesión**: 2026-05-20 — rama `claude/review-android-project-O2OMf`.
+> **Última sesión**: 2026-05-20 — rama `claude/kotlin-app-development-s0o78`
+> (reorder + hide de canales).
 > **Estado**: feature-complete contra la lista priorizada por el usuario.
-> CI verde sobre 8.10.2 + Java 17 con detekt en modo estricto. Falta
-> pulir 1-2 sub-flujos (reorder canales, EPG grid) y ejecutar los
-> pasos manuales de Play Store. **Leer este fichero al inicio de cada
-> sesión** para retomar contexto.
+> CI verde sobre 8.10.2 + Java 17 con detekt en modo soft (deuda viva
+> sigue pendiente). EPG grid y "Recientemente visto" siguen abiertos.
+> **Leer este fichero al inicio de cada sesión** para retomar contexto.
 
 ---
 
@@ -167,15 +167,29 @@ queremos a medio plazo.
 
 ### Próxima sesión candidata (Live TV polish)
 
-1. **Pantalla de reorder canales + hide canales** — UNA sesión, mismo storage.
-   - Entrada primaria: sidebar Live TV "Reordenar canales" (placeholder ya wired en `LiveTvSidebar.onReorderChannels`).
-   - Entrada secundaria: Settings → Personalización (nueva sección en `SettingsScreen`).
-   - Pantalla: list de canales con D-pad, OK entra/sale "modo mover", ↑/↓ desplaza la fila.
-   - Nuevo `ChannelOrderStore` (DataStore separado del TokenStore). Clave `${serverUrl}|${libraryId}` → `List<String>` de channel IDs.
-   - IDs nuevos del backend van al final; IDs eliminados se ignoran.
-   - `LiveTvViewModel.fetchChannels` aplica el orden tras leer del backend.
+1. ~~**Pantalla de reorder canales + hide canales**~~ — **HECHO** (rama `claude/kotlin-app-development-s0o78`).
+   - `data/ChannelOrderStore.kt` — DataStore separado (`hubplay_channel_prefs`),
+     un blob JSON-Moshi keyed por `"$serverUrl|$libraryId"` con `(order, hidden)`.
+   - `ChannelOrderStore.applyPrefs` (filtra hidden) + `applyPrefsForOrderView`
+     (mantiene hidden) — pure helpers cubiertos por 8 tests en
+     `ChannelOrderStoreTest.kt`.
+   - `LiveTvViewModel`: cachea `channelsByLibrary` pre-filter durante
+     `fetchInventory`. Observa `prefsFlow` (con `drop(1)` para saltar el
+     replay inicial) y re-aplica en memoria cuando el usuario edita —
+     sin refetch de red.
+   - `ChannelOrderViewModel` + `ChannelOrderScreen` — botones ↑/↓ y
+     ojo (hide/show) por fila, picker de biblioteca cuando hay >1, botón
+     "Restablecer". Hidden visible en la pantalla (greyed out) para
+     poder revertir.
+   - Entradas:
+     - Sidebar Live TV `onReorderChannels` (placeholder ya wired).
+     - Settings → nueva sección "Personalización" (`Icons.Outlined.Tune`).
+   - Decisión UX: opté por botones explícitos ↑/↓/ojo en vez del
+     "OK enters move mode" sketcheado en el placeholder — más
+     descubrible, igual de usable con D-pad, menos focus management.
+     Si en práctica se siente lento con cientos de canales, el modo
+     mover puede añadirse luego.
    - Backend pending: `/me/channels/order` (su `docs/memory/per-user-channel-order-pending.md`). Cuando shippee, ChannelOrderStore se vuelve cache local con sync vía SSE.
-   - Hide channels: misma estructura, segundo Set<String> en el store.
 
 2. **"Recientemente visto"** filtro auto-generado en sidebar Live TV.
    - Storage: lista circular en DataStore (últimos 20 channel IDs vistos).

@@ -4,9 +4,11 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.alex.hubplay.data.ChannelOrderStore
 import com.alex.hubplay.data.EpgProgram
 import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.LiveTvRepository
+import com.alex.hubplay.data.TokenStore
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -14,6 +16,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -44,16 +50,29 @@ import java.time.Instant
  *    later behind a setting.
  */
 class LiveTvViewModel(
-    private val repository: LiveTvRepository,
+    private val repository:        LiveTvRepository,
+    private val channelOrderStore: ChannelOrderStore,
+    private val tokenStore:        TokenStore,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(LiveTvUiState(isLoading = true))
     val ui: StateFlow<LiveTvUiState> = _ui.asStateFlow()
 
+    /**
+     * Pre-filter snapshot of every channel grouped by library, captured
+     * during [fetchInventory]. We need this to re-apply prefs when the
+     * user edits ordering / visibility on the reorder screen and comes
+     * back — without it, channels they just unhid wouldn't reappear
+     * because the public `channels` list excludes them by design.
+     */
+    private var channelsByLibrary: Map<String, List<LiveChannel>> = emptyMap()
+    private var serverUrlCached: String = ""
+
     init {
         load()
         startNowTicker()
         startScheduleRefresher()
+        observePrefChanges()
     }
 
     fun load() {
@@ -153,34 +172,45 @@ class LiveTvViewModel(
 
         // 2) Fan out: channels + groups per library, plus favourites once.
         val channelDeferreds = libraries.map { lib ->
-            async { repository.fetchChannels(lib.id) }
+            async { lib to repository.fetchChannels(lib.id) }
         }
         val groupDeferreds = libraries.map { lib ->
             async { repository.fetchGroups(lib.id) }
         }
         val favoritesDeferred = async { repository.fetchFavoriteIds() }
 
-        val rawChannels = channelDeferreds.awaitAll().flatten()
-        val rawGroups   = groupDeferreds.awaitAll().flatten()
+        val serverUrl = tokenStore.snapshot().serverUrl?.trimEnd('/').orEmpty()
 
-        // Normalize the group name on every channel. Some M3U sources
-        // arrive with semicolon-joined XMLTV categories (e.g.
-        // "Animation;Kids;Public") because they lack a real group-title
-        // and the server falls back to EPG categories. We split on `;`,
-        // take the first token, trim and title-case. Two channels that
-        // used to live under "Animation;Kids" and "Animation;Kids;Public"
-        // both collapse to "Animation" — exactly what the filter chips
-        // need.
-        val channels = rawChannels.map { ch ->
-            ch.copy(groupName = normalizeGroup(ch.groupName))
+        // 3) Per-library: normalize → default-sort by channel number/name.
+        //    We pre-sort per library so "unknown" channels (added
+        //    server-side after the last reorder) keep the LCN order at
+        //    the tail of each library, not the arbitrary server response
+        //    order. The prefs (order + hidden) are applied as a second
+        //    pass below — the unfiltered per-library map is cached on the
+        //    VM so the reorder screen's writes can be re-applied without
+        //    a refetch.
+        val rawPerLibrary = channelDeferreds.awaitAll().associate { (lib, rawChannels) ->
+            lib.id to rawChannels
+                .map { ch -> ch.copy(groupName = normalizeGroup(ch.groupName)) }
+                .sortedWith(
+                    compareBy(
+                        { ch -> ch.number.takeIf { n -> n > 0 } ?: Int.MAX_VALUE },
+                        { ch -> ch.name.lowercase() },
+                    ),
+                )
         }
-        val groups = rawGroups
+        channelsByLibrary = rawPerLibrary
+        serverUrlCached   = serverUrl
+
+        val channels = applyPrefsToCachedChannels()
+
+        val groups = groupDeferreds.awaitAll().flatten()
             .map { normalizeGroup(it) }
             .filter { it.isNotBlank() }
             .distinct()
         val favorites = favoritesDeferred.await()
 
-        // 3) Bulk schedule. One round-trip even with hundreds of channels.
+        // 4) Bulk schedule. One round-trip even with hundreds of channels.
         val schedule = if (channels.isEmpty()) {
             emptyMap()
         } else {
@@ -190,6 +220,35 @@ class LiveTvViewModel(
         }
 
         InventorySnapshot(channels, groups, favorites, schedule)
+    }
+
+    /**
+     * Reapply the latest persisted prefs to the cached pre-filter per-
+     * library lists. Returns the flattened display list.
+     */
+    private suspend fun applyPrefsToCachedChannels(): List<LiveChannel> {
+        if (channelsByLibrary.isEmpty()) return emptyList()
+        return channelsByLibrary.flatMap { (libId, raw) ->
+            val prefs = channelOrderStore.snapshotFor(serverUrlCached, libId)
+            ChannelOrderStore.applyPrefs(raw, prefs)
+        }
+    }
+
+    /**
+     * Pick up edits the user makes on the reorder screen without forcing
+     * a network refetch. We drop the first emission because it's the
+     * Flow's initial replay — the value [fetchInventory] already used.
+     */
+    private fun observePrefChanges() {
+        channelOrderStore.prefsFlow
+            .distinctUntilChanged()
+            .drop(1)
+            .onEach {
+                if (channelsByLibrary.isEmpty()) return@onEach
+                val refreshed = applyPrefsToCachedChannels()
+                _ui.update { it.copy(channels = refreshed) }
+            }
+            .launchIn(viewModelScope)
     }
 
     /**
@@ -257,13 +316,16 @@ class LiveTvViewModel(
             }
         }
 
-        fun factory(repository: LiveTvRepository) =
-            object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return LiveTvViewModel(repository) as T
-                }
+        fun factory(
+            repository:        LiveTvRepository,
+            channelOrderStore: ChannelOrderStore,
+            tokenStore:        TokenStore,
+        ) = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return LiveTvViewModel(repository, channelOrderStore, tokenStore) as T
             }
+        }
     }
 }
 
@@ -283,18 +345,19 @@ data class LiveTvUiState(
     val nowEpoch:          Long = System.currentTimeMillis(),
     val lastLoadedAt:      Instant? = null,
 ) {
-    /** Applies the active filter; returns channels sorted by number then name. */
+    /**
+     * Applies the active filter to the channel list, preserving the order
+     * already baked in by [LiveTvViewModel.fetchInventory] (per-library:
+     * default LCN sort overridden by the user's saved reorder).
+     */
     val visibleChannels: List<LiveChannel> get() = channels
-        .asSequence()
         .filter { ch ->
             when (val f = filter) {
-                ChannelFilter.All        -> true
-                ChannelFilter.Favorites  -> ch.id in favorites
-                is ChannelFilter.Group   -> ch.groupName.equals(f.name, ignoreCase = true)
+                ChannelFilter.All       -> true
+                ChannelFilter.Favorites -> ch.id in favorites
+                is ChannelFilter.Group  -> ch.groupName.equals(f.name, ignoreCase = true)
             }
         }
-        .sortedWith(compareBy({ it.number.takeIf { n -> n > 0 } ?: Int.MAX_VALUE }, { it.name.lowercase() }))
-        .toList()
 
     /**
      * The channel the hero panel should render right now.
