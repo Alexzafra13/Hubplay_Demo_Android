@@ -8,16 +8,28 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -48,11 +60,13 @@ import com.alex.hubplay.ui.theme.BgBase
  */
 @Composable
 fun SettingsScreen(
-    viewModel: SettingsViewModel,
-    onBack:    () -> Unit,
-    onLogOut:  () -> Unit,
+    viewModel:       SettingsViewModel,
+    onBack:          () -> Unit,
+    onLogOut:        () -> Unit,
+    onForgetServer:  () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsState()
+    var showCrashDialog by remember { mutableStateOf(false) }
 
     Surface(modifier = Modifier.fillMaxSize(), color = BgBase) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -93,20 +107,41 @@ fun SettingsScreen(
                     SectionCard(title = "Servidor", icon = Icons.Outlined.Dns) {
                         InfoRow(label = "URL", value = ui.serverUrl ?: "—")
                         Spacer(Modifier.height(14.dp))
-                        Button(
-                            onClick  = onLogOut,
-                            colors   = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                            ),
-                            shape    = RoundedCornerShape(10.dp),
-                        ) {
-                            Icon(
-                                imageVector        = Icons.AutoMirrored.Filled.Logout,
-                                contentDescription = null,
-                                modifier           = Modifier.size(18.dp),
+                        // Two distinct exit doors. Log out keeps the URL so
+                        // re-pairing is one tap; Forget server wipes it.
+                        SecondaryAction(
+                            label   = "Cerrar sesión",
+                            icon    = Icons.AutoMirrored.Filled.Logout,
+                            onClick = onLogOut,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        SecondaryAction(
+                            label   = "Cambiar servidor (olvidar este)",
+                            icon    = Icons.Outlined.LinkOff,
+                            onClick = onForgetServer,
+                        )
+                    }
+
+                    SectionCard(title = "Diagnóstico", icon = Icons.Outlined.BugReport) {
+                        Text(
+                            text  = "Si la app se cierra inesperadamente, aquí queda " +
+                                    "el stack trace del último crash. Cópialo cuando " +
+                                    "reportes un fallo.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            SecondaryAction(
+                                label   = "Ver logs",
+                                icon    = Icons.Outlined.BugReport,
+                                onClick = { showCrashDialog = true },
                             )
-                            Spacer(Modifier.width(8.dp))
-                            Text("Cerrar sesión y cambiar servidor")
+                            SecondaryAction(
+                                label   = "Borrar logs",
+                                icon    = Icons.Outlined.DeleteSweep,
+                                onClick = { viewModel.clearCrashLog() },
+                            )
                         }
                     }
 
@@ -119,6 +154,62 @@ fun SettingsScreen(
             }
         }
     }
+
+    if (showCrashDialog) {
+        CrashLogDialog(
+            log       = viewModel.readCrashLog(),
+            onDismiss = { showCrashDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun SecondaryAction(
+    label:   String,
+    icon:    ImageVector,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        colors  = ButtonDefaults.outlinedButtonColors(
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+        shape   = RoundedCornerShape(10.dp),
+    ) {
+        Icon(
+            imageVector        = icon,
+            contentDescription = null,
+            modifier           = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(label)
+    }
+}
+
+@Composable
+private fun CrashLogDialog(log: String, onDismiss: () -> Unit) {
+    val text = log.ifBlank { "Sin crashes registrados." }
+    val scroll = rememberScrollState()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton    = {
+            TextButton(onClick = onDismiss) { Text("Cerrar") }
+        },
+        title  = { Text("Logs de crashes") },
+        text   = {
+            // Stack traces are tall. Wrap in a vertical scroller so the
+            // dialog itself stays bounded; horizontal overflow folds to
+            // next line at the dialog's max width.
+            Text(
+                text       = text,
+                style      = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                modifier   = Modifier
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(scroll),
+            )
+        },
+    )
 }
 
 @Composable

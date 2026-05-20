@@ -46,6 +46,13 @@ class HubplayApp : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        // Install the uncaught-exception handler FIRST so we capture
+        // crashes that happen during the rest of onCreate too. The
+        // logger delegates to the previous handler so the app still
+        // dies on a real crash — we just record the trace first.
+        com.alex.hubplay.data.CrashLogger.install(this).also {
+            container.attachCrashLogger(it)
+        }
         // Touch the lazy so the construction cost happens here on the
         // main-thread startup path (predictable) rather than later on
         // whichever thread first reads .container.

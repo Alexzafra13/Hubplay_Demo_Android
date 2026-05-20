@@ -91,6 +91,12 @@ class TokenStore(private val context: Context) {
         }
     }
 
+    /**
+     * "Log out" — drop tokens, KEEP the server URL so the user can
+     * re-pair against the same HubPlay without re-typing the address.
+     * The expected flow afterwards is: login screen → device-code
+     * pairing UI shows up with the URL already filled.
+     */
     suspend fun clear() {
         context.dataStore.edit { prefs ->
             prefs.remove(keyAccess)
@@ -101,11 +107,25 @@ class TokenStore(private val context: Context) {
     }
 
     /**
+     * "Forget this server" — drop tokens AND the server URL. The user
+     * lands on the empty URL form, ready to point the app at a
+     * different HubPlay (e.g. moved house, friend's library).
+     */
+    suspend fun forgetServer() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(keyAccess)
+            prefs.remove(keyRefresh)
+            prefs.remove(keyServerUrl)
+        }
+    }
+
+    /**
      * Synchronous variant for the rare moments where coroutine context
      * is awkward (e.g. logout button in nav graph). Acceptable because
      * DataStore's edit suspends only on disk IO, which is cheap.
      */
     fun clearBlocking() = runBlocking { clear() }
+    fun forgetServerBlocking() = runBlocking { forgetServer() }
 
     /**
      * Read once for places that need the value right now (interceptor,
