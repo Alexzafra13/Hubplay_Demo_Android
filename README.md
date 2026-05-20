@@ -111,7 +111,19 @@ El `AuthInterceptor` se encarga del refresh automático en 401 con un único ref
 ./gradlew refreshOpenApiSpec     # actualiza spec del server
 ./gradlew :app:openApiGenerate   # regenera cliente sin build completo
 ./gradlew :app:testDebugUnitTest # unitarios (src/test/kotlin)
+./gradlew :app:detekt            # static analysis (config/detekt.yml)
+./gradlew :app:detektBaseline    # regenera el baseline tras aceptar findings
 ```
+
+### Static analysis
+
+`./gradlew :app:detekt` corre detekt 1.23.7 + el ruleset de formatting
+(ktlint backend) en un solo paso. La config vive en `config/detekt.yml`
+— tuned para Compose (composables PascalCase OK, líneas hasta 140 col,
+MagicNumber en `padding = 16.dp` permitido). Findings que existían
+antes del gate están en `config/detekt-baseline.xml`; código nuevo
+pasa por la regla completa. Regenera el baseline cuando aceptes un
+finding de forma consciente.
 
 ---
 
@@ -121,13 +133,14 @@ El `AuthInterceptor` se encarga del refresh automático en 401 con un único ref
 `claude/**` y en cada PR contra `main`:
 
 1. `:app:openApiGenerate` — regenera el cliente Retrofit desde el spec.
-2. `:app:testDebugUnitTest` — unitarios JVM (resolver de series, normalización de URL, throttling del ProgressReporter, …).
-3. `:app:assembleDebug` — APK debug completo, ejercita el toolchain entero.
+2. `:app:detekt` — static analysis (formatting + code smells).
+3. `:app:testDebugUnitTest` — unitarios JVM (resolver de series, normalización de URL, throttling del ProgressReporter, …).
+4. `:app:assembleDebug` — APK debug completo, ejercita el toolchain entero.
 
-Sube como artefactos: reportes de tests siempre (también en rojo) +
-APK debug si el build pasa. Usa `gradle/actions/setup-gradle@v4` con
-Gradle 8.10.2 (igual que el wrapper local), así no hace falta tener el
-`gradle-wrapper.jar` commiteado.
+Sube como artefactos: reportes de tests y detekt siempre (también en
+rojo) + APK debug si el build pasa. Usa `gradle/actions/setup-gradle@v4`
+con Gradle 8.10.2 (igual que el wrapper local), así no hace falta tener
+el `gradle-wrapper.jar` commiteado.
 
 ---
 

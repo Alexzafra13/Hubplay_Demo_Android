@@ -8,4 +8,8 @@ plugins {
     alias(libs.plugins.ksp)                 apply false
     alias(libs.plugins.openapi.generator)   apply false
     alias(libs.plugins.play.publisher)      apply false
+    // detekt is declared here but applied on the :app module so
+    // libs.* is accessible from the dependencies { } block where the
+    // formatting plugin needs to be wired in.
+    alias(libs.plugins.detekt)              apply false
 }

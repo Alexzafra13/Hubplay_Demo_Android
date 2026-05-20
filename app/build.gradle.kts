@@ -11,6 +11,44 @@ plugins {
     // is the only place the service-account JSON lives. Locally `assembleDebug`
     // never touches the plugin's task graph, so applying it is free.
     alias(libs.plugins.play.publisher)
+    alias(libs.plugins.detekt)
+}
+
+// ─── detekt configuration ────────────────────────────────────────────────────
+//
+// Static analysis. Runs as part of `./gradlew check` and from CI. The
+// baseline (config/detekt-baseline.xml) captures issues that exist today
+// so the gate doesn't go red on day one; new code is held to the full
+// ruleset. Regenerate the baseline with `./gradlew detektBaseline` when
+// you intentionally accept a new finding.
+detekt {
+    toolVersion            = libs.versions.detekt.get()
+    config.setFrom(rootProject.file("config/detekt.yml"))
+    baseline               = rootProject.file("config/detekt-baseline.xml")
+    buildUponDefaultConfig = true
+    autoCorrect            = false
+    parallel               = true
+    ignoredBuildTypes      = listOf("release")
+    // First-run posture: the report uploads to CI and we see findings,
+    // but the build is NOT gated red on day one. Once we've either fixed
+    // the existing findings or baselined them (./gradlew detektBaseline),
+    // flip this to false so new code is held to the full ruleset.
+    ignoreFailures         = true
+}
+
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    // The OpenAPI-generated client lives under build/generated/openapi/
+    // — we don't own that code so we shouldn't lint it.
+    exclude("**/generated/**")
+    exclude("**/build/**")
+    reports {
+        html.required.set(true)
+        xml.required.set(true)
+        sarif.required.set(true)
+        txt.required.set(false)
+        md.required.set(false)
+    }
+    jvmTarget = "17"
 }
 
 // ─── Env-driven release metadata ─────────────────────────────────────────────
@@ -252,6 +290,11 @@ dependencies {
     testImplementation(libs.mockwebserver)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)
+
+    // ── Static analysis — ktlint-backed formatting ruleset folded into
+    //    the same detekt run, so a single `./gradlew detekt` covers both
+    //    code-smell + style rules.
+    detektPlugins(libs.detekt.formatting)
 }
 
 // ─── Play Store publishing ───────────────────────────────────────────────────

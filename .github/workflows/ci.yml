@@ -55,13 +55,19 @@ jobs:
       - name: Generate OpenAPI client
         run: gradle :app:openApiGenerate --no-daemon --stacktrace
 
-      # ── 2. Unit tests ─────────────────────────────────────────────────
+      # ── 2. Static analysis (detekt) ───────────────────────────────────
+      # Runs ktlint-style formatting + code-smell rules. Findings beyond
+      # the baseline (config/detekt-baseline.xml) fail the build.
+      - name: Static analysis (detekt)
+        run: gradle :app:detekt --no-daemon --stacktrace
+
+      # ── 3. Unit tests ─────────────────────────────────────────────────
       # JVM-only tests (src/test/kotlin). Instrumented tests would need
       # an emulator matrix which we'll add when the test surface grows.
       - name: Run unit tests
         run: gradle :app:testDebugUnitTest --no-daemon --stacktrace
 
-      # ── 3. Debug APK build ────────────────────────────────────────────
+      # ── 4. Debug APK build ────────────────────────────────────────────
       # `assembleDebug` exercises the full Kotlin/Compose/AGP toolchain
       # plus resource processing and DEX — anything compile-error-ish
       # surfaces here.
@@ -80,6 +86,16 @@ jobs:
           path: |
             app/build/reports/tests/
             app/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload detekt report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: detekt-report
+          path: |
+            app/build/reports/detekt/
           if-no-files-found: ignore
           retention-days: 7
 

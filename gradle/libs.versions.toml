@@ -11,6 +11,10 @@ openapiGenerator   = "7.10.0"         # paired with Gradle 8.x
 # Google's API. 3.12.1 is the latest stable that supports AGP 8.7.x
 # without dragging us into AGP 9 / Kotlin 2.1+ territory.
 playPublisher     = "3.12.1"
+# detekt — static analysis. 1.23.7 supports Kotlin 2.0.21 via the
+# `detekt-formatting` plugin's ktlint-1.x dependency. Newer 1.23.8+
+# bumps to Kotlin 2.1 — keep on 7 until the wider stack moves.
+detekt            = "1.23.7"
 
 # ─── AndroidX core ──────────────────────────────────────────────────────────
 coreKtx            = "1.15.0"
@@ -128,6 +132,11 @@ turbine                        = { group = "app.cash.turbine",         name = "t
 kotlinx-coroutines-test        = { group = "org.jetbrains.kotlinx",    name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 mockwebserver                  = { group = "com.squareup.okhttp3",     name = "mockwebserver",        version.ref = "mockwebserver" }
 
+# Static analysis — applied via the detekt plugin (see [plugins]) +
+# the formatting ruleset bundled here so a single :detekt invocation
+# covers both code-smell and style.
+detekt-formatting              = { group = "io.gitlab.arturbosch.detekt", name = "detekt-formatting",   version.ref = "detekt" }
+
 [plugins]
 android-application = { id = "com.android.application",       version.ref = "agp" }
 kotlin-android      = { id = "org.jetbrains.kotlin.android",  version.ref = "kotlin" }
@@ -135,3 +144,4 @@ kotlin-compose      = { id = "org.jetbrains.kotlin.plugin.compose", version.ref 
 ksp                 = { id = "com.google.devtools.ksp",       version.ref = "ksp" }
 openapi-generator   = { id = "org.openapi.generator",         version.ref = "openapiGenerator" }
 play-publisher      = { id = "com.github.triplet.play",       version.ref = "playPublisher" }
+detekt              = { id = "io.gitlab.arturbosch.detekt",   version.ref = "detekt" }

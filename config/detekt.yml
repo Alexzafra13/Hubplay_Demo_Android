@@ -1,0 +1,123 @@
+# detekt — static analysis config
+#
+# Tuned to be useful, not pedantic. Defaults are good for ~85 % of
+# rules; this file disables a handful that fight Compose / our own
+# patterns, and raises thresholds on a few that fire constantly on
+# real Compose codebases without surfacing real issues.
+#
+# When something fires that you genuinely don't want to fix, prefer
+# regenerating the baseline (`./gradlew detektBaseline`) over editing
+# this file — keeps the rule on for future code.
+
+build:
+  maxIssues: 0           # CI gate: any NEW finding fails the build.
+
+config:
+  validation: true
+  warningsAsErrors: false
+
+# ─── Complexity ─────────────────────────────────────────────────────────────
+complexity:
+  LongMethod:
+    threshold: 80        # Compose composables routinely run long.
+  LongParameterList:
+    functionThreshold: 8 # ViewModel factories + nav graph routes need a few.
+    constructorThreshold: 8
+  TooManyFunctions:
+    active: false        # Repositories + composables make this noisy.
+  CyclomaticComplexMethod:
+    threshold: 20
+
+# ─── Style — Compose-friendly overrides ────────────────────────────────────
+style:
+  MagicNumber:
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    ignoreAnnotation: true
+    ignoreEnums: true
+    ignoreNamedArgument: true        # `padding = 16.dp` is a stylistic constant.
+    ignoreRanges: true
+  MaxLineLength:
+    maxLineLength: 140               # Compose modifier chains are wide.
+  FunctionOnlyReturningConstant:
+    active: false                    # Composable defaults often do this.
+  UnusedPrivateMember:
+    active: true
+    allowedNames: '(_|ignored|expected)'
+  ReturnCount:
+    max: 5                            # Early-return guards in reporters are fine.
+  WildcardImport:
+    active: true
+  ForbiddenComment:
+    values: ['STOPSHIP']
+    # TODO / FIXME stay legal — we file them.
+
+# ─── Naming — Compose composables are PascalCase ───────────────────────────
+naming:
+  FunctionNaming:
+    functionPattern: '[a-zA-Z][a-zA-Z0-9]*'  # Allow PascalCase @Composable funs.
+  TopLevelPropertyNaming:
+    constantPattern: '[A-Z][_A-Z0-9]*'
+    propertyPattern: '[a-z][A-Za-z0-9]*'
+    privatePropertyPattern: '_?[a-z][A-Za-z0-9]*'
+
+# ─── Empty blocks — we use `Unit` on purpose in `when` exhaustives ──────────
+empty-blocks:
+  EmptyFunctionBlock:
+    active: true
+    ignoreOverridden: true
+
+# ─── Formatting (ktlint-backed) ────────────────────────────────────────────
+formatting:
+  active: true
+  android: true            # Adapts to Android-style alignment.
+  autoCorrect: false
+  Filename:
+    active: false          # We allow multi-class files (DTOs.kt holds many).
+  FinalNewline:
+    active: true
+  MaximumLineLength:
+    active: true
+    maxLineLength: 140
+  NoWildcardImports:
+    active: true
+  Indentation:
+    active: false          # Compose modifier alignment trips this constantly.
+  ParameterListWrapping:
+    active: false          # Same — modifier chains read better unwrapped.
+  ArgumentListWrapping:
+    active: false
+  TrailingCommaOnCallSite:
+    active: false
+  TrailingCommaOnDeclarationSite:
+    active: false
+
+# ─── Performance — extra strict, matches our "rendimiento top" goal ────────
+performance:
+  ForEachOnRange:
+    active: true
+  SpreadOperator:
+    active: true
+  UnnecessaryTemporaryInstantiation:
+    active: true
+  CouldBeSequence:
+    active: true
+    threshold: 3
+
+# ─── Potential bugs ────────────────────────────────────────────────────────
+potential-bugs:
+  UnsafeCallOnNullableType:
+    active: true
+  UnsafeCast:
+    active: true
+  LateinitUsage:
+    active: false           # We use lateinit deliberately in MainActivity.
+
+# ─── Coroutines — opinionated, catches real foot-guns ──────────────────────
+coroutines:
+  GlobalCoroutineUsage:
+    active: true
+  RedundantSuspendModifier:
+    active: true
+  SuspendFunWithFlowReturnType:
+    active: true
