@@ -71,6 +71,7 @@ class CatalogViewModel(
     }
 }
 
+@androidx.compose.runtime.Immutable
 data class CatalogUiState(
     val isLoading: Boolean         = false,
     val items:     List<MediaItem> = emptyList(),

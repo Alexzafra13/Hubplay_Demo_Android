@@ -327,6 +327,7 @@ class PlayerViewModel(
 
 enum class PlayerMode { Unknown, Vod, Live }
 
+@androidx.compose.runtime.Immutable
 data class PlayerUiState(
     val itemId:          String,
     val mode:            PlayerMode = PlayerMode.Unknown,

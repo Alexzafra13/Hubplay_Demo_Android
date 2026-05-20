@@ -45,6 +45,7 @@ class SettingsViewModel(
     }
 }
 
+@androidx.compose.runtime.Immutable
 data class SettingsUiState(
     val serverUrl:   String? = null,
     val appVersion:  String  = "",

@@ -269,6 +269,7 @@ class LiveTvViewModel(
 
 // ─── UI state ────────────────────────────────────────────────────────────────
 
+@androidx.compose.runtime.Immutable
 data class LiveTvUiState(
     val isLoading:         Boolean = false,
     val error:             String? = null,
