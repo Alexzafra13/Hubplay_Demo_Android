@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -152,6 +153,25 @@ fun PlayerScreen(
                     imageVector       = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Volver",
                     tint              = Color.White,
+                )
+            }
+            // Audio + subtitle picker — only relevant for VOD HLS (live
+            // IPTV streams typically expose a single audio track).
+            var showTrackSheet by remember { mutableStateOf(false) }
+            IconButton(
+                onClick  = { showTrackSheet = true },
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+            ) {
+                Icon(
+                    imageVector        = Icons.Outlined.ClosedCaption,
+                    contentDescription = "Audio y subtítulos",
+                    tint               = Color.White,
+                )
+            }
+            if (showTrackSheet) {
+                TrackSelectionSheet(
+                    player    = player.exoPlayer,
+                    onDismiss = { showTrackSheet = false },
                 )
             }
             BackHandler(onBack = onBack)
