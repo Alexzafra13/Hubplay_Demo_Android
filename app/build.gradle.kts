@@ -29,11 +29,12 @@ detekt {
     autoCorrect            = false
     parallel               = true
     ignoredBuildTypes      = listOf("release")
-    // First-run posture: the report uploads to CI and we see findings,
-    // but the build is NOT gated red on day one. Once we've either fixed
-    // the existing findings or baselined them (./gradlew detektBaseline),
-    // flip this to false so new code is held to the full ruleset.
-    ignoreFailures         = true
+    // CI gate enabled — any finding NOT in config/detekt-baseline.xml
+    // fails the build. If a legitimate finding fires, the right move
+    // is either to fix it or regenerate the baseline locally with
+    // `./gradlew detektBaseline` and commit the updated file. Don't
+    // disable rules wholesale just to stay green.
+    ignoreFailures         = false
 }
 
 tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
