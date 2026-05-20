@@ -30,6 +30,8 @@ import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LinkOff
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -62,10 +64,11 @@ import com.alex.hubplay.ui.theme.BgBase
  */
 @Composable
 fun SettingsScreen(
-    viewModel:       SettingsViewModel,
-    onBack:          () -> Unit,
-    onLogOut:        () -> Unit,
-    onForgetServer:  () -> Unit,
+    viewModel:           SettingsViewModel,
+    onBack:              () -> Unit,
+    onLogOut:            () -> Unit,
+    onForgetServer:      () -> Unit,
+    onReorderChannels:   () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsState()
     var showCrashDialog by remember { mutableStateOf(false) }
@@ -121,6 +124,20 @@ fun SettingsScreen(
                             label   = stringResource(R.string.settings_action_change_server),
                             icon    = Icons.Outlined.LinkOff,
                             onClick = onForgetServer,
+                        )
+                    }
+
+                    SectionCard(title = stringResource(R.string.settings_section_personalization), icon = Icons.Outlined.Tune) {
+                        Text(
+                            text  = stringResource(R.string.settings_personalization_help),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        SecondaryAction(
+                            label   = stringResource(R.string.settings_action_reorder_channels),
+                            icon    = Icons.Filled.SwapVert,
+                            onClick = onReorderChannels,
                         )
                     }
 

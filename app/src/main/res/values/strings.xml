@@ -71,6 +71,9 @@
     <string name="settings_value_unknown">—</string>
     <string name="settings_action_logout">Cerrar sesión</string>
     <string name="settings_action_change_server">Cambiar servidor (olvidar este)</string>
+    <string name="settings_section_personalization">Personalización</string>
+    <string name="settings_personalization_help">Reordena y oculta canales de TV en vivo. Los cambios se aplican solo en este dispositivo.</string>
+    <string name="settings_action_reorder_channels">Reordenar canales</string>
     <string name="settings_diagnostics_help">Si la app se cierra inesperadamente, aquí queda el stack trace del último crash. Cópialo cuando reportes un fallo.</string>
     <string name="settings_action_view_logs">Ver logs</string>
     <string name="settings_action_clear_logs">Borrar logs</string>
@@ -121,6 +124,18 @@
     <string name="livetv_epg_no_guide_short">Sin guía</string>
     <string name="livetv_epg_ended">Fin</string>
     <string name="livetv_remaining_hours_minutes_short">%1$d h %2$d min</string>
+
+    <!-- Channel order / hide -->
+    <string name="channel_order_title">Reordenar canales</string>
+    <string name="channel_order_help">Usa las flechas para subir o bajar cada canal. El icono del ojo lo oculta del listado principal de TV en vivo.</string>
+    <string name="channel_order_reset">Restablecer</string>
+    <string name="channel_order_move_up">Subir canal</string>
+    <string name="channel_order_move_down">Bajar canal</string>
+    <string name="channel_order_hide">Ocultar canal</string>
+    <string name="channel_order_show">Mostrar canal</string>
+    <string name="channel_order_hidden_badge">Oculto</string>
+    <string name="channel_order_empty_title">Sin canales en esta biblioteca</string>
+    <string name="channel_order_empty_subtitle">Elige otra biblioteca o vuelve cuando el servidor tenga canales activos.</string>
 
     <!-- Player -->
     <string name="player_preparing">Preparando…</string>

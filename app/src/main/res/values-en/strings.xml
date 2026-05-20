@@ -71,6 +71,9 @@
     <string name="settings_value_unknown">—</string>
     <string name="settings_action_logout">Sign out</string>
     <string name="settings_action_change_server">Change server (forget this one)</string>
+    <string name="settings_section_personalization">Personalization</string>
+    <string name="settings_personalization_help">Reorder and hide Live TV channels. Changes apply on this device only.</string>
+    <string name="settings_action_reorder_channels">Reorder channels</string>
     <string name="settings_diagnostics_help">If the app closes unexpectedly, the stack trace from the last crash is saved here. Copy it when you report an issue.</string>
     <string name="settings_action_view_logs">View logs</string>
     <string name="settings_action_clear_logs">Clear logs</string>
@@ -121,6 +124,18 @@
     <string name="livetv_epg_no_guide_short">No guide</string>
     <string name="livetv_epg_ended">End</string>
     <string name="livetv_remaining_hours_minutes_short">%1$d h %2$d min</string>
+
+    <!-- Channel order / hide -->
+    <string name="channel_order_title">Reorder channels</string>
+    <string name="channel_order_help">Use the arrows to move each channel up or down. The eye icon hides it from the main Live TV list.</string>
+    <string name="channel_order_reset">Reset</string>
+    <string name="channel_order_move_up">Move channel up</string>
+    <string name="channel_order_move_down">Move channel down</string>
+    <string name="channel_order_hide">Hide channel</string>
+    <string name="channel_order_show">Show channel</string>
+    <string name="channel_order_hidden_badge">Hidden</string>
+    <string name="channel_order_empty_title">No channels in this library</string>
+    <string name="channel_order_empty_subtitle">Pick another library or come back when the server has active channels.</string>
 
     <!-- Player -->
     <string name="player_preparing">Preparing…</string>

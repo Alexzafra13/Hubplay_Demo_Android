@@ -98,6 +98,13 @@ class AppContainer(context: Context) {
 
     val homeRepository: HomeRepository = HomeRepository(hubplayApi, tokenStore)
 
+    /**
+     * Per-library channel order + hidden-set persistence. Used by the
+     * reorder screen to write, and by [LiveTvViewModel] to read on
+     * inventory load.
+     */
+    val channelOrderStore: ChannelOrderStore = ChannelOrderStore(context.applicationContext)
+
     val liveTvRepository: LiveTvRepository = LiveTvRepository(hubplayApi, tokenStore)
 
     /**

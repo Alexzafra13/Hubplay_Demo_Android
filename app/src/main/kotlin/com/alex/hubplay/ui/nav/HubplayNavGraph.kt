@@ -19,6 +19,8 @@ import com.alex.hubplay.ui.detail.DetailViewModel
 import com.alex.hubplay.ui.home.HomeScreen
 import com.alex.hubplay.ui.home.HomeViewModel
 import com.alex.hubplay.ui.home.components.Tab
+import com.alex.hubplay.ui.livetv.ChannelOrderScreen
+import com.alex.hubplay.ui.livetv.ChannelOrderViewModel
 import com.alex.hubplay.ui.livetv.LiveTvScreen
 import com.alex.hubplay.ui.livetv.LiveTvViewModel
 import com.alex.hubplay.ui.login.LoginScreen
@@ -103,6 +105,9 @@ fun HubplayNavGraph(
         val openSettings: () -> Unit = {
             navController.navigate(Route.Settings.path)
         }
+        val openChannelOrder: () -> Unit = {
+            navController.navigate(Route.ChannelOrder.path)
+        }
 
         // ── Home ─────────────────────────────────────────────────────
         composable(Route.Home.path) {
@@ -162,16 +167,36 @@ fun HubplayNavGraph(
         // ── Live TV (custom screen — not a Catalog flavour) ──────────
         composable(Route.LiveTv.path) {
             val vm = viewModel<LiveTvViewModel>(
-                factory = LiveTvViewModel.factory(container.liveTvRepository),
+                factory = LiveTvViewModel.factory(
+                    container.liveTvRepository,
+                    container.channelOrderStore,
+                    container.tokenStore,
+                ),
             )
             LiveTvScreen(
-                viewModel     = vm,
-                authState     = authState,
-                okHttpClient  = container.mainOkHttp,
-                onPlayChannel = { channelId -> playItem(channelId, 0L) },
-                onTabSelected = navigateToTab,
-                onLogOut      = logOut,
-                onSettings    = openSettings,
+                viewModel       = vm,
+                authState       = authState,
+                okHttpClient    = container.mainOkHttp,
+                onPlayChannel   = { channelId -> playItem(channelId, 0L) },
+                onTabSelected   = navigateToTab,
+                onLogOut        = logOut,
+                onSettings      = openSettings,
+                onReorderChannels = openChannelOrder,
+            )
+        }
+
+        // ── Channel order / hide ─────────────────────────────────────
+        composable(Route.ChannelOrder.path) {
+            val vm = viewModel<ChannelOrderViewModel>(
+                factory = ChannelOrderViewModel.factory(
+                    container.liveTvRepository,
+                    container.channelOrderStore,
+                    container.tokenStore,
+                ),
+            )
+            ChannelOrderScreen(
+                viewModel = vm,
+                onBack    = { navController.popBackStack() },
             )
         }
 
@@ -202,10 +227,11 @@ fun HubplayNavGraph(
                 }
             }
             SettingsScreen(
-                viewModel       = vm,
-                onBack          = { navController.popBackStack() },
-                onLogOut        = logOut,
-                onForgetServer  = forgetServer,
+                viewModel           = vm,
+                onBack              = { navController.popBackStack() },
+                onLogOut            = logOut,
+                onForgetServer      = forgetServer,
+                onReorderChannels   = openChannelOrder,
             )
         }
 
