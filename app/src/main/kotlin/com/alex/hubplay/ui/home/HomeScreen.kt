@@ -70,6 +70,7 @@ fun HomeScreen(
     onPlayItem:      (itemId: String, resumePosSec: Long) -> Unit,
     onNavigateToTab: (Tab) -> Unit,
     onLogOut:        () -> Unit,
+    onOpenSettings:  () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsState()
     val scrollState = rememberScrollState()
@@ -83,8 +84,8 @@ fun HomeScreen(
             TopNav(
                 selectedTab    = Tab.Home,
                 onTabSelected  = onNavigateToTab,
-                onSearch       = { /* Search modal — next sprint */ },
                 onLogOut       = onLogOut,
+                onSettings     = onOpenSettings,
             )
 
             // Content Box claims the remaining height via weight(1f).

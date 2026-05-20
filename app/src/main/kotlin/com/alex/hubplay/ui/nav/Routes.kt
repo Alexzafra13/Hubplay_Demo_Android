@@ -14,6 +14,8 @@ sealed class Route(val path: String) {
     data object Movies  : Route("movies")
     data object SeriesList : Route("series-list")
     data object LiveTv  : Route("live-tv")
+    data object Search  : Route("search")
+    data object Settings: Route("settings")
 
     /** Item detail / browse-then-play surface (movies). */
     data object Detail : Route("detail/{itemId}") {

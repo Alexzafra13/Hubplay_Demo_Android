@@ -191,6 +191,19 @@ class HomeRepository(
         return resp.data?.isFavorite == true
     }
 
+    /**
+     * Full-text search across the catalogue. Returns the same MediaItem
+     * shape Home rails use so the result grid can reuse MediaCard +
+     * navigate to Detail/Series with the existing rules. Empty query
+     * short-circuits without hitting the network.
+     */
+    suspend fun searchItems(query: String, limit: Int = 60): List<MediaItem> {
+        val q = query.trim()
+        if (q.isEmpty()) return emptyList()
+        val server = serverUrl()
+        return api.searchItems(query = q, limit = limit).data.map { it.toMedia(server) }
+    }
+
     private suspend fun serverUrl(): String =
         tokenStore.snapshot().serverUrl?.trimEnd('/').orEmpty()
 
@@ -313,6 +326,7 @@ class HomeRepository(
             seasonNumber  = seasonNumber,
             episodeNumber = episodeNumber,
             durationSec   = totalSec,
+            isFavorite    = userData?.isFavorite == true,
         )
     }
 

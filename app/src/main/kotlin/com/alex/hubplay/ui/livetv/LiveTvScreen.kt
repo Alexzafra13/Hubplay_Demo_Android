@@ -81,6 +81,7 @@ fun LiveTvScreen(
     onPlayChannel: (String) -> Unit,
     onTabSelected: (Tab) -> Unit,
     onLogOut:      () -> Unit,
+    onSettings:    () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsState()
     val now = Instant.ofEpochMilli(ui.nowEpoch)
@@ -90,8 +91,8 @@ fun LiveTvScreen(
             TopNav(
                 selectedTab   = Tab.LiveTv,
                 onTabSelected = onTabSelected,
-                onSearch      = { /* search modal — next sprint */ },
                 onLogOut      = onLogOut,
+                onSettings    = onSettings,
             )
 
             when {

@@ -9,18 +9,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material3.DropdownMenu
@@ -63,7 +60,6 @@ import com.alex.hubplay.ui.theme.AccentSoft
 fun TopNav(
     selectedTab:    Tab,
     onTabSelected:  (Tab) -> Unit,
-    onSearch:       () -> Unit,
     onLogOut:       () -> Unit,
     onSettings:     () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
@@ -98,22 +94,15 @@ fun TopNav(
             }
         }
 
-        // ── Search + avatar
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onSearch) {
-                Icon(
-                    imageVector        = Icons.Default.Search,
-                    contentDescription = "Buscar",
-                    tint               = MaterialTheme.colorScheme.onBackground,
-                )
-            }
-            Spacer(Modifier.width(4.dp))
-            AvatarMenu(
-                onSwitchProfile = onSwitchProfile,
-                onSettings      = onSettings,
-                onLogOut        = onLogOut,
-            )
-        }
+        // ── Avatar dropdown (right)
+        // Settings now lives inside the avatar dropdown — the previous
+        // standalone search icon disappeared when Search became a tab,
+        // so the right-hand cluster is just identity-related actions.
+        AvatarMenu(
+            onSwitchProfile = onSwitchProfile,
+            onSettings      = onSettings,
+            onLogOut        = onLogOut,
+        )
     }
 }
 
@@ -205,4 +194,5 @@ enum class Tab(val label: String) {
     Movies("Películas"),
     Series("Series"),
     LiveTv("TV en vivo"),
+    Search("Buscar"),
 }
