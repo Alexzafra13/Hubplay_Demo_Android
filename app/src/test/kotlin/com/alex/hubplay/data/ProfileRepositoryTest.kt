@@ -4,6 +4,8 @@ import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.dto.BulkScheduleRequest
 import com.alex.hubplay.data.api.dto.BulkScheduleResponse
 import com.alex.hubplay.data.api.dto.ChannelOrderRequest
+import com.alex.hubplay.data.api.dto.CollectionDetailResponse
+import com.alex.hubplay.data.api.dto.CollectionsListResponse
 import com.alex.hubplay.data.api.dto.ChannelVisibilityRequest
 import com.alex.hubplay.data.api.dto.ChannelsResponse
 import com.alex.hubplay.data.api.dto.ChildrenResponse
@@ -262,5 +264,7 @@ class ProfileRepositoryTest {
         override suspend fun markUnplayed(itemId: String)                     = TODO()
         override suspend fun toggleItemFavorite(itemId: String): ItemFavoriteToggleResponse = TODO()
         override suspend fun searchItems(query: String, limit: Int): SearchResponse = TODO()
+        override suspend fun listCollections(): CollectionsListResponse = TODO()
+        override suspend fun getCollection(id: String): CollectionDetailResponse = TODO()
     }
 }
