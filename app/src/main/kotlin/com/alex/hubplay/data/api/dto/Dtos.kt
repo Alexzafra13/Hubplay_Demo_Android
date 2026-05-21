@@ -121,6 +121,12 @@ data class ItemDetailDto(
     @Json(name = "logo_url")         val logoUrl:         String? = null,
     /** Set only when scanner found an embeddable trailer (YouTube/Vimeo). */
     val trailer:                                           TrailerDto? = null,
+    /**
+     * TMDb saga this movie belongs to, when the scanner matched one.
+     * Backend writes `{ id, name }`; UI renders a "Parte de: <name>"
+     * chip on the Detail screen that jumps to /collections/{id}.
+     */
+    val collection:                                        CollectionRefDto? = null,
     @Json(name = "user_data")        val userData:        UserDataDto? = null,
 )
 

@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -14,6 +15,8 @@ import androidx.compose.ui.zIndex
 import androidx.navigation.compose.rememberNavController
 import com.alex.hubplay.data.AppContainer
 import com.alex.hubplay.ui.components.CertTrustDialog
+import com.alex.hubplay.ui.home.components.LocalVisibleTabs
+import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.nav.HubplayNavGraph
 import com.alex.hubplay.ui.nav.Route
 import com.alex.hubplay.ui.screensaver.ScreensaverOverlay
@@ -34,11 +37,25 @@ import com.alex.hubplay.ui.screensaver.ScreensaverOverlay
  */
 @Composable
 fun HubplayApp(container: AppContainer) {
-    val navController     = rememberNavController()
-    val authState         by container.authStateFlow.collectAsState()
-    val idleState         by container.idleController.state.collectAsState()
-    val slides            by container.screensaverImageSource.slides.collectAsState()
-    val pendingCertChallenge by container.certChallengeBus.pending.collectAsState()
+    val navController         = rememberNavController()
+    val authState             by container.authStateFlow.collectAsState()
+    val idleState             by container.idleController.state.collectAsState()
+    val slides                by container.screensaverImageSource.slides.collectAsState()
+    val pendingCertChallenge  by container.certChallengeBus.pending.collectAsState()
+    val collectionsAvailable  by container.collectionsAvailability.hasAny.collectAsState()
+
+    // Trigger the availability fetch on first paint of any TopNav-
+    // bearing screen — cheap, idempotent thanks to ensureLoaded().
+    androidx.compose.runtime.LaunchedEffect(authState.isAuthenticated) {
+        if (authState.isAuthenticated) container.collectionsAvailability.ensureLoaded()
+    }
+
+    // Hide the Collections tab when the server has no sagas. Set
+    // recomputes only when the boolean flips, so TopNav doesn't churn.
+    val visibleTabs = androidx.compose.runtime.remember(collectionsAvailable) {
+        if (collectionsAvailable) Tab.entries.toSet()
+        else                       Tab.entries.toSet() - Tab.Collections
+    }
 
     // Three-state startup gate:
     //   - no token        → Login
@@ -54,11 +71,13 @@ fun HubplayApp(container: AppContainer) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        HubplayNavGraph(
-            navController = navController,
-            startRoute    = startRoute,
-            container     = container,
-        )
+        CompositionLocalProvider(LocalVisibleTabs provides visibleTabs) {
+            HubplayNavGraph(
+                navController = navController,
+                startRoute    = startRoute,
+                container     = container,
+            )
+        }
 
         // The screensaver only ever shows when:
         //   1. The user is logged in (no pool to show otherwise).

@@ -23,6 +23,11 @@
     <!-- Navigation (TopNav tabs) -->
     <string name="nav_tab_home">Inicio</string>
     <string name="nav_tab_movies">Películas</string>
+    <string name="nav_tab_collections">Colecciones</string>
+    <string name="collections_title">Colecciones</string>
+    <string name="collections_empty">Todavía no hay colecciones en tu biblioteca.</string>
+    <string name="collections_member_count">%1$d películas</string>
+    <string name="collections_part_of">Parte de %1$s</string>
     <string name="nav_tab_series">Series</string>
     <string name="nav_tab_livetv">TV en vivo</string>
     <string name="nav_tab_search">Buscar</string>

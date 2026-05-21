@@ -6,6 +6,8 @@ import com.alex.hubplay.data.api.dto.ChannelOrderRequest
 import com.alex.hubplay.data.api.dto.ChannelVisibilityRequest
 import com.alex.hubplay.data.api.dto.ChannelsResponse
 import com.alex.hubplay.data.api.dto.ChildrenResponse
+import com.alex.hubplay.data.api.dto.CollectionDetailResponse
+import com.alex.hubplay.data.api.dto.CollectionsListResponse
 import com.alex.hubplay.data.api.dto.ContinueWatchingResponse
 import com.alex.hubplay.data.api.dto.FavoriteIdsResponse
 import com.alex.hubplay.data.api.dto.FavoriteToggleResponse
@@ -288,4 +290,24 @@ interface HubplayApi {
      */
     @POST("auth/switch-profile")
     suspend fun switchProfile(@Body body: SwitchProfileRequest): SwitchProfileResponse
+
+    // ─── Movie collections (TMDb sagas) ─────────────────────────────────────
+
+    /**
+     * GET /api/v1/collections — every movie collection (saga) with at
+     * least one member in the catalogue. Backed by TMDb's
+     * `belongs_to_collection` metadata; ordered by member count desc.
+     * Powers the Collections tab and its index grid.
+     */
+    @GET("collections")
+    suspend fun listCollections(): CollectionsListResponse
+
+    /**
+     * GET /api/v1/collections/{id} — saga detail + member movies in
+     * release order. `id` is the canonical `collection:<tmdb_id>`
+     * string the index endpoint returns verbatim; Retrofit URL-encodes
+     * the colon for us so we don't have to.
+     */
+    @GET("collections/{id}")
+    suspend fun getCollection(@Path("id") id: String): CollectionDetailResponse
 }

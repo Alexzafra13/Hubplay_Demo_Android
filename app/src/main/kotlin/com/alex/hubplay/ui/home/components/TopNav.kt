@@ -81,11 +81,17 @@ fun TopNav(
         )
 
         // ── Tabs (centre)
+        // Filter through LocalVisibleTabs so the Collections tab can
+        // disappear on libraries with zero sagas without each surface
+        // having to manage it. Iteration in enum order preserves the
+        // canonical visual order (Home · Movies · Collections · Series
+        // · LiveTv · Search) regardless of what's hidden.
+        val visibleTabs = LocalVisibleTabs.current
         Row(
             verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Tab.entries.forEach { tab ->
+            Tab.entries.filter { it in visibleTabs }.forEach { tab ->
                 NavTab(
                     label    = stringResource(tab.labelRes),
                     selected = tab == selectedTab,
@@ -188,7 +194,18 @@ private fun AvatarMenu(
 enum class Tab(@StringRes val labelRes: Int) {
     Home(R.string.nav_tab_home),
     Movies(R.string.nav_tab_movies),
+    Collections(R.string.nav_tab_collections),
     Series(R.string.nav_tab_series),
     LiveTv(R.string.nav_tab_livetv),
     Search(R.string.nav_tab_search),
 }
+
+/**
+ * Tabs that should render in the TopNav for the current session.
+ * Provided at the app root from [HubplayApp]; lets the Collections
+ * tab vanish on libraries with zero sagas without each screen having
+ * to know about it. Falls back to the full enum so previews / tests
+ * that don't wrap in a provider still render every tab.
+ */
+val LocalVisibleTabs: androidx.compose.runtime.ProvidableCompositionLocal<Set<Tab>> =
+    androidx.compose.runtime.staticCompositionLocalOf { Tab.entries.toSet() }

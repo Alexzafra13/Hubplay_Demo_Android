@@ -14,6 +14,10 @@ import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.catalog.CatalogScreen
 import com.alex.hubplay.ui.catalog.CatalogViewModel
 import com.alex.hubplay.ui.catalog.PortraitCatalogCard
+import com.alex.hubplay.ui.collections.CollectionDetailScreen
+import com.alex.hubplay.ui.collections.CollectionDetailViewModel
+import com.alex.hubplay.ui.collections.CollectionsScreen
+import com.alex.hubplay.ui.collections.CollectionsViewModel
 import com.alex.hubplay.ui.detail.DetailScreen
 import com.alex.hubplay.ui.detail.DetailViewModel
 import com.alex.hubplay.ui.home.HomeScreen
@@ -122,11 +126,12 @@ fun HubplayNavGraph(
         // scroll position and pulls don't pile up in the back stack.
         val navigateToTab: (Tab) -> Unit = { tab ->
             val target = when (tab) {
-                Tab.Home   -> Route.Home.path
-                Tab.Movies -> Route.Movies.path
-                Tab.Series -> Route.SeriesList.path
-                Tab.LiveTv -> Route.LiveTv.path
-                Tab.Search -> Route.Search.path
+                Tab.Home        -> Route.Home.path
+                Tab.Movies      -> Route.Movies.path
+                Tab.Collections -> Route.Collections.path
+                Tab.Series      -> Route.SeriesList.path
+                Tab.LiveTv      -> Route.LiveTv.path
+                Tab.Search      -> Route.Search.path
             }
             navController.navigate(target) {
                 popUpTo(Route.Home.path) {
@@ -136,6 +141,9 @@ fun HubplayNavGraph(
                 launchSingleTop = true
                 restoreState    = true
             }
+        }
+        val openCollection: (String) -> Unit = { collectionId ->
+            navController.navigate(Route.CollectionDetail.route(collectionId))
         }
         val openSettings: () -> Unit = {
             navController.navigate(Route.Settings.path)
@@ -305,11 +313,45 @@ fun HubplayNavGraph(
                 factory = DetailViewModel.factory(container.homeRepository, itemId),
             )
             DetailScreen(
-                viewModel = viewModel,
-                onPlay    = { id, resume ->
+                viewModel        = viewModel,
+                onPlay           = { id, resume ->
                     navController.navigate(Route.Player.route(id, resume))
                 },
-                onBack    = { navController.popBackStack() },
+                onBack           = { navController.popBackStack() },
+                onOpenCollection = openCollection,
+            )
+        }
+
+        // ── Collections grid ─────────────────────────────────────────
+        composable(Route.Collections.path) {
+            val vm = viewModel<CollectionsViewModel>(
+                factory = CollectionsViewModel.factory(container.homeRepository),
+            )
+            CollectionsScreen(
+                viewModel     = vm,
+                onOpen        = openCollection,
+                onTabSelected = navigateToTab,
+                onLogOut      = logOut,
+                onSettings    = openSettings,
+            )
+        }
+
+        // ── Collection detail (saga hero + member movies) ────────────
+        composable(
+            route     = Route.CollectionDetail.path,
+            arguments = listOf(
+                navArgument(Route.CollectionDetail.ARG_COLLECTION_ID) { type = NavType.StringType },
+            ),
+        ) { entry ->
+            val rawId = entry.arguments?.getString(Route.CollectionDetail.ARG_COLLECTION_ID) ?: return@composable
+            val collectionId = java.net.URLDecoder.decode(rawId, Charsets.UTF_8)
+            val vm = viewModel<CollectionDetailViewModel>(
+                factory = CollectionDetailViewModel.factory(container.homeRepository, collectionId),
+            )
+            CollectionDetailScreen(
+                viewModel  = vm,
+                onOpenItem = openItem,
+                onBack     = { navController.popBackStack() },
             )
         }
 

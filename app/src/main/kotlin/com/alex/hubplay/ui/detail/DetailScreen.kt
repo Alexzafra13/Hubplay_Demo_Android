@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +26,8 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.Collections
+import androidx.compose.material3.Icon
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -81,9 +85,10 @@ import com.alex.hubplay.ui.theme.BgBase
  */
 @Composable
 fun DetailScreen(
-    viewModel: DetailViewModel,
-    onPlay:    (itemId: String, resumePosSec: Long) -> Unit,
-    onBack:    () -> Unit,
+    viewModel:        DetailViewModel,
+    onPlay:           (itemId: String, resumePosSec: Long) -> Unit,
+    onBack:           () -> Unit,
+    onOpenCollection: (collectionId: String) -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsState()
 
@@ -96,6 +101,7 @@ fun DetailScreen(
                 onPlay           = onPlay,
                 onBack           = onBack,
                 onToggleFavorite = viewModel::toggleFavorite,
+                onOpenCollection = onOpenCollection,
             )
         }
     }
@@ -107,6 +113,7 @@ private fun HeroFull(
     onPlay:           (String, Long) -> Unit,
     onBack:           () -> Unit,
     onToggleFavorite: () -> Unit,
+    onOpenCollection: (String) -> Unit,
 ) {
     // Backdrop ↔ trailer crossfade — same machinery as the SeriesScreen.
     var trailerRevealed by remember(item.id) { mutableStateOf(false) }
@@ -221,7 +228,7 @@ private fun HeroFull(
             PosterAndPlayColumn(item = item, onPlay = onPlay)
 
             // ── Right column: logo/title, meta, overview, secondary CTAs
-            InfoColumn(item = item)
+            InfoColumn(item = item, onOpenCollection = onOpenCollection)
         }
     }
 }
@@ -276,7 +283,7 @@ private fun PosterAndPlayColumn(item: MediaItem, onPlay: (String, Long) -> Unit)
 }
 
 @Composable
-private fun InfoColumn(item: MediaItem) {
+private fun InfoColumn(item: MediaItem, onOpenCollection: (String) -> Unit) {
     Column(
         modifier            = Modifier.fillMaxHeight(),
         verticalArrangement = Arrangement.Center,
@@ -327,6 +334,17 @@ private fun InfoColumn(item: MediaItem) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
+
+        // "Parte de [Saga]" chip — clickable, jumps to the collection
+        // detail screen. Only present on movies the scanner matched
+        // to a TMDb collection; everything else (series, channels,
+        // orphan movies) doesn't render this row at all.
+        val collectionId = item.collectionId
+        val collectionName = item.collectionName
+        if (collectionId != null && !collectionName.isNullOrBlank()) {
+            Spacer(Modifier.height(14.dp))
+            PartOfChip(name = collectionName, onClick = { onOpenCollection(collectionId) })
+        }
     }
 }
 
@@ -372,6 +390,41 @@ private fun MetaRow(item: MediaItem) {
                 color    = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * Pill that says "Parte de [Saga]" and jumps to the collection detail
+ * screen when tapped. Kept compact and inline with the meta column —
+ * it's a secondary navigation, not a primary action, so it shouldn't
+ * compete with Play.
+ */
+@Composable
+private fun PartOfChip(name: String, onClick: () -> Unit) {
+    Surface(
+        color    = MaterialTheme.colorScheme.surface,
+        shape    = RoundedCornerShape(999.dp),
+        tonalElevation = 2.dp,
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier              = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                imageVector        = Icons.Outlined.Collections,
+                contentDescription = null,
+                tint               = Accent,
+                modifier           = Modifier.size(16.dp),
+            )
+            Text(
+                text       = stringResource(R.string.collections_part_of, name),
+                style      = MaterialTheme.typography.labelLarge,
+                color      = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium,
             )
         }
     }

@@ -1,6 +1,7 @@
 package com.alex.hubplay.data
 
 import com.alex.hubplay.data.api.HubplayApi
+import com.alex.hubplay.data.api.dto.CollectionListEntryDto
 import com.alex.hubplay.data.api.dto.ContinueWatchingEntryDto
 import com.alex.hubplay.data.api.dto.ItemSummaryDto
 import com.alex.hubplay.data.api.dto.LiveNowChannelDto
@@ -144,6 +145,48 @@ class HomeRepository(
         ).data?.items.orEmpty().map { it.toMedia(server) }
     }
 
+    /**
+     * GET /collections — the index of TMDb sagas matched by the
+     * scanner. Repository absolutizes poster / backdrop URLs against
+     * the paired server so Coil hits them directly without re-applying
+     * BaseUrlInterceptor on every Image() composable.
+     *
+     * Empty list = backend resolved but has zero collections (legit on
+     * a fresh deployment); failure throws. Caller distinguishes both
+     * via runCatching.
+     */
+    suspend fun fetchCollections(): List<CollectionSummary> {
+        val server = serverUrl()
+        return api.listCollections().data?.collections.orEmpty().map { it.toDomain(server) }
+    }
+
+    /**
+     * GET /collections/{id} — saga hero + member movies in release
+     * order. Wraps both in [CollectionDetail] for the screen.
+     */
+    suspend fun fetchCollectionDetail(id: String): CollectionDetail {
+        val server = serverUrl()
+        val data = api.getCollection(id).data
+            ?: error("collections/$id returned no data envelope")
+        return CollectionDetail(
+            id          = data.id,
+            tmdbId      = data.tmdbId,
+            name        = data.name,
+            overview    = data.overview,
+            posterUrl   = absolutize(data.posterUrl, server),
+            backdropUrl = absolutize(data.backdropUrl, server),
+            items       = data.items.map { it.toMedia(server) },
+        )
+    }
+
+    private fun CollectionListEntryDto.toDomain(server: String) = CollectionSummary(
+        id          = id,
+        name        = name,
+        itemCount   = itemCount,
+        posterUrl   = absolutize(posterUrl, server),
+        backdropUrl = absolutize(backdropUrl, server),
+    )
+
     suspend fun fetchItemDetail(itemId: String): MediaItem {
         val server = serverUrl()
         val data = api.getItem(itemId).data
@@ -160,22 +203,24 @@ class HomeRepository(
         )
 
         return MediaItem(
-            id           = data.id,
-            kind         = MediaKind.from(data.type),
-            title        = data.title.orEmpty(),
-            subtitle     = data.tagline,
-            posterUrl    = absolutize(data.posterUrl, server),
-            backdropUrl  = absolutize(data.backdropUrl, server),
-            logoUrl      = absolutize(data.logoUrl ?: data.studioLogoUrl, server),
-            overview     = data.overview,
-            genres       = data.genres,
-            rating       = data.communityRating,
-            year         = data.year,
-            progressPct  = progress,
-            resumePosSec = resumeSec,
-            trailerKey   = data.trailer?.key,
-            trailerSite  = data.trailer?.site,
-            isFavorite   = data.userData?.isFavorite == true,
+            id                = data.id,
+            kind              = MediaKind.from(data.type),
+            title             = data.title.orEmpty(),
+            subtitle          = data.tagline,
+            posterUrl         = absolutize(data.posterUrl, server),
+            backdropUrl       = absolutize(data.backdropUrl, server),
+            logoUrl           = absolutize(data.logoUrl ?: data.studioLogoUrl, server),
+            overview          = data.overview,
+            genres            = data.genres,
+            rating            = data.communityRating,
+            year              = data.year,
+            progressPct       = progress,
+            resumePosSec      = resumeSec,
+            trailerKey        = data.trailer?.key,
+            trailerSite       = data.trailer?.site,
+            isFavorite        = data.userData?.isFavorite == true,
+            collectionId      = data.collection?.id,
+            collectionName    = data.collection?.name,
         )
     }
 
@@ -456,6 +501,42 @@ data class MediaItem(
      * don't bother fetching user_data (Trending, LiveNow) keep working.
      */
     val isFavorite:   Boolean = false,
+    /**
+     * TMDb saga membership. Set only on /items/{id} responses for movies
+     * that belong to a collection — drives the "Parte de: <name>" chip
+     * on the Detail screen.
+     */
+    val collectionId:    String? = null,
+    val collectionName:  String? = null,
+)
+
+/**
+ * Row in the Collections tab grid. Trimmed to what the tile renders:
+ * name + poster + member count badge. Detail is fetched on demand.
+ */
+@androidx.compose.runtime.Immutable
+data class CollectionSummary(
+    val id:          String,
+    val name:        String,
+    val itemCount:   Int,
+    val posterUrl:   String?,
+    val backdropUrl: String?,
+)
+
+/**
+ * Full collection detail with member movies in release order. Members
+ * reuse [MediaItem] so the same grid + card code as Movies/Series
+ * works without translation.
+ */
+@androidx.compose.runtime.Immutable
+data class CollectionDetail(
+    val id:          String,
+    val tmdbId:      Int?,
+    val name:        String,
+    val overview:    String?,
+    val posterUrl:   String?,
+    val backdropUrl: String?,
+    val items:       List<MediaItem>,
 )
 
 @androidx.compose.runtime.Immutable

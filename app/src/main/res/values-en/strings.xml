@@ -23,6 +23,11 @@
     <!-- Navigation (TopNav tabs) -->
     <string name="nav_tab_home">Home</string>
     <string name="nav_tab_movies">Movies</string>
+    <string name="nav_tab_collections">Collections</string>
+    <string name="collections_title">Collections</string>
+    <string name="collections_empty">No collections in your library yet.</string>
+    <string name="collections_member_count">%1$d movies</string>
+    <string name="collections_part_of">Part of %1$s</string>
     <string name="nav_tab_series">Series</string>
     <string name="nav_tab_livetv">Live TV</string>
     <string name="nav_tab_search">Search</string>
