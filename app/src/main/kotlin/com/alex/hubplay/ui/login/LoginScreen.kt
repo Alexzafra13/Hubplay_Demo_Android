@@ -54,7 +54,6 @@ import androidx.compose.ui.unit.sp
 import com.alex.hubplay.R
 import com.alex.hubplay.data.DeviceCodeStatus
 import com.alex.hubplay.data.LanServer
-import com.alex.hubplay.ui.components.CertTrustDialog
 import com.alex.hubplay.ui.components.QrCode
 
 /**
@@ -151,17 +150,11 @@ fun LoginScreen(
         }
     }
 
-    // TOFU: trust-on-first-use dialog when PinnedCertTrustManager
-    // rejects the server's cert and asks the user to review it. Lives
-    // here (and not inside ServerUrlForm) so it survives the stage
-    // transition if a redirect mid-pairing surfaces a new challenge.
-    ui.certChallenge?.let { challenge ->
-        CertTrustDialog(
-            challenge = challenge,
-            onTrust   = viewModel::acceptCertChallenge,
-            onCancel  = viewModel::dismissCertChallenge,
-        )
-    }
+    // TOFU dialog used to live here; it's been hoisted to HubplayApp
+    // root so cert rotation while paired (~every 90 days with LE) is
+    // caught from any screen, not only Login. LoginViewModel still
+    // listens to CertChallengeBus.accepted to auto-retry pickServer
+    // after the user accepts — see LoginViewModel.init.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

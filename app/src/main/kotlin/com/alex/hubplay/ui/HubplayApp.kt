@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
 import androidx.navigation.compose.rememberNavController
 import com.alex.hubplay.data.AppContainer
+import com.alex.hubplay.ui.components.CertTrustDialog
 import com.alex.hubplay.ui.nav.HubplayNavGraph
 import com.alex.hubplay.ui.nav.Route
 import com.alex.hubplay.ui.screensaver.ScreensaverOverlay
@@ -33,10 +34,11 @@ import com.alex.hubplay.ui.screensaver.ScreensaverOverlay
  */
 @Composable
 fun HubplayApp(container: AppContainer) {
-    val navController = rememberNavController()
-    val authState by container.authStateFlow.collectAsState()
-    val idleState by container.idleController.state.collectAsState()
-    val slides    by container.screensaverImageSource.slides.collectAsState()
+    val navController     = rememberNavController()
+    val authState         by container.authStateFlow.collectAsState()
+    val idleState         by container.idleController.state.collectAsState()
+    val slides            by container.screensaverImageSource.slides.collectAsState()
+    val pendingCertChallenge by container.certChallengeBus.pending.collectAsState()
 
     // Three-state startup gate:
     //   - no token        → Login
@@ -72,6 +74,22 @@ fun HubplayApp(container: AppContainer) {
             modifier = Modifier.fillMaxSize().zIndex(100f),
         ) {
             ScreensaverOverlay(slides = slides)
+        }
+
+        // Cert-trust dialog promoted from LoginScreen to the app root.
+        // Why: certs rotate every ~90 days with Let's Encrypt; if the
+        // user is already paired and the rotation happens, the API
+        // call from Home / Player / Search would have hard-failed with
+        // a generic network error and forced a re-pair through Login.
+        // Now the dialog catches the rotation in place — accept once,
+        // ExoPlayer + Retrofit + Coil all share the same OkHttp with
+        // the same TrustManager, so everything resumes.
+        pendingCertChallenge?.let { challenge ->
+            CertTrustDialog(
+                challenge = challenge,
+                onTrust   = { container.certChallengeBus.accept(it) },
+                onCancel  = { container.certChallengeBus.dismiss() },
+            )
         }
     }
 }
