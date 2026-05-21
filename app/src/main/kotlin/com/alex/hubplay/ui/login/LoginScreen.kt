@@ -1,5 +1,6 @@
 package com.alex.hubplay.ui.login
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,7 +25,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -45,14 +45,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.alex.hubplay.R
 import com.alex.hubplay.data.DeviceCodeStatus
 import com.alex.hubplay.data.LanServer
-import com.alex.hubplay.ui.components.CertTrustDialog
 import com.alex.hubplay.ui.components.QrCode
 
 /**
@@ -149,17 +150,11 @@ fun LoginScreen(
         }
     }
 
-    // TOFU: trust-on-first-use dialog when PinnedCertTrustManager
-    // rejects the server's cert and asks the user to review it. Lives
-    // here (and not inside ServerUrlForm) so it survives the stage
-    // transition if a redirect mid-pairing surfaces a new challenge.
-    ui.certChallenge?.let { challenge ->
-        CertTrustDialog(
-            challenge = challenge,
-            onTrust   = viewModel::acceptCertChallenge,
-            onCancel  = viewModel::dismissCertChallenge,
-        )
-    }
+    // TOFU dialog used to live here; it's been hoisted to HubplayApp
+    // root so cert rotation while paired (~every 90 days with LE) is
+    // caught from any screen, not only Login. LoginViewModel still
+    // listens to CertChallengeBus.accepted to auto-retry pickServer
+    // after the user accepts — see LoginViewModel.init.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -513,167 +508,199 @@ private fun AutoConnectingOverlay(ui: LoginUiState) {
 private fun PairingForm(ui: LoginUiState, viewModel: LoginViewModel, isWide: Boolean) {
     val start = ui.pairingStart ?: return
 
-    Text(
-        text      = stringResource(R.string.login_pairing_title),
-        style     = MaterialTheme.typography.headlineMedium,
-        textAlign = TextAlign.Center,
-        fontWeight = FontWeight.SemiBold,
-    )
-    Spacer(Modifier.height(10.dp))
-    Text(
-        text      = stringResource(R.string.login_pairing_subtitle),
-        style     = MaterialTheme.typography.bodyMedium,
-        color     = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-        modifier  = Modifier.widthIn(max = 560.dp),
-    )
-    Spacer(Modifier.height(28.dp))
-
-    if (isWide) {
-        Row(
-            modifier              = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            verticalAlignment     = Alignment.Top,
-        ) {
-            QrOptionCard(start.verifyUrlComplete, modifier = Modifier.weight(1f))
-            CodeOptionCard(
-                userCode  = start.userCode,
-                verifyUrl = start.verifyUrl,
-                modifier  = Modifier.weight(1f),
-            )
-        }
-    } else {
-        QrOptionCard(start.verifyUrlComplete, modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(16.dp))
-        CodeOptionCard(
-            userCode  = start.userCode,
-            verifyUrl = start.verifyUrl,
-            modifier  = Modifier.fillMaxWidth(),
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier            = Modifier.fillMaxWidth(),
+    ) {
+        // ── Title ──────────────────────────────────────────────────────
+        Text(
+            text       = stringResource(R.string.login_pairing_title),
+            style      = MaterialTheme.typography.headlineMedium,
+            color      = MaterialTheme.colorScheme.onBackground,
+            textAlign  = TextAlign.Center,
+            fontWeight = FontWeight.SemiBold,
         )
-    }
+        Spacer(Modifier.height(20.dp))
 
-    Spacer(Modifier.height(28.dp))
-    PollStatusRow(ui.pollStatus)
-    Spacer(Modifier.height(12.dp))
+        // ── Step 1: open this URL ─────────────────────────────────────
+        UrlInstruction(verifyUrl = start.verifyUrl)
+        Spacer(Modifier.height(28.dp))
 
-    TextButton(onClick = viewModel::onCancelPairing) {
-        Text(stringResource(R.string.login_pairing_change_url))
-    }
-}
+        // ── Step 2: code (hero) + QR (alternative) ────────────────────
+        // The user code is the practical path on a TV remote — phones
+        // usually fail to scan a QR cleanly across the living room — so
+        // it gets the visual weight; the QR demotes to a secondary
+        // "or scan with your phone" shortcut with a divider in between.
+        if (isWide) {
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                BigCodeBlock(userCode = start.userCode, modifier = Modifier.weight(1.4f))
+                OrDivider(orientation = OrOrientation.Vertical, height = 220.dp)
+                CompactQrBlock(payload = start.verifyUrlComplete, modifier = Modifier.weight(1f))
+            }
+        } else {
+            BigCodeBlock(userCode = start.userCode, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(22.dp))
+            OrDivider(orientation = OrOrientation.Horizontal)
+            Spacer(Modifier.height(22.dp))
+            CompactQrBlock(payload = start.verifyUrlComplete, modifier = Modifier.fillMaxWidth())
+        }
 
-@Composable
-private fun QrOptionCard(payload: String, modifier: Modifier = Modifier) {
-    OptionCard(
-        title    = stringResource(R.string.login_pairing_qr_title),
-        icon     = Icons.Filled.QrCode2,
-        help     = stringResource(R.string.login_pairing_qr_help),
-        modifier = modifier,
-    ) {
-        Box(
-            modifier         = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center,
-        ) {
-            // 280 dp + ECC level M (default in QrCode) — see KDoc on
-            // QrCode for the trade-off. Phones across the living room
-            // need chunkier modules than 220 dp / H provided.
-            QrCode(
-                payload  = payload,
-                size     = 280.dp,
-                fgColor  = Color.Black,
-                bgColor  = Color.White,
-            )
+        // ── Poll status — sits with the code, not floating ─────────────
+        Spacer(Modifier.height(28.dp))
+        PollStatusRow(ui.pollStatus)
+        Spacer(Modifier.height(4.dp))
+
+        TextButton(onClick = viewModel::onCancelPairing) {
+            Text(stringResource(R.string.login_pairing_change_url))
         }
     }
 }
 
 @Composable
-private fun CodeOptionCard(
-    userCode:  String,
-    verifyUrl: String,
-    modifier:  Modifier = Modifier,
-) {
-    OptionCard(
-        title    = stringResource(R.string.login_pairing_code_title),
-        icon     = null,
-        help     = stringResource(R.string.login_pairing_code_help),
-        modifier = modifier,
-    ) {
+private fun UrlInstruction(verifyUrl: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text       = stringResource(R.string.login_pairing_step_url),
+            style      = MaterialTheme.typography.bodyMedium,
+            color      = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign  = TextAlign.Center,
+        )
+        Spacer(Modifier.height(6.dp))
         Surface(
-            color    = MaterialTheme.colorScheme.surfaceVariant,
-            shape    = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth(),
+            color    = MaterialTheme.colorScheme.surface,
+            shape    = RoundedCornerShape(999.dp),
+            tonalElevation = 2.dp,
         ) {
             Text(
-                text       = userCode,
-                style      = MaterialTheme.typography.displayMedium,
+                text       = verifyUrl,
+                style      = MaterialTheme.typography.titleSmall,
                 color      = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                textAlign  = TextAlign.Center,
-                modifier   = Modifier.fillMaxWidth().padding(vertical = 28.dp),
+                fontWeight = FontWeight.Medium,
+                fontFamily = FontFamily.Monospace,
+                modifier   = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
             )
         }
-        Spacer(Modifier.height(10.dp))
+    }
+}
+
+@Composable
+private fun BigCodeBlock(userCode: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier            = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Text(
-            text      = verifyUrl,
-            style     = MaterialTheme.typography.bodySmall,
-            color     = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier  = Modifier.fillMaxWidth(),
+            text       = stringResource(R.string.login_pairing_step_code),
+            style      = MaterialTheme.typography.labelMedium,
+            color      = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
         )
+        Spacer(Modifier.height(12.dp))
+        Surface(
+            color    = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+            shape    = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth(),
+            border   = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f),
+            ),
+        ) {
+            Text(
+                text          = formatUserCode(userCode),
+                style         = MaterialTheme.typography.displayLarge,
+                color         = MaterialTheme.colorScheme.primary,
+                fontWeight    = FontWeight.Bold,
+                fontFamily    = FontFamily.Monospace,
+                letterSpacing = 4.sp,
+                textAlign     = TextAlign.Center,
+                maxLines      = 1,
+                modifier      = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 28.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactQrBlock(payload: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier            = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text       = stringResource(R.string.login_pairing_qr_secondary),
+            style      = MaterialTheme.typography.labelMedium,
+            color      = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(12.dp))
+        QrCode(
+            payload = payload,
+            size    = 220.dp,
+            fgColor = Color.Black,
+            bgColor = Color.White,
+        )
+    }
+}
+
+private enum class OrOrientation { Horizontal, Vertical }
+
+@Composable
+private fun OrDivider(
+    orientation: OrOrientation,
+    height:      androidx.compose.ui.unit.Dp = 1.dp,
+) {
+    val label = stringResource(R.string.login_pairing_or)
+    val lineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+
+    when (orientation) {
+        OrOrientation.Horizontal -> Row(
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier              = Modifier.fillMaxWidth(),
+        ) {
+            Box(modifier = Modifier.weight(1f).height(1.dp).background(lineColor))
+            Text(
+                text       = label.uppercase(),
+                style      = MaterialTheme.typography.labelSmall,
+                color      = labelColor,
+                fontWeight = FontWeight.SemiBold,
+                modifier   = Modifier.padding(horizontal = 14.dp),
+            )
+            Box(modifier = Modifier.weight(1f).height(1.dp).background(lineColor))
+        }
+        OrOrientation.Vertical -> Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier            = Modifier.height(height),
+        ) {
+            Box(modifier = Modifier.weight(1f).width(1.dp).background(lineColor))
+            Text(
+                text       = label.uppercase(),
+                style      = MaterialTheme.typography.labelSmall,
+                color      = labelColor,
+                fontWeight = FontWeight.SemiBold,
+                modifier   = Modifier.padding(vertical = 10.dp),
+            )
+            Box(modifier = Modifier.weight(1f).width(1.dp).background(lineColor))
+        }
     }
 }
 
 /**
- * Reusable shell for the two pairing options. Same paddings, same elevation,
- * same title typography so QR and code feel like equally-weighted choices
- * rather than primary/secondary.
+ * The backend hands us "ABCD-EFGH" already. If for any reason we get
+ * a canonical 8-char form ("ABCDEFGH"), insert the dash so the user
+ * sees the same visual grouping every time.
  */
-@Composable
-private fun OptionCard(
-    title:    String,
-    icon:     androidx.compose.ui.graphics.vector.ImageVector?,
-    help:     String,
-    modifier: Modifier = Modifier,
-    content:  @Composable () -> Unit,
-) {
-    Surface(
-        color          = MaterialTheme.colorScheme.surface,
-        shape          = RoundedCornerShape(20.dp),
-        tonalElevation = 3.dp,
-        modifier       = modifier,
-    ) {
-        Column(
-            modifier            = Modifier.padding(20.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (icon != null) {
-                    Icon(
-                        imageVector        = icon,
-                        contentDescription = null,
-                        tint               = MaterialTheme.colorScheme.primary,
-                        modifier           = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                }
-                Text(
-                    text       = title,
-                    style      = MaterialTheme.typography.titleMedium,
-                    color      = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            Spacer(Modifier.height(16.dp))
-            content()
-            Spacer(Modifier.height(14.dp))
-            Text(
-                text      = help,
-                style     = MaterialTheme.typography.bodySmall,
-                color     = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
+private fun formatUserCode(raw: String): String {
+    if (raw.contains("-")) return raw
+    return if (raw.length == 8) "${raw.substring(0, 4)}-${raw.substring(4)}" else raw
 }
 
 @Composable

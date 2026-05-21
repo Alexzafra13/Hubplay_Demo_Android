@@ -153,6 +153,15 @@ class AppContainer(context: Context) {
      */
     val meEventsStream: MeEventsStream = MeEventsStream(mainOkHttp, tokenStore, moshi)
 
+    /**
+     * Drives the visibility of the "Colecciones" tab in TopNav — we
+     * hide it on libraries that have no TMDb sagas matched yet so the
+     * user doesn't land on an empty grid. Refreshes on login / forget
+     * server transitions.
+     */
+    val collectionsAvailability: CollectionsAvailability =
+        CollectionsAvailability(homeRepository, authStateFlow, appScope)
+
     /** Idle detection driving the in-app screensaver. */
     val idleController: IdleController = IdleController(appScope)
 

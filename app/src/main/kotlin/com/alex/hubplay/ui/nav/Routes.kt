@@ -19,6 +19,14 @@ sealed class Route(val path: String) {
     data object Settings: Route("settings")
     data object ChannelOrder: Route("channel-order")
     data object TrustedServers: Route("trusted-servers")
+    data object Collections : Route("collections")
+
+    /** Collection detail — saga hero + member movies in release order. */
+    data object CollectionDetail : Route("collections/{collectionId}") {
+        const val ARG_COLLECTION_ID = "collectionId"
+        fun route(collectionId: String): String =
+            "collections/${java.net.URLEncoder.encode(collectionId, Charsets.UTF_8)}"
+    }
 
     /** Item detail / browse-then-play surface (movies). */
     data object Detail : Route("detail/{itemId}") {

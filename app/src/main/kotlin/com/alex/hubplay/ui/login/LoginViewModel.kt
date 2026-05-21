@@ -4,7 +4,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.alex.hubplay.data.CertChallenge
 import com.alex.hubplay.data.CertChallengeBus
 import com.alex.hubplay.data.DeviceCodeRepository
 import com.alex.hubplay.data.DeviceCodeStart
@@ -74,17 +73,13 @@ class LoginViewModel(
         }
         viewModelScope.launch { armAutoSkip() }
 
-        // Mirror the global cert-challenge bus into our UI state so the
-        // Login screen renders the TOFU dialog. Auto-retry on accept:
-        // the user just told us "yes, trust this cert" — the next call
-        // through the same OkHttp client now succeeds, so re-running
-        // pickServer with the stored URL completes the pairing without
-        // them having to press Continue again.
-        viewModelScope.launch {
-            certChallengeBus.pending.collect { ch ->
-                _uiState.update { it.copy(certChallenge = ch) }
-            }
-        }
+        // Auto-retry on cert accept: the dialog at HubplayApp root
+        // handles the user-facing yes/no, but only the Login flow can
+        // resume what the user was doing (the original pickServer call).
+        // We listen to accepted events from the bus and re-issue
+        // pickServer with the URL still in our state, provided the
+        // host the user just trusted matches — defensive in case a
+        // background request from another screen also published.
         viewModelScope.launch {
             certChallengeBus.accepted.collect { ch ->
                 val url = _uiState.value.serverUrl
@@ -196,22 +191,6 @@ class LoginViewModel(
             delay(LAN_SEARCH_TIMEOUT_MS)
             _uiState.update { it.copy(lanSearching = false) }
         }
-    }
-
-    /** User tapped "Confiar y conectar" in the TOFU dialog. */
-    fun acceptCertChallenge(challenge: CertChallenge) {
-        certChallengeBus.accept(challenge)
-        // Don't clear the error yet — auto-retry might fail for another
-        // reason. The collector above wipes it on retry success / new
-        // failure. We DO clear the pending challenge so the dialog goes
-        // away immediately; the bus's compareAndSet handles the race.
-        _uiState.update { it.copy(certChallenge = null, error = null, isStarting = true) }
-    }
-
-    /** User tapped "Cancelar" in the TOFU dialog. */
-    fun dismissCertChallenge() {
-        certChallengeBus.dismiss()
-        _uiState.update { it.copy(certChallenge = null) }
     }
 
     fun onCancelPairing() {
@@ -370,11 +349,6 @@ data class LoginUiState(
     val error:         String? = null,
     val lanSearching:  Boolean = false,
     val lanDiscovery:  List<LanServer> = emptyList(),
-    /**
-     * Set when [PinnedCertTrustManager] published an "unknown cert"
-     * challenge for the URL the user is trying. Drives the TOFU dialog.
-     */
-    val certChallenge: CertChallenge? = null,
     /**
      * True when stage 1 was skipped automatically because a single LAN
      * server was the obvious pick. Drives the "Conectando con HubPlay…"

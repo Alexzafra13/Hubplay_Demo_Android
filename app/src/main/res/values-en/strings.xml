@@ -23,6 +23,11 @@
     <!-- Navigation (TopNav tabs) -->
     <string name="nav_tab_home">Home</string>
     <string name="nav_tab_movies">Movies</string>
+    <string name="nav_tab_collections">Collections</string>
+    <string name="collections_title">Collections</string>
+    <string name="collections_empty">No collections in your library yet.</string>
+    <string name="collections_member_count">%1$d movies</string>
+    <string name="collections_part_of">Part of %1$s</string>
     <string name="nav_tab_series">Series</string>
     <string name="nav_tab_livetv">Live TV</string>
     <string name="nav_tab_search">Search</string>
@@ -34,11 +39,11 @@
     <string name="login_server_hint">https://hubplay.duckdns.org</string>
     <string name="login_continue">Continue</string>
     <string name="login_pairing_title">Pair this device</string>
-    <string name="login_pairing_subtitle">Pick how to link: scan the QR from an already-connected device, or enter the code manually.</string>
+    <string name="login_pairing_step_url">On your phone or browser, open:</string>
+    <string name="login_pairing_step_code">Then type this code</string>
+    <string name="login_pairing_or">or</string>
+    <string name="login_pairing_qr_secondary">Scan with your phone</string>
     <string name="login_pairing_qr_title">Scan the QR</string>
-    <string name="login_pairing_qr_help">From a device already connected to this server: Settings → Devices → Scan code.</string>
-    <string name="login_pairing_code_title">Or enter the code</string>
-    <string name="login_pairing_code_help">Open HubPlay in any browser and go to Settings → Devices.</string>
     <string name="login_pairing_waiting">Waiting for approval…</string>
     <string name="login_pairing_change_url">Change server</string>
     <string name="login_pairing_approved">Approved, opening HubPlay…</string>

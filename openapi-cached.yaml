@@ -2506,6 +2506,13 @@ components:
             people:
               type: array
               items: { $ref: "#/components/schemas/CreditEntry" }
+            collection:
+              type: object
+              nullable: true
+              description: "Movie-collection (TMDb saga) the item belongs to, when matched."
+              properties:
+                id:   { type: string }
+                name: { type: string }
 
     Image:
       type: object
