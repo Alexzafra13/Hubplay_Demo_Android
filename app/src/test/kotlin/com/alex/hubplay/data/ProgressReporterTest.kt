@@ -4,6 +4,8 @@ import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.dto.BulkScheduleRequest
 import com.alex.hubplay.data.api.dto.BulkScheduleResponse
 import com.alex.hubplay.data.api.dto.ChannelOrderRequest
+import com.alex.hubplay.data.api.dto.CollectionDetailResponse
+import com.alex.hubplay.data.api.dto.CollectionsListResponse
 import com.alex.hubplay.data.api.dto.ChannelVisibilityRequest
 import com.alex.hubplay.data.api.dto.ChannelsResponse
 import com.alex.hubplay.data.api.dto.ChildrenResponse
@@ -235,6 +237,8 @@ class ProgressReporterTest {
         override suspend fun searchItems(query: String, limit: Int): SearchResponse = TODO()
         override suspend fun listProfiles(): ProfilesResponse                 = TODO()
         override suspend fun switchProfile(body: SwitchProfileRequest): SwitchProfileResponse = TODO()
+        override suspend fun listCollections(): CollectionsListResponse = TODO()
+        override suspend fun getCollection(id: String): CollectionDetailResponse = TODO()
     }
 
     companion object {
