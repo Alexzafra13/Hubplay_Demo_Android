@@ -164,6 +164,7 @@ fun HubplayNavGraph(
                 onNavigateToTab = navigateToTab,
                 onLogOut        = logOut,
                 onOpenSettings  = openSettings,
+                profileName     = authState.activeProfileName,
             )
         }
 
