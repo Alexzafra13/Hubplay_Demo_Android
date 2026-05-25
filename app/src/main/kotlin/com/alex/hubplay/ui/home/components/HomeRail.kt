@@ -6,15 +6,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,15 +28,6 @@ fun HomeRail(
 ) {
     if (items.isEmpty()) return
 
-    val listState = rememberLazyListState()
-    var focusedIndex by remember { mutableIntStateOf(-1) }
-
-    LaunchedEffect(focusedIndex) {
-        if (focusedIndex >= 0) {
-            listState.scrollToItem(index = focusedIndex, scrollOffset = 0)
-        }
-    }
-
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text       = title,
@@ -58,7 +43,6 @@ fun HomeRail(
         )
 
         LazyRow(
-            state                 = listState,
             contentPadding        = PaddingValues(horizontal = RailContentPadding),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier              = Modifier
@@ -73,10 +57,7 @@ fun HomeRail(
                 MediaCard(
                     item      = item,
                     style     = style,
-                    onFocused = { focusedItem ->
-                        focusedIndex = index
-                        onFocused(focusedItem)
-                    },
+                    onFocused = { onFocused(it) },
                     onClick   = onClick,
                 )
             }
@@ -94,15 +75,6 @@ fun LiveNowRail(
 ) {
     if (items.isEmpty()) return
 
-    val listState = rememberLazyListState()
-    var focusedIndex by remember { mutableIntStateOf(-1) }
-
-    LaunchedEffect(focusedIndex) {
-        if (focusedIndex >= 0) {
-            listState.scrollToItem(index = focusedIndex, scrollOffset = 0)
-        }
-    }
-
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text       = title,
@@ -118,7 +90,6 @@ fun LiveNowRail(
         )
 
         LazyRow(
-            state                 = listState,
             contentPadding        = PaddingValues(horizontal = RailContentPadding),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier              = Modifier
@@ -132,10 +103,7 @@ fun LiveNowRail(
                 val item = items[index]
                 LiveChannelCard(
                     item      = item,
-                    onFocused = { focusedItem ->
-                        focusedIndex = index
-                        onFocused(focusedItem)
-                    },
+                    onFocused = { onFocused(it) },
                     onClick   = onClick,
                 )
             }

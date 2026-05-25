@@ -181,10 +181,6 @@ fun HeroTrailerView(
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
                             Log.d(TAG, "WebView onPageFinished url=$url stage=$stage")
-                            // The page is loaded — give YouTube 1.2s to
-                            // actually start playback before we fade the
-                            // static backdrop out. The guard inside the
-                            // postDelayed catches a fast dismiss/race.
                             view?.postDelayed({
                                 if (stage == 1) {
                                     Log.d(TAG, "trailer revealed $videoKey")
@@ -192,6 +188,15 @@ fun HeroTrailerView(
                                     onReveal()
                                     view.evaluateJavascript(POST_HD_QUALITY, null)
                                     view.evaluateJavascript(POST_UNMUTE, null)
+                                    // Retry quality enforcement — YouTube
+                                    // sometimes ignores the first request
+                                    // if playback hasn't fully started.
+                                    view.postDelayed({
+                                        view.evaluateJavascript(POST_HD_QUALITY, null)
+                                    }, 2_000)
+                                    view.postDelayed({
+                                        view.evaluateJavascript(POST_HD_QUALITY, null)
+                                    }, 5_000)
                                 } else {
                                     Log.d(TAG, "reveal skipped, stage=$stage (already revealed or dismissed)")
                                 }
@@ -336,7 +341,7 @@ private const val POST_PAUSE = """
  * just changed its volume.
  */
 private const val POST_HD_QUALITY = """
-    (function() { var f = document.querySelector('iframe'); if (f && f.contentWindow) f.contentWindow.postMessage('{"event":"command","func":"setPlaybackQuality","args":["hd1080"]}', '*'); })();
+    (function() { var f = document.querySelector('iframe'); if (f && f.contentWindow) { f.contentWindow.postMessage('{"event":"command","func":"setPlaybackQuality","args":["hd1080"]}', '*'); f.contentWindow.postMessage('{"event":"command","func":"setPlaybackQualityRange","args":[{"min":"hd1080","max":"hd2160"}]}', '*'); } })();
 """
 private const val POST_UNMUTE = """
     (function() { var f = document.querySelector('iframe'); if (f && f.contentWindow) { f.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}', '*'); f.contentWindow.postMessage('{"event":"command","func":"setVolume","args":[80]}', '*'); } })();
