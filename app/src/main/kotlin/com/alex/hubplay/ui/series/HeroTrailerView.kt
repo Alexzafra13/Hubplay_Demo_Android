@@ -190,9 +190,7 @@ fun HeroTrailerView(
                                     Log.d(TAG, "trailer revealed $videoKey")
                                     stage = 2
                                     onReveal()
-                                    // Now that playback is rolling we
-                                    // can bring sound in without re-
-                                    // triggering the autoplay gate.
+                                    view.evaluateJavascript(POST_HD_QUALITY, null)
                                     view.evaluateJavascript(POST_UNMUTE, null)
                                 } else {
                                     Log.d(TAG, "reveal skipped, stage=$stage (already revealed or dismissed)")
@@ -258,10 +256,12 @@ fun HeroTrailerView(
  * Iframe sizing trick — same one Netflix / Plex use to hide what
  * YouTube DOESN'T let us strip with flags (the title overlay top-left
  * during the first seconds, the bottom progress hint, the "Watch on
- * YouTube" link). We size the iframe at 130% × 130% and shift it
- * 15% / 15% up-and-left, then clip via `overflow: hidden` on the
+ * YouTube" link). We size the iframe at 112% × 112% and shift it
+ * 6% / 6% up-and-left, then clip via `overflow: hidden` on the
  * body. The hero ends up seeing only the central crop of the video —
- * none of YouTube's edge chrome reaches the visible area.
+ * most of YouTube's edge chrome falls outside the visible area.
+ * Kept tight (was 130%) so the effective resolution stays high on
+ * TV screens where the upscale is visible.
  */
 private fun buildIframeHtml(videoKey: String): String {
     val safe = videoKey.replace("\"", "")
@@ -273,8 +273,8 @@ private fun buildIframeHtml(videoKey: String): String {
           .wrap{position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden}
           iframe{
             position:absolute;
-            top:-15%; left:-15%;
-            width:130%; height:130%;
+            top:-6%; left:-6%;
+            width:112%; height:112%;
             border:0;
             pointer-events:none;
           }
@@ -282,7 +282,7 @@ private fun buildIframeHtml(videoKey: String): String {
         </head><body>
           <div class="wrap">
             <iframe
-              src="https://www.youtube-nocookie.com/embed/$safe?autoplay=1&mute=1&controls=0&loop=1&playlist=$safe&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3&disablekb=1&showinfo=0&enablejsapi=1"
+              src="https://www.youtube-nocookie.com/embed/$safe?autoplay=1&mute=1&controls=0&loop=1&playlist=$safe&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3&disablekb=1&showinfo=0&enablejsapi=1&vq=hd1080"
               allow="autoplay; encrypted-media; picture-in-picture"
               allowfullscreen></iframe>
           </div>
@@ -335,6 +335,9 @@ private const val POST_PAUSE = """
  * the autoplay policy because the player is already playing — we
  * just changed its volume.
  */
+private const val POST_HD_QUALITY = """
+    (function() { var f = document.querySelector('iframe'); if (f && f.contentWindow) f.contentWindow.postMessage('{"event":"command","func":"setPlaybackQuality","args":["hd1080"]}', '*'); })();
+"""
 private const val POST_UNMUTE = """
     (function() { var f = document.querySelector('iframe'); if (f && f.contentWindow) { f.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}', '*'); f.contentWindow.postMessage('{"event":"command","func":"setVolume","args":[80]}', '*'); } })();
 """

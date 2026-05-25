@@ -218,24 +218,24 @@ fun HomeScreen(
                                 .fillMaxHeight(),
                         ) {
                             // ── Hero info (fixed top section) ───────────
-                            // Takes ~45% of screen height. Always visible,
-                            // content crossfades when focused item changes.
+                            // Takes ~35% of screen height — compact so
+                            // the rails get the lion's share of space.
                             HeroInfo(
                                 item = heroItem,
                                 onPlay = { it?.let { item -> onPlayItem(item.id, item.resumePosSec) } },
                                 onDetails = { it?.let { item -> onOpenItem(item.id, item.kind) } },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(0.45f),
+                                    .weight(0.35f),
                             )
 
                             // ── Rails (scrollable bottom section) ───────
-                            // Takes ~55% of screen height. Shows the
+                            // Takes ~65% of screen height. Shows the
                             // current rail + peek of the next one below.
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(0.55f),
+                                    .weight(0.65f),
                             ) {
                                 Column(
                                     modifier = Modifier

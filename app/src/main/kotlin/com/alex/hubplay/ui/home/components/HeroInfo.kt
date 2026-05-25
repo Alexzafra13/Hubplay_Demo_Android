@@ -91,8 +91,8 @@ fun HeroInfo(
         ) { displayItem ->
             Column(
                 modifier = Modifier
-                    .widthIn(max = 520.dp)
-                    .padding(start = 16.dp, end = 24.dp, bottom = 12.dp),
+                    .widthIn(max = 480.dp)
+                    .padding(start = 16.dp, end = 24.dp, bottom = 4.dp),
             ) {
                 // Eyebrow
                 Text(
@@ -102,7 +102,7 @@ fun HeroInfo(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.5.sp,
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
 
                 // Logo or title
                 if (!displayItem.logoUrl.isNullOrBlank()) {
@@ -111,27 +111,27 @@ fun HeroInfo(
                         contentDescription = displayItem.title,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
-                            .heightIn(min = 50.dp, max = 90.dp)
-                            .widthIn(max = 340.dp),
+                            .heightIn(min = 40.dp, max = 72.dp)
+                            .widthIn(max = 300.dp),
                     )
                 } else {
                     Text(
                         text = displayItem.title,
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onBackground,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
 
                 // Meta row
                 HeroMetaRow(displayItem)
 
-                // Overview
+                // Overview — single line to keep the hero compact
                 displayItem.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         text = overview,
                         style = MaterialTheme.typography.bodySmall,
@@ -141,7 +141,7 @@ fun HeroInfo(
                     )
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
 
                 // CTA buttons
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
