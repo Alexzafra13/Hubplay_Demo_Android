@@ -8,7 +8,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -37,11 +36,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.R
-import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.TextPrimary
-import com.alex.hubplay.ui.theme.TextSecondary
+import com.alex.hubplay.ui.theme.TextMuted
 
-val SIDEBAR_WIDTH = 56.dp
+val SIDEBAR_WIDTH = 52.dp
 
 @Composable
 fun HomeSidebar(
@@ -58,7 +56,7 @@ fun HomeSidebar(
     ) {
         Column(
             modifier = Modifier.align(Alignment.Center),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             SidebarIcon(
                 icon = Icons.Default.Search,
@@ -115,19 +113,19 @@ private fun SidebarIcon(
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (focused) 1.15f else 1.0f,
-        animationSpec = tween(180),
+        targetValue = if (focused) 1.12f else 1.0f,
+        animationSpec = tween(150),
         label = "sidebar-icon-scale",
     )
     val interactionSource = remember { MutableInteractionSource() }
-    val tint = if (focused) TextPrimary else TextSecondary
+    val tint = if (focused) TextPrimary else TextMuted
 
-    Row(
+    Box(
         modifier = Modifier
             .width(SIDEBAR_WIDTH)
-            .height(42.dp)
+            .height(38.dp)
             .scale(scale)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
             .onFocusChanged { focused = it.isFocused }
             .clickable(
                 interactionSource = interactionSource,
@@ -135,17 +133,16 @@ private fun SidebarIcon(
                 onClick = onClick,
             )
             .then(
-                if (focused) Modifier.border(1.5.dp, Accent, RoundedCornerShape(8.dp))
+                if (focused) Modifier.border(1.5.dp, TextPrimary.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
                 else Modifier,
             ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(20.dp),
         )
     }
 }
