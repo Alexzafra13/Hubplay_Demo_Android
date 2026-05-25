@@ -72,7 +72,6 @@ fun HomeScreen(
     val focusedItem by viewModel.focusedItem.collectAsState()
     val trailerInfo by viewModel.trailerInfo.collectAsState()
     val scrollState = rememberScrollState()
-    var sidebarExpanded by remember { mutableStateOf(false) }
 
     val isLanding by remember {
         derivedStateOf { focusedItem == null }
@@ -171,9 +170,6 @@ fun HomeScreen(
 
                         val visibleTabs = LocalVisibleTabs.current
                         HomeSidebar(
-                            profileName = profileName,
-                            expanded = sidebarExpanded,
-                            onExpandChange = { sidebarExpanded = it },
                             onNavigateToTab = onNavigateToTab,
                             onOpenSearch = { onNavigateToTab(Tab.Search) },
                             onOpenSettings = onOpenSettings,
@@ -197,9 +193,6 @@ fun HomeScreen(
                             )
 
                             // ── Rails (scrollable bottom) ──────────────
-                            // clip(RectangleShape) forces a hard clip
-                            // boundary that child offscreen compositing
-                            // layers (edge fades) cannot escape.
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -213,6 +206,8 @@ fun HomeScreen(
                                         .verticalScroll(scrollState),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
+                                    Spacer(Modifier.height(24.dp))
+
                                     ui.data.rails.forEach { config ->
                                         RenderRail(
                                             config = config,
@@ -226,6 +221,23 @@ fun HomeScreen(
 
                                     Spacer(Modifier.height(40.dp))
                                 }
+
+                                // Top mask — covers scroll overflow
+                                // that clip alone can't contain due to
+                                // offscreen compositing in child rails.
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .fillMaxWidth()
+                                        .height(36.dp)
+                                        .background(
+                                            Brush.verticalGradient(
+                                                0f to BgBase,
+                                                0.6f to BgBase.copy(alpha = 0.85f),
+                                                1f to Color.Transparent,
+                                            ),
+                                        ),
+                                )
 
                                 // Bottom fade — next rail dissolves
                                 Box(
