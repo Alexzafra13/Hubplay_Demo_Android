@@ -18,23 +18,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 
-/**
- * Drives the Home screen.
- *
- * Two pieces of state worth flagging:
- *   - `ui` carries every rail in one snapshot. Rails are fetched in
- *     parallel; whichever's slowest gates the loading spinner. A
- *     future refinement is per-rail loading so the page paints rails
- *     progressively as they arrive.
- *   - `focusedItem` is what the Hero observes to crossfade to whatever
- *     card the user (D-pad) is currently focused on. It defaults to
- *     null so the Hero falls back to its auto-rotating spotlight.
- */
 @OptIn(FlowPreview::class)
 class HomeViewModel(
     private val repository:     HomeRepository,
@@ -48,26 +37,22 @@ class HomeViewModel(
     val focusedItem: StateFlow<MediaItem?> = _focusedItem.asStateFlow()
 
     /**
-     * Raw focus events from rail cards. Debounced before reaching
-     * [_focusedItem] so that quick D-pad navigation across cards
-     * doesn't repaint the FocusedHero on every step — only a deliberate
-     * pause (>= [FOCUS_DEBOUNCE_MS]) commits the new selection. This is
-     * the "hover delay" the user asked for; matches how Netflix /
-     * Apple TV billboards settle on a card.
+     * Trailer info for the currently focused item. Fetched lazily when
+     * the focused item changes and cached by item id so repeated
+     * focuses on the same card don't re-fetch.
      */
+    private val _trailerInfo = MutableStateFlow<TrailerInfo?>(null)
+    val trailerInfo: StateFlow<TrailerInfo?> = _trailerInfo.asStateFlow()
+
     private val focusBus = MutableSharedFlow<MediaItem?>(
         replay = 0, extraBufferCapacity = 16,
     )
 
-    /**
-     * Collapses bursts of `/me/events` notifications into a single
-     * refresh. Declared BEFORE `init` so the init block can subscribe
-     * to it without tripping a forward-reference null access — Kotlin
-     * runs property initialisers and init blocks in source order.
-     */
     private val rebuildDebouncer = MutableSharedFlow<Unit>(
         replay = 0, extraBufferCapacity = 8,
     )
+
+    private val trailerCache = mutableMapOf<String, TrailerInfo?>()
 
     init {
         refresh()
@@ -76,16 +61,13 @@ class HomeViewModel(
             .onEach { _focusedItem.value = it }
             .launchIn(viewModelScope)
 
-        // Listen for cross-device events. ProgressUpdated and
-        // PlayedToggled both affect Continue Watching / Next Up, so we
-        // refresh the page. FavoriteToggled only matters once we add a
-        // Favorites rail — silently ignored for now to avoid pointless
-        // refresh storms when the user marks a movie as favourite from
-        // another device. ChannelOrderUpdated is a Live TV concern,
-        // handled by LiveTvViewModel; Home doesn't render channel
-        // ordering so we ignore it here too. Debounced so a burst of
-        // progress events (e.g. someone seeking on the laptop)
-        // collapses into one fetch.
+        // When the focused item settles, fetch trailer info.
+        _focusedItem
+            .debounce(TRAILER_FETCH_DELAY_MS)
+            .distinctUntilChangedBy { it?.id }
+            .onEach { item -> fetchTrailerInfo(item) }
+            .launchIn(viewModelScope)
+
         meEventsStream.events()
             .onEach { event ->
                 when (event) {
@@ -101,19 +83,45 @@ class HomeViewModel(
             .launchIn(viewModelScope)
     }
 
+    private fun fetchTrailerInfo(item: MediaItem?) {
+        if (item == null) {
+            _trailerInfo.value = null
+            return
+        }
+        val cached = trailerCache[item.id]
+        if (cached != null) {
+            _trailerInfo.value = cached
+            return
+        }
+        if (trailerCache.containsKey(item.id)) {
+            _trailerInfo.value = null
+            return
+        }
+        viewModelScope.launch {
+            val info = runCatching {
+                val detail = repository.fetchItemDetail(item.id)
+                if (detail.trailerKey != null && detail.trailerSite != null) {
+                    TrailerInfo(
+                        itemId = item.id,
+                        key = detail.trailerKey,
+                        site = detail.trailerSite,
+                    )
+                } else null
+            }.getOrElse { err ->
+                Log.w("HomeViewModel", "trailer fetch failed for ${item.id}: ${err.message}")
+                null
+            }
+            trailerCache[item.id] = info
+            if (_focusedItem.value?.id == item.id) {
+                _trailerInfo.value = info
+            }
+        }
+    }
 
     fun refresh() {
         _ui.value = _ui.value.copy(isLoading = true, error = null)
         viewModelScope.launch {
-            // supervisorScope so a single rail's failure doesn't cancel
-            // the others. Each rail is wrapped in safeFetch so its
-            // exception renders that rail empty without taking the
-            // page down with it.
             val data = supervisorScope {
-                // Phase 1 — fetch the page-level dependencies in parallel.
-                // We need both `layout` (which rails to render and in
-                // what order) AND `libraries` (id → content_type) before
-                // we can fan out the per-library Latest fetches.
                 val layoutDef = async {
                     runCatching { repository.fetchHomeLayout() }
                         .getOrElse {
@@ -136,11 +144,6 @@ class HomeViewModel(
                 val layout    = layoutDef.await()
                 val libraries = librariesDef.await()
 
-                // Phase 2 — for each `latest_in_library` rail, fan out
-                // a fetch with the right library_id + type filter so we
-                // get the right shape of card (movies → posters of
-                // movies; shows → posters of series with new-episode
-                // counts via the activity-aware path).
                 val latestRailFetches = layout
                     .filter { it.type == HomeRailType.LatestInLibrary }
                     .map { config ->
@@ -168,11 +171,6 @@ class HomeViewModel(
         }
     }
 
-    /**
-     * Library content_type → /items/latest `type=` filter.
-     * Returns null when the type isn't useful (mixed / unknown / livetv);
-     * the handler then defaults to its own ordering.
-     */
     private fun String.toLatestType(): String? = when (this) {
         "movies" -> "movie"
         "shows"  -> "series"
@@ -186,21 +184,8 @@ class HomeViewModel(
         }
     }
 
-    /**
-     * Drops the very first focus event we see after Home loads. Compose's
-     * LazyRow auto-grants focus to its first visible item on initial
-     * composition (so a D-pad user can start scrolling); we don't want
-     * that auto-focus to summon the lateral preview before the user
-     * has navigated anywhere.
-     */
     private var firstFocusConsumed: Boolean = false
 
-    /**
-     * Called from MediaCard when it gains focus. The Home screen's
-     * FocusedItemPreview observes [focusedItem] and slides in with the
-     * item's backdrop + meta + overview. The Hero is independent and
-     * does NOT react to this signal — see HeroSection.
-     */
     fun onCardFocused(item: MediaItem?) {
         if (!firstFocusConsumed) {
             firstFocusConsumed = true
@@ -210,20 +195,15 @@ class HomeViewModel(
     }
 
     companion object {
-        /**
-         * Hover dwell required before the FocusedHero crossfades to
-         * the focused card. Long enough that fast D-pad scans don't
-         * trigger it; short enough that deliberate stops feel snappy.
-         */
         private const val FOCUS_DEBOUNCE_MS = 800L
+        private const val SSE_REFRESH_DEBOUNCE_MS = 1_500L
 
         /**
-         * Collapse a burst of SSE events into a single refresh — when the
-         * user scrubs on another device the server emits one progress
-         * update per chunk. We don't want to repaint the page 30 times
-         * a minute.
+         * Extra delay after focused item settles before fetching trailer
+         * info from the server. Gives the hero crossfade time to paint
+         * before the network round-trip starts.
          */
-        private const val SSE_REFRESH_DEBOUNCE_MS = 1_500L
+        private const val TRAILER_FETCH_DELAY_MS = 1_200L
 
         fun factory(repository: HomeRepository, meEventsStream: MeEventsStream) =
             object : ViewModelProvider.Factory {
@@ -240,4 +220,11 @@ data class HomeUiState(
     val isLoading: Boolean   = false,
     val data:      HomeData  = HomeData(),
     val error:     String?   = null,
+)
+
+@androidx.compose.runtime.Immutable
+data class TrailerInfo(
+    val itemId: String,
+    val key:    String,
+    val site:   String,
 )
