@@ -81,9 +81,9 @@ fun HomeRail(
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { state ->
-                if (state.hasFocus) {
+                if (state.hasFocus && pagerState.settledPage != pageIndex) {
                     scope.launch {
-                        pagerState.animateScrollToPage(pageIndex)
+                        pagerState.scrollToPage(pageIndex)
                     }
                 }
             },
@@ -199,9 +199,9 @@ fun LiveNowRail(
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { state ->
-                if (state.hasFocus) {
+                if (state.hasFocus && pagerState.settledPage != pageIndex) {
                     scope.launch {
-                        pagerState.animateScrollToPage(pageIndex)
+                        pagerState.scrollToPage(pageIndex)
                     }
                 }
             },

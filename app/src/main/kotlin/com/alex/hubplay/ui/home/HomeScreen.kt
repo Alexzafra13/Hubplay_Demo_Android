@@ -211,7 +211,8 @@ fun HomeScreen(
                                 state = pagerState,
                                 pageSize = RailPageSize,
                                 pageSpacing = 8.dp,
-                                beyondViewportPageCount = 0,
+                                beyondViewportPageCount = 1,
+                                userScrollEnabled = false,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(0.60f),
