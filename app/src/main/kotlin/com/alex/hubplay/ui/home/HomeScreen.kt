@@ -3,7 +3,6 @@ package com.alex.hubplay.ui.home
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,8 +14,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.PageSize
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -33,12 +34,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
@@ -56,6 +57,13 @@ import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.series.HeroTrailerView
 import com.alex.hubplay.ui.theme.BgBase
 
+private val RailPageSize = object : PageSize {
+    override fun Density.calculateMainAxisPageSize(
+        availableSpace: Int,
+        pageSpacing: Int,
+    ): Int = (availableSpace * 0.80f).toInt()
+}
+
 @Composable
 fun HomeScreen(
     viewModel:       HomeViewModel,
@@ -69,7 +77,6 @@ fun HomeScreen(
     val ui by viewModel.ui.collectAsState()
     val focusedItem by viewModel.focusedItem.collectAsState()
     val trailerInfo by viewModel.trailerInfo.collectAsState()
-    val scrollState = rememberScrollState()
 
     val isLanding by remember {
         derivedStateOf { focusedItem == null }
@@ -102,6 +109,12 @@ fun HomeScreen(
                 onRetry = viewModel::refresh,
             )
             else -> {
+                val rails = ui.data.rails
+                val pagerState = rememberPagerState(
+                    initialPage = 0,
+                    pageCount = { rails.size },
+                )
+
                 Box(modifier = Modifier.fillMaxSize()) {
 
                     // ── Layer 0: Full-screen backdrop ──────────────────
@@ -189,46 +202,31 @@ fun HomeScreen(
                                     .weight(0.40f),
                             )
 
-                            // ── Rails ──────────────────────────────────
-                            Box(
+                            // ── Rails (VerticalPager) ──────────────────
+                            // Each page = one rail. The pager clips
+                            // pages natively — previous rails are never
+                            // visible. pageSize = 80% of viewport so the
+                            // next rail title peeks at the bottom.
+                            VerticalPager(
+                                state = pagerState,
+                                pageSize = RailPageSize,
+                                pageSpacing = 8.dp,
+                                beyondViewportPageCount = 0,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(0.60f)
-                                    .clipToBounds(),
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .verticalScroll(scrollState),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    ui.data.rails.forEach { config ->
-                                        RenderRail(
-                                            config = config,
-                                            data = ui.data,
-                                            onCardFocused = viewModel::onCardFocused,
-                                            onOpenItem = onOpenItem,
-                                            onPlayItem = onPlayItem,
-                                            parentScroll = scrollState,
-                                        )
-                                    }
-
-                                    Spacer(Modifier.height(40.dp))
+                                    .weight(0.60f),
+                            ) { page ->
+                                if (page in rails.indices) {
+                                    RenderRail(
+                                        config = rails[page],
+                                        data = ui.data,
+                                        onCardFocused = viewModel::onCardFocused,
+                                        onOpenItem = onOpenItem,
+                                        onPlayItem = onPlayItem,
+                                        pagerState = pagerState,
+                                        pageIndex = page,
+                                    )
                                 }
-
-                                // Bottom fade
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .fillMaxWidth()
-                                        .height(80.dp)
-                                        .background(
-                                            Brush.verticalGradient(
-                                                0f to Color.Transparent,
-                                                1f to BgBase,
-                                            ),
-                                        ),
-                                )
                             }
                         }
                     }
@@ -245,7 +243,8 @@ private fun RenderRail(
     onCardFocused: (MediaItem) -> Unit,
     onOpenItem:    (String, MediaKind) -> Unit,
     onPlayItem:    (String, Long) -> Unit,
-    parentScroll:  ScrollState,
+    pagerState:    PagerState,
+    pageIndex:     Int,
 ) {
     when (config.type) {
         HomeRailType.ContinueWatching -> HomeRail(
@@ -254,7 +253,8 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, it.resumePosSec) },
-            parentScroll = parentScroll,
+            pagerState = pagerState,
+            pageIndex = pageIndex,
         )
         HomeRailType.NextUp -> HomeRail(
             title = config.title,
@@ -262,7 +262,8 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, 0L) },
-            parentScroll = parentScroll,
+            pagerState = pagerState,
+            pageIndex = pageIndex,
         )
         HomeRailType.Trending -> HomeRail(
             title = config.title,
@@ -270,7 +271,8 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
-            parentScroll = parentScroll,
+            pagerState = pagerState,
+            pageIndex = pageIndex,
         )
         HomeRailType.LatestInLibrary -> HomeRail(
             title = config.title,
@@ -278,14 +280,16 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
-            parentScroll = parentScroll,
+            pagerState = pagerState,
+            pageIndex = pageIndex,
         )
         HomeRailType.LiveNow -> LiveNowRail(
             title = config.title,
             items = data.liveNow,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, 0L) },
-            parentScroll = parentScroll,
+            pagerState = pagerState,
+            pageIndex = pageIndex,
         )
     }
 }
