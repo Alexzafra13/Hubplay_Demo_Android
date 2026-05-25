@@ -62,6 +62,15 @@
     <string name="home_view_details">View details</string>
     <string name="home_focused_eyebrow">FEATURED</string>
 
+    <!-- Home sidebar (Prime Video style) -->
+    <string name="home_sidebar_search">Search</string>
+    <string name="home_sidebar_home">Home</string>
+    <string name="home_sidebar_movies">Movies</string>
+    <string name="home_sidebar_series">Series</string>
+    <string name="home_sidebar_livetv">Live TV</string>
+    <string name="home_sidebar_collections">Collections</string>
+    <string name="home_sidebar_settings">Settings</string>
+
     <!-- Catalog -->
     <string name="catalog_empty">No content in this library</string>
 
