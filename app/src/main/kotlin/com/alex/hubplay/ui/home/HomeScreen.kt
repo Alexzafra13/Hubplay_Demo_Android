@@ -56,30 +56,6 @@ import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.series.HeroTrailerView
 import com.alex.hubplay.ui.theme.BgBase
 
-/**
- * Home — Amazon Prime Video style layout for Android TV.
- *
- * The screen is split into two persistent zones:
- *
- *   ┌──────┬───────────────────────────────────┐
- *   │      │  HERO (always visible)            │
- *   │ Side │  Logo/title + meta + Play/Details │
- *   │ bar  ├───────────────────────────────────┤
- *   │      │  RAILS (scrollable)               │
- *   │      │  [card] [card] [card] ...         │
- *   │      │  ─── Next rail title peek ───     │
- *   └──────┴───────────────────────────────────┘
- *
- * Every rail drives the hero: when the user focuses a card in ANY
- * rail, the hero crossfades to that item's backdrop + info. Jumping
- * from one rail to the next is simply "the hero changes to the new
- * rail's focused card". The hero never scrolls away — it's a fixed
- * section that always occupies the upper portion of the screen.
- *
- * The backdrop image is full-screen behind everything, with gradient
- * overlays for legibility. The sidebar is a collapsed icon strip
- * that expands on D-pad Left.
- */
 @Composable
 fun HomeScreen(
     viewModel:       HomeViewModel,
@@ -96,15 +72,18 @@ fun HomeScreen(
     val scrollState = rememberScrollState()
     var sidebarExpanded by remember { mutableStateOf(false) }
 
+    // Landing = no card focused yet (initial state).
+    // Once a card in any rail gets focus, we switch to browse mode.
+    val isLanding by remember {
+        derivedStateOf { focusedItem == null }
+    }
+
     val heroItem by remember {
         derivedStateOf {
             focusedItem ?: ui.data.hero.firstOrNull()
         }
     }
 
-    // Trailer ↔ backdrop crossfade. When the trailer reveals, the
-    // static backdrop fades out so the video plays full-screen behind
-    // the gradients + hero info. Mirrors SeriesScreen's pattern.
     var trailerRevealed by remember { mutableStateOf(false) }
     val backdropAlpha by animateFloatAsState(
         targetValue = if (trailerRevealed) 0f else 1f,
@@ -112,9 +91,6 @@ fun HomeScreen(
         label = "backdrop-fade",
     )
 
-    // Trailer key that's valid for the current hero item. When the
-    // focused item changes, the trailer resets so it doesn't play a
-    // stale video while the new one loads.
     val activeTrailer = trailerInfo?.takeIf { it.itemId == heroItem?.id }
 
     Surface(
@@ -131,7 +107,7 @@ fun HomeScreen(
             else -> {
                 Box(modifier = Modifier.fillMaxSize()) {
 
-                    // ── Layer 0: Full-screen backdrop + trailer ─────────
+                    // ── Layer 0: Full-screen backdrop ──────────────────
                     Crossfade(
                         targetState = heroItem?.backdropUrl ?: heroItem?.posterUrl,
                         animationSpec = tween(durationMillis = 500),
@@ -150,12 +126,6 @@ fun HomeScreen(
                         }
                     }
 
-                    // YouTube trailer overlay — mounted when the server
-                    // has a trailer for the focused item. Handles its
-                    // own oEmbed pre-flight, load delay, and reveal
-                    // timing. On reveal the static backdrop fades out
-                    // so the video plays full-screen behind the
-                    // gradients + hero info.
                     if (activeTrailer != null) {
                         HeroTrailerView(
                             videoKey = activeTrailer.key,
@@ -165,13 +135,11 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
-                    // Reset backdrop when trailer is no longer active
-                    // (focused item changed to one without a trailer).
                     LaunchedEffect(activeTrailer) {
                         if (activeTrailer == null) trailerRevealed = false
                     }
 
-                    // ── Layer 1: Gradient overlays ───────────────────────
+                    // ── Layer 1: Gradient overlays ──────────────────────
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
@@ -198,7 +166,7 @@ fun HomeScreen(
                             ),
                     )
 
-                    // ── Layer 2: Content ─────────────────────────────────
+                    // ── Layer 2: Content ────────────────────────────────
                     Row(modifier = Modifier.fillMaxSize()) {
 
                         val visibleTabs = LocalVisibleTabs.current
@@ -212,31 +180,27 @@ fun HomeScreen(
                             visibleTabs = visibleTabs,
                         )
 
-                        // Main content: hero (top, fixed) + rails (bottom, scroll)
                         Column(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight(),
                         ) {
-                            // ── Hero info (fixed top section) ───────────
-                            // Takes ~35% of screen height — compact so
-                            // the rails get the lion's share of space.
+                            // ── Hero info (fixed top section) ──────────
                             HeroInfo(
                                 item = heroItem,
                                 onPlay = { it?.let { item -> onPlayItem(item.id, item.resumePosSec) } },
                                 onDetails = { it?.let { item -> onOpenItem(item.id, item.kind) } },
+                                showControls = isLanding,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(0.35f),
+                                    .weight(0.40f),
                             )
 
-                            // ── Rails (scrollable bottom section) ───────
-                            // Takes ~65% of screen height. Shows the
-                            // current rail + peek of the next one below.
+                            // ── Rails (scrollable bottom section) ──────
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(0.65f)
+                                    .weight(0.60f)
                                     .clipToBounds(),
                             ) {
                                 Column(
@@ -259,19 +223,8 @@ fun HomeScreen(
                                     Spacer(Modifier.height(40.dp))
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopCenter)
-                                        .fillMaxWidth()
-                                        .height(60.dp)
-                                        .background(
-                                            Brush.verticalGradient(
-                                                0f to BgBase,
-                                                1f to Color.Transparent,
-                                            ),
-                                        ),
-                                )
-
+                                // Bottom fade — peek of the next rail
+                                // dissolves into background.
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)

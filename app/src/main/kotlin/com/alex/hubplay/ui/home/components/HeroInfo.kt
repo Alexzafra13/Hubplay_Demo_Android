@@ -55,27 +55,26 @@ import com.alex.hubplay.ui.theme.OnAccent
 /**
  * Prime Video style hero info panel — ALWAYS visible.
  *
- * Sits in the top portion of the content area (fixed, never scrolls).
- * Shows the currently focused item's metadata: logo/title, overview,
- * rating/year/genres, and Play/Details CTAs. Content crossfades when
- * the focused item changes (user navigates cards in any rail).
- *
- * The background is handled by HomeScreen's backdrop layer — this
- * composable only renders the text + CTA overlay.
+ * Two modes controlled by [showControls]:
+ *   - Landing (true): eyebrow + logo + meta + overview + Play/Details CTAs.
+ *   - Browse  (false): logo + meta + overview only. No buttons, no eyebrow.
  */
 @Composable
 fun HeroInfo(
-    item:      MediaItem?,
-    onPlay:    (MediaItem?) -> Unit,
-    onDetails: (MediaItem?) -> Unit,
-    modifier:  Modifier = Modifier,
+    item:         MediaItem?,
+    onPlay:       (MediaItem?) -> Unit,
+    onDetails:    (MediaItem?) -> Unit,
+    showControls: Boolean,
+    modifier:     Modifier = Modifier,
 ) {
     if (item == null) return
 
     val playFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) {
-        runCatching { playFocusRequester.requestFocus() }
+    LaunchedEffect(showControls) {
+        if (showControls) {
+            runCatching { playFocusRequester.requestFocus() }
+        }
     }
 
     Box(
@@ -92,17 +91,19 @@ fun HeroInfo(
             Column(
                 modifier = Modifier
                     .widthIn(max = 480.dp)
-                    .padding(start = 16.dp, end = 24.dp, bottom = 4.dp),
+                    .padding(start = 16.dp, end = 24.dp, bottom = 8.dp),
             ) {
-                // Eyebrow
-                Text(
-                    text = stringResource(R.string.home_hero_eyebrow),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Accent,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.5.sp,
-                )
-                Spacer(Modifier.height(4.dp))
+                // Eyebrow — only on landing hero
+                if (showControls) {
+                    Text(
+                        text = stringResource(R.string.home_hero_eyebrow),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Accent,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
 
                 // Logo or title
                 if (!displayItem.logoUrl.isNullOrBlank()) {
@@ -129,7 +130,7 @@ fun HeroInfo(
                 // Meta row
                 HeroMetaRow(displayItem)
 
-                // Overview — single line to keep the hero compact
+                // Overview
                 displayItem.overview?.takeIf { it.isNotBlank() }?.let { overview ->
                     Spacer(Modifier.height(4.dp))
                     Text(
@@ -141,58 +142,60 @@ fun HeroInfo(
                     )
                 }
 
-                Spacer(Modifier.height(8.dp))
+                // CTA buttons — only on landing hero
+                if (showControls) {
+                    Spacer(Modifier.height(12.dp))
 
-                // CTA buttons
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    var playFocused by remember { mutableStateOf(false) }
-                    var detailsFocused by remember { mutableStateOf(false) }
-                    val playScale by animateFloatAsState(
-                        targetValue = if (playFocused) 1.06f else 1.0f,
-                        animationSpec = tween(180),
-                        label = "hero-play-scale",
-                    )
-                    val detailsScale by animateFloatAsState(
-                        targetValue = if (detailsFocused) 1.06f else 1.0f,
-                        animationSpec = tween(180),
-                        label = "hero-details-scale",
-                    )
-                    Button(
-                        onClick = { onPlay(displayItem) },
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White,
-                            contentColor = OnAccent,
-                        ),
-                        modifier = Modifier
-                            .focusRequester(playFocusRequester)
-                            .onFocusChanged { playFocused = it.isFocused }
-                            .scale(playScale)
-                            .then(
-                                if (playFocused)
-                                    Modifier.border(2.dp, Accent, RoundedCornerShape(10.dp))
-                                else Modifier,
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        var playFocused by remember { mutableStateOf(false) }
+                        var detailsFocused by remember { mutableStateOf(false) }
+                        val playScale by animateFloatAsState(
+                            targetValue = if (playFocused) 1.06f else 1.0f,
+                            animationSpec = tween(180),
+                            label = "hero-play-scale",
+                        )
+                        val detailsScale by animateFloatAsState(
+                            targetValue = if (detailsFocused) 1.06f else 1.0f,
+                            animationSpec = tween(180),
+                            label = "hero-details-scale",
+                        )
+                        Button(
+                            onClick = { onPlay(displayItem) },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = OnAccent,
                             ),
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.home_play), fontWeight = FontWeight.SemiBold)
-                    }
-                    OutlinedButton(
-                        onClick = { onDetails(displayItem) },
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .onFocusChanged { detailsFocused = it.isFocused }
-                            .scale(detailsScale)
-                            .then(
-                                if (detailsFocused)
-                                    Modifier.border(2.dp, Accent, RoundedCornerShape(10.dp))
-                                else Modifier,
-                            ),
-                    ) {
-                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.height(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.home_view_details))
+                            modifier = Modifier
+                                .focusRequester(playFocusRequester)
+                                .onFocusChanged { playFocused = it.isFocused }
+                                .scale(playScale)
+                                .then(
+                                    if (playFocused)
+                                        Modifier.border(2.dp, Accent, RoundedCornerShape(10.dp))
+                                    else Modifier,
+                                ),
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.home_play), fontWeight = FontWeight.SemiBold)
+                        }
+                        OutlinedButton(
+                            onClick = { onDetails(displayItem) },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .onFocusChanged { detailsFocused = it.isFocused }
+                                .scale(detailsScale)
+                                .then(
+                                    if (detailsFocused)
+                                        Modifier.border(2.dp, Accent, RoundedCornerShape(10.dp))
+                                    else Modifier,
+                                ),
+                        ) {
+                            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.height(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.home_view_details))
+                        }
                     }
                 }
             }

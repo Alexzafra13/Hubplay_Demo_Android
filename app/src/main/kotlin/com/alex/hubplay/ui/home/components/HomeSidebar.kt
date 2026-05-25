@@ -56,20 +56,6 @@ import com.alex.hubplay.ui.theme.TextSecondary
 val SIDEBAR_COLLAPSED_WIDTH = 56.dp
 val SIDEBAR_EXPANDED_WIDTH = 200.dp
 
-/**
- * Amazon Prime Video style sidebar for the home screen.
- *
- * Two states:
- *   - **Collapsed** (default): icon-only strip along the left edge.
- *     Transparent over the backdrop so the hero reads full-width.
- *   - **Expanded**: full-width with labels + user name at top.
- *     Triggered when any sidebar item gains D-pad focus (user
- *     pressed Left from the content area).
- *
- * When expanded, a semi-transparent scrim covers the sidebar zone
- * so text remains legible over any backdrop. On focus-out the
- * sidebar collapses back to icons.
- */
 @Composable
 fun HomeSidebar(
     profileName:    String?,
@@ -83,12 +69,12 @@ fun HomeSidebar(
 ) {
     val width = if (expanded) SIDEBAR_EXPANDED_WIDTH else SIDEBAR_COLLAPSED_WIDTH
 
-    Column(
+    Box(
         modifier = modifier
             .width(width)
             .fillMaxHeight()
             .background(
-                if (expanded) BgBase.copy(alpha = 0.88f)
+                if (expanded) BgBase.copy(alpha = 0.75f)
                 else Color.Transparent,
             )
             .animateContentSize(animationSpec = tween(250))
@@ -96,9 +82,10 @@ fun HomeSidebar(
                 onExpandChange(state.hasFocus)
             }
             .padding(vertical = 16.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
     ) {
+        // Nav items — centered vertically
         Column(
+            modifier = Modifier.align(Alignment.Center),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             if (expanded && !profileName.isNullOrBlank()) {
@@ -182,14 +169,16 @@ fun HomeSidebar(
                     onClick = { onNavigateToTab(Tab.LiveTv) },
                 )
             }
-        }
 
-        SidebarItem(
-            icon = Icons.Default.Settings,
-            label = stringResource(R.string.home_sidebar_settings),
-            expanded = expanded,
-            onClick = onOpenSettings,
-        )
+            Spacer(Modifier.height(16.dp))
+
+            SidebarItem(
+                icon = Icons.Default.Settings,
+                label = stringResource(R.string.home_sidebar_settings),
+                expanded = expanded,
+                onClick = onOpenSettings,
+            )
+        }
     }
 }
 

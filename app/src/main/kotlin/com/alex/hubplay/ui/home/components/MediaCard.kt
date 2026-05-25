@@ -117,7 +117,7 @@ fun MediaCard(
                 .width(style.defaultWidth)
                 .height(cardHeight)
                 .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(Color.Transparent)
                 .alpha(if (hideContent) 0f else 1f)
                 .then(
                     if (focused && !hideContent) Modifier.border(
