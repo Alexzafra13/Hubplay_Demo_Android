@@ -13,7 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -42,24 +42,15 @@ fun HomeRail(
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    var focusedIndex by remember { mutableStateOf<Int?>(null) }
+    var focusedIndex by remember { mutableIntStateOf(-1) }
 
     LaunchedEffect(focusedIndex) {
-        val target = focusedIndex ?: return@LaunchedEffect
-        listState.scrollToItem(index = target, scrollOffset = 0)
+        if (focusedIndex >= 0) {
+            listState.scrollToItem(index = focusedIndex, scrollOffset = 0)
+        }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .onFocusChanged { state ->
-                if (state.hasFocus && pagerState.currentPage != pageIndex) {
-                    scope.launch {
-                        pagerState.animateScrollToPage(pageIndex)
-                    }
-                }
-            },
-    ) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text       = title,
             style      = MaterialTheme.typography.titleLarge,
@@ -79,10 +70,7 @@ fun HomeRail(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier              = Modifier
                 .fillMaxWidth()
-                .padding(vertical = RailScaleHeadroom)
-                .onFocusChanged { focusState ->
-                    if (!focusState.hasFocus) focusedIndex = null
-                },
+                .padding(vertical = RailScaleHeadroom),
         ) {
             items(
                 count = items.size,
@@ -95,6 +83,11 @@ fun HomeRail(
                     onFocused = { focusedItem ->
                         focusedIndex = index
                         onFocused(focusedItem)
+                        if (pagerState.currentPage != pageIndex
+                            && !pagerState.isScrollInProgress
+                        ) {
+                            scope.launch { pagerState.scrollToPage(pageIndex) }
+                        }
                     },
                     onClick   = onClick,
                 )
@@ -117,24 +110,15 @@ fun LiveNowRail(
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    var focusedIndex by remember { mutableStateOf<Int?>(null) }
+    var focusedIndex by remember { mutableIntStateOf(-1) }
 
     LaunchedEffect(focusedIndex) {
-        val target = focusedIndex ?: return@LaunchedEffect
-        listState.scrollToItem(index = target, scrollOffset = 0)
+        if (focusedIndex >= 0) {
+            listState.scrollToItem(index = focusedIndex, scrollOffset = 0)
+        }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .onFocusChanged { state ->
-                if (state.hasFocus && pagerState.currentPage != pageIndex) {
-                    scope.launch {
-                        pagerState.animateScrollToPage(pageIndex)
-                    }
-                }
-            },
-    ) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text       = title,
             style      = MaterialTheme.typography.titleLarge,
@@ -154,10 +138,7 @@ fun LiveNowRail(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier              = Modifier
                 .fillMaxWidth()
-                .padding(vertical = RailScaleHeadroom)
-                .onFocusChanged { focusState ->
-                    if (!focusState.hasFocus) focusedIndex = null
-                },
+                .padding(vertical = RailScaleHeadroom),
         ) {
             items(
                 count = items.size,
@@ -169,6 +150,11 @@ fun LiveNowRail(
                     onFocused = { focusedItem ->
                         focusedIndex = index
                         onFocused(focusedItem)
+                        if (pagerState.currentPage != pageIndex
+                            && !pagerState.isScrollInProgress
+                        ) {
+                            scope.launch { pagerState.scrollToPage(pageIndex) }
+                        }
                     },
                     onClick   = onClick,
                 )
