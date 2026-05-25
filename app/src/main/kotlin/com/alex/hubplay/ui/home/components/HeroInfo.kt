@@ -72,9 +72,7 @@ fun HeroInfo(
     }
 
     Box(
-        modifier = modifier
-            .heightIn(min = 340.dp)
-            .padding(bottom = 8.dp),
+        modifier = modifier.padding(bottom = 4.dp),
         contentAlignment = Alignment.BottomStart,
     ) {
         AnimatedContent(
