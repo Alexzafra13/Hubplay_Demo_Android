@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.PageSize
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -61,7 +61,7 @@ private val RailPageSize = object : PageSize {
     override fun Density.calculateMainAxisPageSize(
         availableSpace: Int,
         pageSpacing: Int,
-    ): Int = (availableSpace * 0.82f).toInt()
+    ): Int = (availableSpace * 0.88f).toInt()
 }
 
 @Composable
@@ -114,6 +114,18 @@ fun HomeScreen(
                     initialPage = 0,
                     pageCount = { rails.size },
                 )
+
+                // Track which rail has focus — decoupled from pager scroll
+                var activeRailIndex by remember { mutableIntStateOf(0) }
+
+                // Single source of truth: scroll pager only when the
+                // tracked rail index changes. No focus callbacks touch
+                // the pager directly, breaking the feedback loop.
+                LaunchedEffect(activeRailIndex) {
+                    if (pagerState.currentPage != activeRailIndex) {
+                        pagerState.scrollToPage(activeRailIndex)
+                    }
+                }
 
                 Box(modifier = Modifier.fillMaxSize()) {
 
@@ -208,7 +220,7 @@ fun HomeScreen(
                             VerticalPager(
                                 state = pagerState,
                                 pageSize = RailPageSize,
-                                pageSpacing = 4.dp,
+                                pageSpacing = 0.dp,
                                 beyondViewportPageCount = 1,
                                 userScrollEnabled = false,
                                 modifier = Modifier
@@ -219,11 +231,12 @@ fun HomeScreen(
                                     RenderRail(
                                         config = rails[page],
                                         data = ui.data,
-                                        onCardFocused = viewModel::onCardFocused,
+                                        onCardFocused = { item ->
+                                            viewModel.onCardFocused(item)
+                                            activeRailIndex = page
+                                        },
                                         onOpenItem = onOpenItem,
                                         onPlayItem = onPlayItem,
-                                        pagerState = pagerState,
-                                        pageIndex = page,
                                     )
                                 }
                             }
@@ -242,8 +255,6 @@ private fun RenderRail(
     onCardFocused: (MediaItem) -> Unit,
     onOpenItem:    (String, MediaKind) -> Unit,
     onPlayItem:    (String, Long) -> Unit,
-    pagerState:    PagerState,
-    pageIndex:     Int,
 ) {
     when (config.type) {
         HomeRailType.ContinueWatching -> HomeRail(
@@ -252,8 +263,6 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, it.resumePosSec) },
-            pagerState = pagerState,
-            pageIndex = pageIndex,
         )
         HomeRailType.NextUp -> HomeRail(
             title = config.title,
@@ -261,8 +270,6 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, 0L) },
-            pagerState = pagerState,
-            pageIndex = pageIndex,
         )
         HomeRailType.Trending -> HomeRail(
             title = config.title,
@@ -270,8 +277,6 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
-            pagerState = pagerState,
-            pageIndex = pageIndex,
         )
         HomeRailType.LatestInLibrary -> HomeRail(
             title = config.title,
@@ -279,16 +284,12 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
-            pagerState = pagerState,
-            pageIndex = pageIndex,
         )
         HomeRailType.LiveNow -> LiveNowRail(
             title = config.title,
             items = data.liveNow,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, 0L) },
-            pagerState = pagerState,
-            pageIndex = pageIndex,
         )
     }
 }

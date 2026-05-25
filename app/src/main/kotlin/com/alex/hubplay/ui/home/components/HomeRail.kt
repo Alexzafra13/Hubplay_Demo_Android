@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -15,33 +14,27 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.data.MediaItem
-import kotlinx.coroutines.launch
 
 private val RailContentPadding = 24.dp
 private val RailScaleHeadroom = 12.dp
 
 @Composable
 fun HomeRail(
-    title:      String,
-    items:      List<MediaItem>,
-    onFocused:  (MediaItem) -> Unit,
-    onClick:    (MediaItem) -> Unit,
-    pagerState: PagerState,
-    pageIndex:  Int,
-    style:      CardStyle = CardStyle.Landscape,
-    modifier:   Modifier  = Modifier,
+    title:     String,
+    items:     List<MediaItem>,
+    onFocused: (MediaItem) -> Unit,
+    onClick:   (MediaItem) -> Unit,
+    style:     CardStyle = CardStyle.Landscape,
+    modifier:  Modifier  = Modifier,
 ) {
     if (items.isEmpty()) return
 
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
     var focusedIndex by remember { mutableIntStateOf(-1) }
 
     LaunchedEffect(focusedIndex) {
@@ -83,11 +76,6 @@ fun HomeRail(
                     onFocused = { focusedItem ->
                         focusedIndex = index
                         onFocused(focusedItem)
-                        if (pagerState.currentPage != pageIndex
-                            && !pagerState.isScrollInProgress
-                        ) {
-                            scope.launch { pagerState.scrollToPage(pageIndex) }
-                        }
                     },
                     onClick   = onClick,
                 )
@@ -98,18 +86,15 @@ fun HomeRail(
 
 @Composable
 fun LiveNowRail(
-    title:      String,
-    items:      List<MediaItem>,
-    onFocused:  (MediaItem) -> Unit,
-    onClick:    (MediaItem) -> Unit,
-    pagerState: PagerState,
-    pageIndex:  Int,
-    modifier:   Modifier = Modifier,
+    title:     String,
+    items:     List<MediaItem>,
+    onFocused: (MediaItem) -> Unit,
+    onClick:   (MediaItem) -> Unit,
+    modifier:  Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
 
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
     var focusedIndex by remember { mutableIntStateOf(-1) }
 
     LaunchedEffect(focusedIndex) {
@@ -150,11 +135,6 @@ fun LiveNowRail(
                     onFocused = { focusedItem ->
                         focusedIndex = index
                         onFocused(focusedItem)
-                        if (pagerState.currentPage != pageIndex
-                            && !pagerState.isScrollInProgress
-                        ) {
-                            scope.launch { pagerState.scrollToPage(pageIndex) }
-                        }
                     },
                     onClick   = onClick,
                 )
