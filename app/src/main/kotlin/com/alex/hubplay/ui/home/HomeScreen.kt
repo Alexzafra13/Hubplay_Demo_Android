@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -235,7 +236,8 @@ fun HomeScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(0.65f),
+                                    .weight(0.65f)
+                                    .clipToBounds(),
                             ) {
                                 Column(
                                     modifier = Modifier
@@ -257,8 +259,19 @@ fun HomeScreen(
                                     Spacer(Modifier.height(40.dp))
                                 }
 
-                                // Bottom fade so the peek of the next
-                                // rail dissolves into the background.
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .fillMaxWidth()
+                                        .height(60.dp)
+                                        .background(
+                                            Brush.verticalGradient(
+                                                0f to BgBase,
+                                                1f to Color.Transparent,
+                                            ),
+                                        ),
+                                )
+
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
