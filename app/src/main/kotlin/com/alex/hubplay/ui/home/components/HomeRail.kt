@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,13 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.data.MediaItem
@@ -42,7 +35,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val RailContentPadding = 32.dp
-private val EdgeFadeWidth = 24.dp
 private val RailScaleHeadroom = 14.dp
 
 private const val SPOTLIGHT_OPEN_DELAY_MS = 1800L
@@ -115,7 +107,6 @@ fun HomeRail(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier              = Modifier
                     .fillMaxWidth()
-                    .horizontalEdgeFade()
                     .padding(vertical = RailScaleHeadroom)
                     .onFocusChanged { focusState ->
                         if (!focusState.hasFocus) focusedIndex = null
@@ -235,7 +226,6 @@ fun LiveNowRail(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             modifier              = Modifier
                 .fillMaxWidth()
-                .horizontalEdgeFade()
                 .padding(vertical = RailScaleHeadroom)
                 .onFocusChanged { focusState ->
                     if (!focusState.hasFocus) focusedIndex = null
@@ -258,22 +248,3 @@ fun LiveNowRail(
         }
     }
 }
-
-private fun Modifier.horizontalEdgeFade(): Modifier = this
-    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
-        val fadePx = EdgeFadeWidth.toPx().coerceAtMost(size.width / 2f)
-        if (fadePx <= 0f) return@drawWithContent
-        val leftStop  = fadePx / size.width
-        val rightStop = 1f - leftStop
-        drawRect(
-            brush = Brush.horizontalGradient(
-                0f        to Color.Transparent,
-                leftStop  to Color.Black,
-                rightStop to Color.Black,
-                1f        to Color.Transparent,
-            ),
-            blendMode = BlendMode.DstIn,
-        )
-    }
