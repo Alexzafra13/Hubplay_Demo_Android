@@ -3,11 +3,11 @@ package com.alex.hubplay.ui.home
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -15,8 +15,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -33,11 +34,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -71,7 +69,7 @@ fun HomeScreen(
     val ui by viewModel.ui.collectAsState()
     val focusedItem by viewModel.focusedItem.collectAsState()
     val trailerInfo by viewModel.trailerInfo.collectAsState()
-    val scrollState = rememberScrollState()
+    val railsListState = rememberLazyListState()
 
     val isLanding by remember {
         derivedStateOf { focusedItem == null }
@@ -192,54 +190,37 @@ fun HomeScreen(
                                     .weight(0.40f),
                             )
 
-                            // ── Rails (scrollable bottom) ──────────────
+                            // ── Rails (LazyColumn) ─────────────────────
+                            // LazyColumn decomposes off-screen items,
+                            // so previous rails can never leak through.
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(0.60f)
-                                    .clip(RectangleShape),
+                                    .weight(0.60f),
                             ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .clipToBounds()
-                                        .verticalScroll(scrollState),
+                                LazyColumn(
+                                    state = railsListState,
+                                    contentPadding = PaddingValues(bottom = 40.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.fillMaxSize(),
                                 ) {
-                                    Spacer(Modifier.height(24.dp))
-
-                                    ui.data.rails.forEach { config ->
+                                    itemsIndexed(
+                                        items = ui.data.rails,
+                                        key = { _, config -> config.id },
+                                    ) { index, config ->
                                         RenderRail(
                                             config = config,
                                             data = ui.data,
                                             onCardFocused = viewModel::onCardFocused,
                                             onOpenItem = onOpenItem,
                                             onPlayItem = onPlayItem,
-                                            parentScroll = scrollState,
+                                            parentListState = railsListState,
+                                            railIndex = index,
                                         )
                                     }
-
-                                    Spacer(Modifier.height(40.dp))
                                 }
 
-                                // Top mask — covers scroll overflow
-                                // that clip alone can't contain due to
-                                // offscreen compositing in child rails.
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopCenter)
-                                        .fillMaxWidth()
-                                        .height(36.dp)
-                                        .background(
-                                            Brush.verticalGradient(
-                                                0f to BgBase,
-                                                0.6f to BgBase.copy(alpha = 0.85f),
-                                                1f to Color.Transparent,
-                                            ),
-                                        ),
-                                )
-
-                                // Bottom fade — next rail dissolves
+                                // Bottom fade
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
@@ -263,12 +244,13 @@ fun HomeScreen(
 
 @Composable
 private fun RenderRail(
-    config:        HomeRailConfig,
-    data:          com.alex.hubplay.data.HomeData,
-    onCardFocused: (MediaItem) -> Unit,
-    onOpenItem:    (String, MediaKind) -> Unit,
-    onPlayItem:    (String, Long) -> Unit,
-    parentScroll:  ScrollState,
+    config:          HomeRailConfig,
+    data:            com.alex.hubplay.data.HomeData,
+    onCardFocused:   (MediaItem) -> Unit,
+    onOpenItem:      (String, MediaKind) -> Unit,
+    onPlayItem:      (String, Long) -> Unit,
+    parentListState: androidx.compose.foundation.lazy.LazyListState,
+    railIndex:       Int,
 ) {
     when (config.type) {
         HomeRailType.ContinueWatching -> HomeRail(
@@ -277,7 +259,8 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, it.resumePosSec) },
-            parentScroll = parentScroll,
+            parentListState = parentListState,
+            railIndex = railIndex,
         )
         HomeRailType.NextUp -> HomeRail(
             title = config.title,
@@ -285,7 +268,8 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, 0L) },
-            parentScroll = parentScroll,
+            parentListState = parentListState,
+            railIndex = railIndex,
         )
         HomeRailType.Trending -> HomeRail(
             title = config.title,
@@ -293,7 +277,8 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
-            parentScroll = parentScroll,
+            parentListState = parentListState,
+            railIndex = railIndex,
         )
         HomeRailType.LatestInLibrary -> HomeRail(
             title = config.title,
@@ -301,14 +286,16 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
-            parentScroll = parentScroll,
+            parentListState = parentListState,
+            railIndex = railIndex,
         )
         HomeRailType.LiveNow -> LiveNowRail(
             title = config.title,
             items = data.liveNow,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, 0L) },
-            parentScroll = parentScroll,
+            parentListState = parentListState,
+            railIndex = railIndex,
         )
     }
 }
