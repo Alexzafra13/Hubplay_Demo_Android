@@ -33,9 +33,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -72,8 +74,6 @@ fun HomeScreen(
     val scrollState = rememberScrollState()
     var sidebarExpanded by remember { mutableStateOf(false) }
 
-    // Landing = no card focused yet (initial state).
-    // Once a card in any rail gets focus, we switch to browse mode.
     val isLanding by remember {
         derivedStateOf { focusedItem == null }
     }
@@ -185,7 +185,7 @@ fun HomeScreen(
                                 .weight(1f)
                                 .fillMaxHeight(),
                         ) {
-                            // ── Hero info (fixed top section) ──────────
+                            // ── Hero info (fixed top) ──────────────────
                             HeroInfo(
                                 item = heroItem,
                                 onPlay = { it?.let { item -> onPlayItem(item.id, item.resumePosSec) } },
@@ -196,16 +196,20 @@ fun HomeScreen(
                                     .weight(0.40f),
                             )
 
-                            // ── Rails (scrollable bottom section) ──────
+                            // ── Rails (scrollable bottom) ──────────────
+                            // clip(RectangleShape) forces a hard clip
+                            // boundary that child offscreen compositing
+                            // layers (edge fades) cannot escape.
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(0.60f)
-                                    .clipToBounds(),
+                                    .clip(RectangleShape),
                             ) {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxSize()
+                                        .clipToBounds()
                                         .verticalScroll(scrollState),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
@@ -223,8 +227,7 @@ fun HomeScreen(
                                     Spacer(Modifier.height(40.dp))
                                 }
 
-                                // Bottom fade — peek of the next rail
-                                // dissolves into background.
+                                // Bottom fade — next rail dissolves
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
