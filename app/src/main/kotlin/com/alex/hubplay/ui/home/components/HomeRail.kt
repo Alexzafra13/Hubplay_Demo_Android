@@ -116,7 +116,7 @@ private const val SECTION_SNAP_ANIM_MS = 350
  * before exhausting), which is "infinite" in practice for a TV
  * remote.
  */
-private const val CYCLE_REPEATS = 50
+private const val CYCLE_REPEATS = 1
 
 /**
  * A titled horizontal rail with cyclic navigation + section-snap.
