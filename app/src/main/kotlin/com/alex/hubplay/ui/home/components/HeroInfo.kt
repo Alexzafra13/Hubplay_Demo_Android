@@ -51,14 +51,8 @@ import com.alex.hubplay.R
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.OnAccent
+import com.alex.hubplay.ui.theme.TextSecondary
 
-/**
- * Prime Video style hero info panel — ALWAYS visible.
- *
- * Two modes controlled by [showControls]:
- *   - Landing (true): eyebrow + logo + meta + overview + Play/Details CTAs.
- *   - Browse  (false): logo + meta + overview only. No buttons, no eyebrow.
- */
 @Composable
 fun HeroInfo(
     item:         MediaItem?,
@@ -78,7 +72,9 @@ fun HeroInfo(
     }
 
     Box(
-        modifier = modifier,
+        modifier = modifier
+            .heightIn(min = 340.dp)
+            .padding(bottom = 8.dp),
         contentAlignment = Alignment.BottomStart,
     ) {
         AnimatedContent(
@@ -90,62 +86,51 @@ fun HeroInfo(
         ) { displayItem ->
             Column(
                 modifier = Modifier
-                    .widthIn(max = 480.dp)
-                    .padding(start = 16.dp, end = 24.dp, bottom = 8.dp),
+                    .widthIn(max = 560.dp)
+                    .padding(start = 24.dp, end = 32.dp, bottom = 4.dp),
             ) {
-                // Eyebrow — only on landing hero
-                if (showControls) {
-                    Text(
-                        text = stringResource(R.string.home_hero_eyebrow),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Accent,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.5.sp,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                }
-
-                // Logo or title
+                // Title — large and bold like Prime Video
                 if (!displayItem.logoUrl.isNullOrBlank()) {
                     AsyncImage(
                         model = displayItem.logoUrl,
                         contentDescription = displayItem.title,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
-                            .heightIn(min = 40.dp, max = 72.dp)
-                            .widthIn(max = 300.dp),
+                            .heightIn(min = 48.dp, max = 90.dp)
+                            .widthIn(max = 400.dp),
                     )
                 } else {
                     Text(
                         text = displayItem.title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        style = MaterialTheme.typography.displayLarge,
+                        color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
+                        lineHeight = 52.sp,
                     )
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(10.dp))
 
-                // Meta row
+                // Meta row: genre · duration · year · rating
                 HeroMetaRow(displayItem)
 
                 // Overview
                 displayItem.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         text = overview,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFFCCCFD6),
+                        maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
+                        lineHeight = 22.sp,
                     )
                 }
 
-                // CTA buttons — only on landing hero
+                // CTA buttons
                 if (showControls) {
-                    Spacer(Modifier.height(12.dp))
-
+                    Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         var playFocused by remember { mutableStateOf(false) }
                         var detailsFocused by remember { mutableStateOf(false) }
@@ -207,29 +192,62 @@ fun HeroInfo(
 private fun HeroMetaRow(item: MediaItem) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        val parts = mutableListOf<@Composable () -> Unit>()
+
+        item.genres.firstOrNull()?.let { genre ->
+            parts.add {
+                Text(
+                    text = genre,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary,
+                )
+            }
+        }
+
+        if (item.durationSec > 0) {
+            val mins = item.durationSec / 60
+            parts.add {
+                Text(
+                    text = "${mins} min",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary,
+                )
+            }
+        }
+
+        item.year?.let { year ->
+            parts.add {
+                Text(
+                    text = year.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary,
+                )
+            }
+        }
+
         item.rating?.let { rating ->
-            Text(
-                text = "★ ${"%.1f".format(rating)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Accent,
-                fontWeight = FontWeight.SemiBold,
-            )
+            parts.add {
+                Text(
+                    text = "★ ${"%.1f".format(rating)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Accent,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
-        item.year?.let {
-            Text(
-                text = it.toString(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        item.genres.take(3).forEach { genre ->
-            Text(
-                text = "· $genre",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+
+        parts.forEachIndexed { index, composable ->
+            if (index > 0) {
+                Text(
+                    text = "·",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(horizontal = 2.dp),
+                )
+            }
+            composable()
         }
     }
 }
