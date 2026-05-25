@@ -1,6 +1,7 @@
 package com.alex.hubplay.ui.home
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -22,6 +23,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -30,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -49,6 +52,7 @@ import com.alex.hubplay.ui.home.components.HomeRail
 import com.alex.hubplay.ui.home.components.LiveNowRail
 import com.alex.hubplay.ui.home.components.LocalVisibleTabs
 import com.alex.hubplay.ui.home.components.Tab
+import com.alex.hubplay.ui.series.HeroTrailerView
 import com.alex.hubplay.ui.theme.BgBase
 
 /**
@@ -87,6 +91,7 @@ fun HomeScreen(
 ) {
     val ui by viewModel.ui.collectAsState()
     val focusedItem by viewModel.focusedItem.collectAsState()
+    val trailerInfo by viewModel.trailerInfo.collectAsState()
     val scrollState = rememberScrollState()
     var sidebarExpanded by remember { mutableStateOf(false) }
 
@@ -95,6 +100,21 @@ fun HomeScreen(
             focusedItem ?: ui.data.hero.firstOrNull()
         }
     }
+
+    // Trailer ↔ backdrop crossfade. When the trailer reveals, the
+    // static backdrop fades out so the video plays full-screen behind
+    // the gradients + hero info. Mirrors SeriesScreen's pattern.
+    var trailerRevealed by remember { mutableStateOf(false) }
+    val backdropAlpha by animateFloatAsState(
+        targetValue = if (trailerRevealed) 0f else 1f,
+        animationSpec = tween(durationMillis = 700),
+        label = "backdrop-fade",
+    )
+
+    // Trailer key that's valid for the current hero item. When the
+    // focused item changes, the trailer resets so it doesn't play a
+    // stale video while the new one loads.
+    val activeTrailer = trailerInfo?.takeIf { it.itemId == heroItem?.id }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -110,12 +130,14 @@ fun HomeScreen(
             else -> {
                 Box(modifier = Modifier.fillMaxSize()) {
 
-                    // ── Layer 0: Full-screen backdrop ────────────────────
+                    // ── Layer 0: Full-screen backdrop + trailer ─────────
                     Crossfade(
                         targetState = heroItem?.backdropUrl ?: heroItem?.posterUrl,
                         animationSpec = tween(durationMillis = 500),
                         label = "home-backdrop",
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .alpha(backdropAlpha),
                     ) { url ->
                         if (url != null) {
                             AsyncImage(
@@ -125,6 +147,27 @@ fun HomeScreen(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
+                    }
+
+                    // YouTube trailer overlay — mounted when the server
+                    // has a trailer for the focused item. Handles its
+                    // own oEmbed pre-flight, load delay, and reveal
+                    // timing. On reveal the static backdrop fades out
+                    // so the video plays full-screen behind the
+                    // gradients + hero info.
+                    if (activeTrailer != null) {
+                        HeroTrailerView(
+                            videoKey = activeTrailer.key,
+                            site = activeTrailer.site,
+                            onReveal = { trailerRevealed = true },
+                            onDismiss = { trailerRevealed = false },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    // Reset backdrop when trailer is no longer active
+                    // (focused item changed to one without a trailer).
+                    LaunchedEffect(activeTrailer) {
+                        if (activeTrailer == null) trailerRevealed = false
                     }
 
                     // ── Layer 1: Gradient overlays ───────────────────────
