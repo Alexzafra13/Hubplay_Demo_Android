@@ -3,6 +3,7 @@ package com.alex.hubplay.ui.home.components
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -28,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.data.MediaItem
@@ -36,20 +39,18 @@ import kotlinx.coroutines.launch
 
 private val RailContentPadding = 32.dp
 private val RailScaleHeadroom = 14.dp
-
 private const val SPOTLIGHT_OPEN_DELAY_MS = 1800L
 private const val SECTION_SNAP_ANIM_MS = 350
 
 @Composable
 fun HomeRail(
-    title:           String,
-    items:           List<MediaItem>,
-    onFocused:       (MediaItem) -> Unit,
-    onClick:         (MediaItem) -> Unit,
-    parentListState: LazyListState,
-    railIndex:       Int,
-    style:           CardStyle = CardStyle.Landscape,
-    modifier:        Modifier  = Modifier,
+    title:        String,
+    items:        List<MediaItem>,
+    onFocused:    (MediaItem) -> Unit,
+    onClick:      (MediaItem) -> Unit,
+    parentScroll: ScrollState,
+    style:        CardStyle = CardStyle.Landscape,
+    modifier:     Modifier  = Modifier,
 ) {
     if (items.isEmpty()) return
 
@@ -59,6 +60,7 @@ fun HomeRail(
 
     var focusedIndex         by remember { mutableStateOf<Int?>(null) }
     var spotlightTargetIndex by remember { mutableStateOf<Int?>(null) }
+    var sectionTopY          by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(focusedIndex, canSpotlight) {
         if (!canSpotlight) {
@@ -82,11 +84,15 @@ fun HomeRail(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .onGloballyPositioned { coords ->
+                sectionTopY = coords.positionInParent().y
+            }
             .onFocusChanged { state ->
                 if (state.hasFocus) {
                     scope.launch {
-                        parentListState.animateScrollToItem(
-                            index = railIndex,
+                        parentScroll.animateScrollTo(
+                            value         = sectionTopY.toInt().coerceAtLeast(0),
+                            animationSpec = tween(durationMillis = SECTION_SNAP_ANIM_MS),
                         )
                     }
                 }
@@ -179,13 +185,12 @@ fun HomeRail(
 
 @Composable
 fun LiveNowRail(
-    title:           String,
-    items:           List<MediaItem>,
-    onFocused:       (MediaItem) -> Unit,
-    onClick:         (MediaItem) -> Unit,
-    parentListState: LazyListState,
-    railIndex:       Int,
-    modifier:        Modifier = Modifier,
+    title:        String,
+    items:        List<MediaItem>,
+    onFocused:    (MediaItem) -> Unit,
+    onClick:      (MediaItem) -> Unit,
+    parentScroll: ScrollState,
+    modifier:     Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
 
@@ -193,6 +198,7 @@ fun LiveNowRail(
     val scope      = rememberCoroutineScope()
 
     var focusedIndex by remember { mutableStateOf<Int?>(null) }
+    var sectionTopY  by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(focusedIndex) {
         val target = focusedIndex ?: return@LaunchedEffect
@@ -202,11 +208,15 @@ fun LiveNowRail(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .onGloballyPositioned { coords ->
+                sectionTopY = coords.positionInParent().y
+            }
             .onFocusChanged { state ->
                 if (state.hasFocus) {
                     scope.launch {
-                        parentListState.animateScrollToItem(
-                            index = railIndex,
+                        parentScroll.animateScrollTo(
+                            value         = sectionTopY.toInt().coerceAtLeast(0),
+                            animationSpec = tween(durationMillis = SECTION_SNAP_ANIM_MS),
                         )
                     }
                 }
