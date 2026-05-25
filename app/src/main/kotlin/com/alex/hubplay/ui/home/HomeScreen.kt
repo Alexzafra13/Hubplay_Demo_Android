@@ -309,7 +309,7 @@ private fun RenderRail(
         HomeRailType.Trending -> HomeRail(
             title = config.title,
             items = data.trending,
-            style = CardStyle.Portrait,
+            style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
             parentScroll = parentScroll,
@@ -317,7 +317,7 @@ private fun RenderRail(
         HomeRailType.LatestInLibrary -> HomeRail(
             title = config.title,
             items = data.latestByRailId[config.id].orEmpty(),
-            style = CardStyle.Portrait,
+            style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
             parentScroll = parentScroll,
