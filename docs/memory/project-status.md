@@ -1,12 +1,86 @@
 # Estado del proyecto — HubPlay Android
 
-> **Última sesión**: 2026-05-20 — rama `claude/kotlin-project-review-faLKV`
-> (TOFU certificate pinning + login UX fixes).
-> **Estado**: feature-complete contra la lista priorizada por el usuario,
-> ahora robusto frente a certs que el OS no reconoce (Let's Encrypt ECDSA
-> en Android <14, self-signed, CAs privadas). CI verde sobre 8.10.2 + Java
-> 17 con detekt en modo soft.
+> **Última sesión**: 2026-05-25 — rama `claude/charming-fermat-y4rPQ`
+> (Home redesign: Amazon Prime Video style layout para Android TV).
+> **Estado**: Home rediseñado con sidebar lateral colapsable, backdrop a
+> pantalla completa que reacciona al foco del primer rail, y panel de hero
+> con logo/descripción/CTAs. Pendiente: trailer integration en hero,
+> ajustes finos de transiciones y scroll behavior.
 > **Leer este fichero al inicio de cada sesión** para retomar contexto.
+
+---
+
+## 📺 Sesión 2026-05-25 — Home redesign (Prime Video style)
+
+Rediseño completo del Home Screen para Android TV inspirado en Amazon
+Prime Video. El usuario proporcionó screenshots de la interfaz de Prime
+Video como referencia.
+
+### Cambios de arquitectura
+
+**Antes** (Netflix-style):
+- TopNav horizontal (tabs en barra superior)
+- HeroSection (420dp fijo, auto-rotación de spotlight)
+- Rails con spotlight inline y FocusedHero lateral
+
+**Después** (Prime Video-style):
+- **HomeSidebar** lateral izquierdo colapsable (icons ↔ icons+labels)
+- **Backdrop a pantalla completa** que crossfadea al item enfocado
+- **HeroInfo** overlay con logo/título, descripción, rating, CTAs
+- Rails horizontales con snap-on-focus (reutiliza HomeRail existente)
+
+### Componentes nuevos
+
+- `ui/home/components/HomeSidebar.kt` — Sidebar con dos estados:
+  - Collapsed (56dp): solo iconos, transparente sobre el backdrop
+  - Expanded (200dp): iconos + labels + avatar del perfil, fondo semi-opaco
+  - Se expande cuando cualquier item gana foco D-pad (← desde contenido)
+  - Se colapsa al perder foco (→ de vuelta al contenido)
+  - Items: Buscar, Inicio, Películas, Series, Colecciones, TV en vivo,
+    Ajustes. Respeta `LocalVisibleTabs` para ocultar tabs no disponibles.
+
+- `ui/home/components/HeroInfo.kt` — Panel de info del hero:
+  - Logo del contenido (AsyncImage) o título como fallback
+  - Overview (3 líneas max), rating, año, géneros
+  - Botones Play + Ver detalles con focus visual (border Accent + scale)
+  - AnimatedContent para crossfade entre items
+  - 340dp de altura para dejar espacio al primer rail
+
+### Archivos modificados
+
+- `ui/home/HomeScreen.kt` — Layout completo reescrito:
+  - Capa 0: Backdrop full-screen (Crossfade entre URLs)
+  - Capa 1: Gradientes (izquierda 65% para legibilidad, abajo 55% fade)
+  - Capa 2: Row(Sidebar + Content scroll)
+  - `heroItem` = focusedItem ?? primer trending
+  - Ya no usa TopNav, HeroSection, FocusedItemPreview
+  - Nuevo parámetro `profileName` para el sidebar
+
+- `ui/nav/HubplayNavGraph.kt` — Pasa `authState.activeProfileName` a HomeScreen
+
+- `strings.xml` (es + en) — 7 strings nuevas para sidebar
+
+### Lo que NO se tocó (por decisión)
+
+- **TopNav.kt** sigue intacto — CatalogScreen, SearchScreen, LiveTvScreen
+  y CollectionsScreen lo siguen usando.
+- **HeroSection.kt, FocusedHero.kt, FocusedItemPreview.kt, RailSpotlight.kt**
+  — se mantienen en el repo aunque HomeScreen ya no los importa. Pueden
+  servir para otras pantallas o eliminarse en un cleanup posterior.
+- **HomeRail.kt** — sin cambios, sigue con cyclic nav + spotlight inline.
+
+### Pendiente para iteraciones siguientes
+
+1. **Trailer integration** — montar HeroTrailerView sobre el backdrop del
+   hero cuando el item tiene trailerKey. Necesita fetch del detalle del item
+   para obtener trailer info (trending/home rails no la incluyen).
+2. **Scroll behavior refinado** — cuando el usuario baja del primer rail,
+   el backdrop debería transicionar a BgBase sólido y el hero colapsarse.
+3. **Poster/carátula en el hero** — el usuario mencionó "quizas hasta
+   carátula mano izquierda" junto al logo. Opcional.
+4. **Sidebar en otras pantallas** — evaluar si Movies/Series/LiveTv también
+   deberían usar sidebar en vez de TopNav.
+5. **Detekt** — verificar que el código nuevo pasa detekt en CI.
 
 ---
 
