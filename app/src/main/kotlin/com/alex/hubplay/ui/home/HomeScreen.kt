@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -15,9 +14,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.PageSize
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -39,9 +39,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
+import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.data.MediaKind
@@ -54,6 +56,13 @@ import com.alex.hubplay.ui.home.components.LocalVisibleTabs
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.series.HeroTrailerView
 import com.alex.hubplay.ui.theme.BgBase
+
+private val RailPageSize = object : PageSize {
+    override fun Density.calculateMainAxisPageSize(
+        availableSpace: Int,
+        pageSpacing: Int,
+    ): Int = (availableSpace * 0.82f).toInt()
+}
 
 @Composable
 fun HomeScreen(
@@ -101,7 +110,10 @@ fun HomeScreen(
             )
             else -> {
                 val rails = ui.data.rails
-                val listState = rememberLazyListState()
+                val pagerState = rememberPagerState(
+                    initialPage = 0,
+                    pageCount = { rails.size },
+                )
 
                 Box(modifier = Modifier.fillMaxSize()) {
 
@@ -154,12 +166,12 @@ fun HomeScreen(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .fillMaxHeight(0.55f)
+                            .fillMaxHeight(0.58f)
                             .background(
                                 Brush.verticalGradient(
                                     0f to Color.Transparent,
-                                    0.25f to BgBase.copy(alpha = 0.55f),
-                                    0.6f to BgBase.copy(alpha = 0.90f),
+                                    0.20f to BgBase.copy(alpha = 0.50f),
+                                    0.50f to BgBase.copy(alpha = 0.88f),
                                     1f to BgBase,
                                 ),
                             ),
@@ -176,59 +188,42 @@ fun HomeScreen(
                             visibleTabs = visibleTabs,
                         )
 
-                        LazyColumn(
-                            state = listState,
-                            contentPadding = PaddingValues(bottom = 48.dp),
+                        Column(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight(),
                         ) {
-                            // ── Hero info section ─────────────────
-                            item(key = "hero") {
-                                HeroInfo(
-                                    item = heroItem,
-                                    onPlay = { it?.let { item -> onPlayItem(item.id, item.resumePosSec) } },
-                                    onDetails = { it?.let { item -> onOpenItem(item.id, item.kind) } },
-                                    showControls = isLanding,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
+                            // ── Hero info — fixed, top half ───────────
+                            HeroInfo(
+                                item = heroItem,
+                                onPlay = { it?.let { item -> onPlayItem(item.id, item.resumePosSec) } },
+                                onDetails = { it?.let { item -> onOpenItem(item.id, item.kind) } },
+                                showControls = isLanding,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(0.50f),
+                            )
 
-                            // ── Rails ─────────────────────────────
-                            itemsIndexed(
-                                items = rails,
-                                key = { _, config -> config.id },
-                            ) { _, config ->
-                                val items = when (config.type) {
-                                    HomeRailType.ContinueWatching -> ui.data.continueWatching
-                                    HomeRailType.NextUp -> ui.data.nextUp
-                                    HomeRailType.Trending -> ui.data.trending
-                                    HomeRailType.LiveNow -> ui.data.liveNow
-                                    HomeRailType.LatestInLibrary -> ui.data.latestByRailId[config.id].orEmpty()
-                                }
-                                if (items.isEmpty()) return@itemsIndexed
-
-                                val onClick: (MediaItem) -> Unit = when (config.type) {
-                                    HomeRailType.ContinueWatching -> { item -> onPlayItem(item.id, item.resumePosSec) }
-                                    HomeRailType.NextUp -> { item -> onPlayItem(item.id, 0L) }
-                                    HomeRailType.LiveNow -> { item -> onPlayItem(item.id, 0L) }
-                                    else -> { item -> onOpenItem(item.id, item.kind) }
-                                }
-
-                                if (config.type == HomeRailType.LiveNow) {
-                                    LiveNowRail(
-                                        title = config.title,
-                                        items = items,
-                                        onFocused = viewModel::onCardFocused,
-                                        onClick = onClick,
-                                    )
-                                } else {
-                                    HomeRail(
-                                        title = config.title,
-                                        items = items,
-                                        style = CardStyle.Landscape,
-                                        onFocused = viewModel::onCardFocused,
-                                        onClick = onClick,
+                            // ── Rails — paged, bottom half ────────────
+                            VerticalPager(
+                                state = pagerState,
+                                pageSize = RailPageSize,
+                                pageSpacing = 4.dp,
+                                beyondViewportPageCount = 1,
+                                userScrollEnabled = false,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(0.50f),
+                            ) { page ->
+                                if (page in rails.indices) {
+                                    RenderRail(
+                                        config = rails[page],
+                                        data = ui.data,
+                                        onCardFocused = viewModel::onCardFocused,
+                                        onOpenItem = onOpenItem,
+                                        onPlayItem = onPlayItem,
+                                        pagerState = pagerState,
+                                        pageIndex = page,
                                     )
                                 }
                             }
@@ -237,6 +232,64 @@ fun HomeScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RenderRail(
+    config:        HomeRailConfig,
+    data:          com.alex.hubplay.data.HomeData,
+    onCardFocused: (MediaItem) -> Unit,
+    onOpenItem:    (String, MediaKind) -> Unit,
+    onPlayItem:    (String, Long) -> Unit,
+    pagerState:    PagerState,
+    pageIndex:     Int,
+) {
+    when (config.type) {
+        HomeRailType.ContinueWatching -> HomeRail(
+            title = config.title,
+            items = data.continueWatching,
+            style = CardStyle.Landscape,
+            onFocused = onCardFocused,
+            onClick = { onPlayItem(it.id, it.resumePosSec) },
+            pagerState = pagerState,
+            pageIndex = pageIndex,
+        )
+        HomeRailType.NextUp -> HomeRail(
+            title = config.title,
+            items = data.nextUp,
+            style = CardStyle.Landscape,
+            onFocused = onCardFocused,
+            onClick = { onPlayItem(it.id, 0L) },
+            pagerState = pagerState,
+            pageIndex = pageIndex,
+        )
+        HomeRailType.Trending -> HomeRail(
+            title = config.title,
+            items = data.trending,
+            style = CardStyle.Landscape,
+            onFocused = onCardFocused,
+            onClick = { onOpenItem(it.id, it.kind) },
+            pagerState = pagerState,
+            pageIndex = pageIndex,
+        )
+        HomeRailType.LatestInLibrary -> HomeRail(
+            title = config.title,
+            items = data.latestByRailId[config.id].orEmpty(),
+            style = CardStyle.Landscape,
+            onFocused = onCardFocused,
+            onClick = { onOpenItem(it.id, it.kind) },
+            pagerState = pagerState,
+            pageIndex = pageIndex,
+        )
+        HomeRailType.LiveNow -> LiveNowRail(
+            title = config.title,
+            items = data.liveNow,
+            onFocused = onCardFocused,
+            onClick = { onPlayItem(it.id, 0L) },
+            pagerState = pagerState,
+            pageIndex = pageIndex,
+        )
     }
 }
 
