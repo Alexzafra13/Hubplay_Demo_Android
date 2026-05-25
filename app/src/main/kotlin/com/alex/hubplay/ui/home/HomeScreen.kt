@@ -54,21 +54,26 @@ import com.alex.hubplay.ui.theme.BgBase
 /**
  * Home — Amazon Prime Video style layout for Android TV.
  *
- * Layout:
- *   [Full-screen backdrop of focused/hero item]
- *     [Left sidebar (collapsed icons / expanded with labels)]
- *     [Content area]
- *       [HeroInfo — logo, description, CTAs (visible when at top)]
- *       [Rails — horizontal carousels with snap-on-focus]
+ * The screen is split into two persistent zones:
  *
- * The first rail drives the hero backdrop: when the user focuses a
- * card in the first rail, the backdrop crossfades to that item's
- * backdrop image. When scrolled past the first rail, the backdrop
- * fades to the base background colour.
+ *   ┌──────┬───────────────────────────────────┐
+ *   │      │  HERO (always visible)            │
+ *   │ Side │  Logo/title + meta + Play/Details │
+ *   │ bar  ├───────────────────────────────────┤
+ *   │      │  RAILS (scrollable)               │
+ *   │      │  [card] [card] [card] ...         │
+ *   │      │  ─── Next rail title peek ───     │
+ *   └──────┴───────────────────────────────────┘
  *
- * The sidebar is always visible as a collapsed icon strip. When
- * the user presses D-pad Left from the content area, the sidebar
- * expands with labels. Pressing Right collapses it back.
+ * Every rail drives the hero: when the user focuses a card in ANY
+ * rail, the hero crossfades to that item's backdrop + info. Jumping
+ * from one rail to the next is simply "the hero changes to the new
+ * rail's focused card". The hero never scrolls away — it's a fixed
+ * section that always occupies the upper portion of the screen.
+ *
+ * The backdrop image is full-screen behind everything, with gradient
+ * overlays for legibility. The sidebar is a collapsed icon strip
+ * that expands on D-pad Left.
  */
 @Composable
 fun HomeScreen(
@@ -123,7 +128,6 @@ fun HomeScreen(
                     }
 
                     // ── Layer 1: Gradient overlays ───────────────────────
-                    // Left gradient — ensures sidebar and hero info read clearly
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
@@ -136,25 +140,23 @@ fun HomeScreen(
                                 ),
                             ),
                     )
-                    // Bottom gradient — fades to BgBase toward the rails
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .fillMaxHeight(0.55f)
+                            .fillMaxHeight(0.6f)
                             .background(
                                 Brush.verticalGradient(
                                     0f to Color.Transparent,
-                                    0.4f to BgBase.copy(alpha = 0.6f),
+                                    0.3f to BgBase.copy(alpha = 0.65f),
                                     1f to BgBase,
                                 ),
                             ),
                     )
 
-                    // ── Layer 2: Content (sidebar + scrollable area) ────
+                    // ── Layer 2: Content ─────────────────────────────────
                     Row(modifier = Modifier.fillMaxSize()) {
 
-                        // Sidebar
                         val visibleTabs = LocalVisibleTabs.current
                         HomeSidebar(
                             profileName = profileName,
@@ -166,54 +168,67 @@ fun HomeScreen(
                             visibleTabs = visibleTabs,
                         )
 
-                        // Main content column
-                        Box(
+                        // Main content: hero (top, fixed) + rails (bottom, scroll)
+                        Column(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight(),
                         ) {
-                            Column(
+                            // ── Hero info (fixed top section) ───────────
+                            // Takes ~45% of screen height. Always visible,
+                            // content crossfades when focused item changes.
+                            HeroInfo(
+                                item = heroItem,
+                                onPlay = { it?.let { item -> onPlayItem(item.id, item.resumePosSec) } },
+                                onDetails = { it?.let { item -> onOpenItem(item.id, item.kind) } },
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .verticalScroll(scrollState),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                // Hero info — visible when near top
-                                HeroInfo(
-                                    item = heroItem,
-                                    onPlay = { it?.let { item -> onPlayItem(item.id, item.resumePosSec) } },
-                                    onDetails = { it?.let { item -> onOpenItem(item.id, item.kind) } },
-                                    parentScroll = scrollState,
-                                )
+                                    .fillMaxWidth()
+                                    .weight(0.45f),
+                            )
 
-                                // Rails
-                                ui.data.rails.forEach { config ->
-                                    RenderRail(
-                                        config = config,
-                                        data = ui.data,
-                                        onCardFocused = viewModel::onCardFocused,
-                                        onOpenItem = onOpenItem,
-                                        onPlayItem = onPlayItem,
-                                        parentScroll = scrollState,
-                                    )
-                                }
-
-                                Spacer(Modifier.height(60.dp))
-                            }
-
-                            // Bottom fade overlay — anchored to viewport
+                            // ── Rails (scrollable bottom section) ───────
+                            // Takes ~55% of screen height. Shows the
+                            // current rail + peek of the next one below.
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .height(120.dp)
-                                    .background(
-                                        Brush.verticalGradient(
-                                            0f to Color.Transparent,
-                                            1f to BgBase,
+                                    .weight(0.55f),
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .verticalScroll(scrollState),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    ui.data.rails.forEach { config ->
+                                        RenderRail(
+                                            config = config,
+                                            data = ui.data,
+                                            onCardFocused = viewModel::onCardFocused,
+                                            onOpenItem = onOpenItem,
+                                            onPlayItem = onPlayItem,
+                                            parentScroll = scrollState,
+                                        )
+                                    }
+
+                                    Spacer(Modifier.height(40.dp))
+                                }
+
+                                // Bottom fade so the peek of the next
+                                // rail dissolves into the background.
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .height(80.dp)
+                                        .background(
+                                            Brush.verticalGradient(
+                                                0f to Color.Transparent,
+                                                1f to BgBase,
+                                            ),
                                         ),
-                                    ),
-                            )
+                                )
+                            }
                         }
                     }
                 }
