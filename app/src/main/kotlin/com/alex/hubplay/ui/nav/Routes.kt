@@ -29,9 +29,11 @@ sealed class Route(val path: String) {
     }
 
     /** Item detail / browse-then-play surface (movies). */
-    data object Detail : Route("detail/{itemId}") {
+    data object Detail : Route("detail/{itemId}?trailerResume={trailerResumeSec}") {
         const val ARG_ITEM_ID = "itemId"
-        fun route(itemId: String): String = "detail/$itemId"
+        const val ARG_TRAILER_RESUME = "trailerResumeSec"
+        fun route(itemId: String, trailerResumeSec: Long = 0L): String =
+            "detail/$itemId?trailerResume=$trailerResumeSec"
     }
 
     /** Series detail — seasons + episodes + resume resolver. */

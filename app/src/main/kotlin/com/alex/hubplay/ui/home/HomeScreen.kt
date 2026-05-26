@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -46,13 +47,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
+import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRailType
+import com.alex.hubplay.data.IdleController
+import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.HeroInfo
 import com.alex.hubplay.ui.home.components.HomeSidebar
+import com.alex.hubplay.ui.livetv.ChannelPreviewPlayer
 import com.alex.hubplay.ui.home.components.HomeRail
 import com.alex.hubplay.ui.home.components.LiveNowRail
 import com.alex.hubplay.ui.home.components.LocalVisibleTabs
@@ -78,6 +83,9 @@ fun HomeScreen(
     onLogOut:        () -> Unit,
     onOpenSettings:  () -> Unit = {},
     profileName:     String?   = null,
+    authState:       AuthState? = null,
+    okHttpClient:    okhttp3.OkHttpClient? = null,
+    idleController:  IdleController? = null,
 ) {
     val ui by viewModel.ui.collectAsState()
     val focusedItem by viewModel.focusedItem.collectAsState()
@@ -101,6 +109,11 @@ fun HomeScreen(
     )
 
     val activeTrailer = trailerInfo?.takeIf { it.itemId == heroItem?.id }
+
+    DisposableEffect(trailerRevealed) {
+        if (trailerRevealed) idleController?.setSuspended(true)
+        onDispose { if (trailerRevealed) idleController?.setSuspended(false) }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -143,13 +156,35 @@ fun HomeScreen(
                         }
                     }
 
-                    if (activeTrailer != null) {
+                    if (heroItem?.kind == MediaKind.LiveChannel && authState != null && okHttpClient != null) {
+                        val liveChannel = remember(heroItem?.id) {
+                            heroItem?.let { item ->
+                                LiveChannel(
+                                    id = item.id, name = item.title, number = 0,
+                                    groupName = "", category = "",
+                                    logoUrl = item.logoUrl,
+                                    logoInitials = item.logoInitials,
+                                    logoBg = item.logoBg, logoFg = item.logoFg,
+                                    libraryId = "", isActive = true,
+                                    healthStatus = "ok",
+                                )
+                            }
+                        }
+                        ChannelPreviewPlayer(
+                            channel      = liveChannel,
+                            authState    = authState,
+                            okHttpClient = okHttpClient,
+                            modifier     = Modifier.fillMaxSize(),
+                            fallback     = {},
+                        )
+                    } else if (activeTrailer != null) {
                         HeroTrailerView(
-                            videoKey = activeTrailer.key,
-                            site = activeTrailer.site,
-                            onReveal = { trailerRevealed = true },
-                            onDismiss = { trailerRevealed = false },
-                            modifier = Modifier.fillMaxSize(),
+                            videoKey      = activeTrailer.key,
+                            site          = activeTrailer.site,
+                            onReveal      = { trailerRevealed = true },
+                            onDismiss     = { trailerRevealed = false },
+                            onCurrentTime = viewModel::onTrailerTimeUpdate,
+                            modifier      = Modifier.fillMaxSize(),
                         )
                     }
                     LaunchedEffect(activeTrailer) {
