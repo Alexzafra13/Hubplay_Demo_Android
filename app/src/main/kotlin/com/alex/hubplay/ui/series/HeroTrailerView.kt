@@ -214,7 +214,7 @@ fun HeroTrailerView(
 
                     val html = buildIframeHtml(videoKey)
                     loadDataWithBaseURL(
-                        "https://www.youtube-nocookie.com",
+                        "https://www.youtube.com",
                         html,
                         "text/html",
                         "UTF-8",
@@ -282,7 +282,7 @@ private fun buildIframeHtml(videoKey: String): String {
         </head><body>
           <div class="wrap">
             <iframe
-              src="https://www.youtube-nocookie.com/embed/$safe?autoplay=1&mute=1&controls=0&loop=1&playlist=$safe&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3&disablekb=1&showinfo=0&enablejsapi=1&vq=hd1080"
+              src="https://www.youtube.com/embed/$safe?autoplay=1&mute=1&controls=0&loop=1&playlist=$safe&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3&disablekb=1&showinfo=0&enablejsapi=1&vq=hd1080&origin=https://www.youtube.com"
               allow="autoplay; encrypted-media; picture-in-picture"
               allowfullscreen></iframe>
           </div>
