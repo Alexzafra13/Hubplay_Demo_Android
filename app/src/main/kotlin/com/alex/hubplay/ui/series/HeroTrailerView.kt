@@ -143,6 +143,11 @@ fun HeroTrailerView(
                                     view.evaluateJavascript(JS_UNMUTE, null)
                                 }
                             }, 800)
+                            // Safety timeout: if still not revealed after 6s,
+                            // YouTube likely showed an error page — dismiss.
+                            view?.postDelayed({
+                                if (stage == 1) { stage = 3; onDismiss() }
+                            }, 6000)
                         }
 
                         override fun onReceivedError(
@@ -150,6 +155,17 @@ fun HeroTrailerView(
                             description: String?, failingUrl: String?,
                         ) {
                             if (stage in 0..1) { stage = 3; onDismiss() }
+                        }
+
+                        override fun onReceivedHttpError(
+                            view: WebView?,
+                            request: android.webkit.WebResourceRequest?,
+                            errorResponse: android.webkit.WebResourceResponse?,
+                        ) {
+                            val url = request?.url?.toString().orEmpty()
+                            if (url.contains("/embed/") && stage in 0..1) {
+                                stage = 3; onDismiss()
+                            }
                         }
                     }
 
