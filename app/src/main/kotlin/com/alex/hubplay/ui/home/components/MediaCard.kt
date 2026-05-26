@@ -1,7 +1,5 @@
 package com.alex.hubplay.ui.home.components
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,7 +19,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -47,11 +44,6 @@ fun MediaCard(
     modifier:     Modifier  = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue   = if (focused) 1.05f else 1.0f,
-        animationSpec = tween(durationMillis = 150),
-        label         = "media-card-scale",
-    )
 
     val cardHeight = when (style) {
         CardStyle.Portrait  -> style.defaultWidth * 1.5f
@@ -70,7 +62,6 @@ fun MediaCard(
         modifier = modifier
             .width(slotWidth)
             .height(cardHeight)
-            .scale(scale)
             .clip(shape)
             .onFocusChanged { state ->
                 focused = state.isFocused
@@ -83,7 +74,7 @@ fun MediaCard(
             )
             .then(
                 if (focused) Modifier.border(
-                    width = 2.5.dp,
+                    width = 3.dp,
                     color = Color.White,
                     shape = shape,
                 ) else Modifier,
