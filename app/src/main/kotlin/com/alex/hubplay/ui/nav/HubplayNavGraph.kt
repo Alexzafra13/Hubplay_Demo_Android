@@ -167,6 +167,7 @@ fun HubplayNavGraph(
                 profileName     = authState.activeProfileName,
                 authState       = authState,
                 okHttpClient    = container.mainOkHttp,
+                idleController  = container.idleController,
             )
         }
 

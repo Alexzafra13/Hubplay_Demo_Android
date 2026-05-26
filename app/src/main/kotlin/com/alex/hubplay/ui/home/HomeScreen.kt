@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -49,6 +50,7 @@ import com.alex.hubplay.R
 import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRailType
+import com.alex.hubplay.data.IdleController
 import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.data.MediaKind
@@ -83,6 +85,7 @@ fun HomeScreen(
     profileName:     String?   = null,
     authState:       AuthState? = null,
     okHttpClient:    okhttp3.OkHttpClient? = null,
+    idleController:  IdleController? = null,
 ) {
     val ui by viewModel.ui.collectAsState()
     val focusedItem by viewModel.focusedItem.collectAsState()
@@ -106,6 +109,11 @@ fun HomeScreen(
     )
 
     val activeTrailer = trailerInfo?.takeIf { it.itemId == heroItem?.id }
+
+    DisposableEffect(trailerRevealed) {
+        if (trailerRevealed) idleController?.setSuspended(true)
+        onDispose { if (trailerRevealed) idleController?.setSuspended(false) }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
