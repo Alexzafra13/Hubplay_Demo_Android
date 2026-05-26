@@ -85,10 +85,11 @@ import com.alex.hubplay.ui.theme.BgBase
  */
 @Composable
 fun DetailScreen(
-    viewModel:        DetailViewModel,
-    onPlay:           (itemId: String, resumePosSec: Long) -> Unit,
-    onBack:           () -> Unit,
-    onOpenCollection: (collectionId: String) -> Unit = {},
+    viewModel:          DetailViewModel,
+    onPlay:             (itemId: String, resumePosSec: Long) -> Unit,
+    onBack:             () -> Unit,
+    onOpenCollection:   (collectionId: String) -> Unit = {},
+    trailerResumeSec:   Long = 0L,
 ) {
     val ui by viewModel.ui.collectAsState()
 
@@ -97,11 +98,12 @@ fun DetailScreen(
             ui.isLoading       -> CenteredSpinner()
             ui.error != null   -> ErrorBanner(message = ui.error!!, onRetry = viewModel::load)
             ui.item != null    -> HeroFull(
-                item             = ui.item!!,
-                onPlay           = onPlay,
-                onBack           = onBack,
-                onToggleFavorite = viewModel::toggleFavorite,
-                onOpenCollection = onOpenCollection,
+                item               = ui.item!!,
+                onPlay             = onPlay,
+                onBack             = onBack,
+                onToggleFavorite   = viewModel::toggleFavorite,
+                onOpenCollection   = onOpenCollection,
+                trailerResumeSec   = trailerResumeSec,
             )
         }
     }
@@ -109,11 +111,12 @@ fun DetailScreen(
 
 @Composable
 private fun HeroFull(
-    item:             MediaItem,
-    onPlay:           (String, Long) -> Unit,
-    onBack:           () -> Unit,
-    onToggleFavorite: () -> Unit,
-    onOpenCollection: (String) -> Unit,
+    item:               MediaItem,
+    onPlay:             (String, Long) -> Unit,
+    onBack:             () -> Unit,
+    onToggleFavorite:   () -> Unit,
+    onOpenCollection:   (String) -> Unit,
+    trailerResumeSec:   Long = 0L,
 ) {
     // Backdrop ↔ trailer crossfade — same machinery as the SeriesScreen.
     var trailerRevealed by remember(item.id) { mutableStateOf(false) }
@@ -137,10 +140,11 @@ private fun HeroFull(
         // ── Optional trailer overlay ───────────────────────────────────────
         if (item.trailerKey != null && item.trailerSite != null) {
             HeroTrailerView(
-                videoKey  = item.trailerKey,
-                site      = item.trailerSite,
-                onReveal  = { trailerRevealed = true },
-                onDismiss = { trailerRevealed = false },
+                videoKey   = item.trailerKey,
+                site       = item.trailerSite,
+                startAtSec = trailerResumeSec,
+                onReveal   = { trailerRevealed = true },
+                onDismiss  = { trailerRevealed = false },
             )
         }
 

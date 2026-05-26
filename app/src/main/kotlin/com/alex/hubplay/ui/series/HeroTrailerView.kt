@@ -33,11 +33,13 @@ import java.net.URL
 
 @Composable
 fun HeroTrailerView(
-    videoKey: String,
-    site:     String,
-    modifier: Modifier = Modifier,
-    onReveal: () -> Unit = {},
-    onDismiss: () -> Unit = {},
+    videoKey:      String,
+    site:          String,
+    modifier:      Modifier = Modifier,
+    startAtSec:    Long = 0L,
+    onReveal:      () -> Unit = {},
+    onDismiss:     () -> Unit = {},
+    onCurrentTime: ((Long) -> Unit)? = null,
 ) {
     if (site != "YouTube") return
 
@@ -106,7 +108,10 @@ fun HeroTrailerView(
                         useWideViewPort = true
                         loadWithOverviewMode = false
                         userAgentString = DESKTOP_USER_AGENT
+                        @SuppressLint("SetAllowMixedContent")
+                        mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     }
+                    setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                     setInitialScale(100)
 
                     android.webkit.CookieManager.getInstance()
@@ -118,6 +123,10 @@ fun HeroTrailerView(
                             mainHandler.post {
                                 if (stage == 2) { stage = 3; onDismiss() }
                             }
+                        }
+                        @JavascriptInterface
+                        fun reportTime(seconds: Double) {
+                            onCurrentTime?.invoke(seconds.toLong())
                         }
                     }, "TrailerBridge")
 
@@ -145,11 +154,12 @@ fun HeroTrailerView(
                     }
 
                     val safe = videoKey.replace("\"", "")
+                    val startParam = if (startAtSec > 0) "&start=$startAtSec" else ""
                     loadUrl(
                         "https://www.youtube-nocookie.com/embed/$safe" +
                         "?autoplay=1&mute=1&controls=0&modestbranding=1" +
                         "&playsinline=1&rel=0&iv_load_policy=3&disablekb=1" +
-                        "&showinfo=0&enablejsapi=1&vq=hd1080",
+                        "&showinfo=0&enablejsapi=1&vq=hd1080$startParam",
                     )
                     webViewRef = this
                 }
@@ -201,16 +211,17 @@ private const val JS_HIDE_CHROME = """
 
 private const val JS_END_LISTENER = """
     (function() {
-      var v = document.querySelector('video');
-      if (v) {
+      function setup(v) {
         v.addEventListener('ended', function() { TrailerBridge.onEnded(); });
-      } else {
+        setInterval(function() {
+          if (!v.paused && !v.ended) TrailerBridge.reportTime(v.currentTime);
+        }, 2000);
+      }
+      var v = document.querySelector('video');
+      if (v) { setup(v); } else {
         var t = setInterval(function() {
           var v2 = document.querySelector('video');
-          if (v2) {
-            clearInterval(t);
-            v2.addEventListener('ended', function() { TrailerBridge.onEnded(); });
-          }
+          if (v2) { clearInterval(t); setup(v2); }
         }, 500);
         setTimeout(function() { clearInterval(t); }, 10000);
       }

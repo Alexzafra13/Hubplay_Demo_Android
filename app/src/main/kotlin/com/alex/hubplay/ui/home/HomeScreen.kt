@@ -179,11 +179,12 @@ fun HomeScreen(
                         )
                     } else if (activeTrailer != null) {
                         HeroTrailerView(
-                            videoKey = activeTrailer.key,
-                            site = activeTrailer.site,
-                            onReveal = { trailerRevealed = true },
-                            onDismiss = { trailerRevealed = false },
-                            modifier = Modifier.fillMaxSize(),
+                            videoKey      = activeTrailer.key,
+                            site          = activeTrailer.site,
+                            onReveal      = { trailerRevealed = true },
+                            onDismiss     = { trailerRevealed = false },
+                            onCurrentTime = viewModel::onTrailerTimeUpdate,
+                            modifier      = Modifier.fillMaxSize(),
                         )
                     }
                     LaunchedEffect(activeTrailer) {

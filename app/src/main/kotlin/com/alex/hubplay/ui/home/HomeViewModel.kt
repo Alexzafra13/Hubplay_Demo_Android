@@ -184,6 +184,12 @@ class HomeViewModel(
         }
     }
 
+    @Volatile
+    var trailerCurrentTimeSec: Long = 0L
+        private set
+
+    fun onTrailerTimeUpdate(sec: Long) { trailerCurrentTimeSec = sec }
+
     private var firstFocusConsumed: Boolean = false
 
     fun onCardFocused(item: MediaItem?) {

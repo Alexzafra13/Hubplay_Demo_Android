@@ -159,7 +159,14 @@ fun HubplayNavGraph(
             )
             HomeScreen(
                 viewModel       = viewModel,
-                onOpenItem      = openItem,
+                onOpenItem      = { itemId, kind ->
+                    if (kind == MediaKind.Series) {
+                        navController.navigate(Route.Series.route(itemId))
+                    } else {
+                        val resume = viewModel.trailerCurrentTimeSec
+                        navController.navigate(Route.Detail.route(itemId, resume))
+                    }
+                },
                 onPlayItem      = playItem,
                 onNavigateToTab = navigateToTab,
                 onLogOut        = logOut,
@@ -310,19 +317,24 @@ fun HubplayNavGraph(
             route     = Route.Detail.path,
             arguments = listOf(
                 navArgument(Route.Detail.ARG_ITEM_ID) { type = NavType.StringType },
+                navArgument(Route.Detail.ARG_TRAILER_RESUME) {
+                    type = NavType.LongType; defaultValue = 0L
+                },
             ),
         ) { entry ->
             val itemId = entry.arguments?.getString(Route.Detail.ARG_ITEM_ID) ?: return@composable
+            val trailerResume = entry.arguments?.getLong(Route.Detail.ARG_TRAILER_RESUME) ?: 0L
             val viewModel = viewModel<DetailViewModel>(
                 factory = DetailViewModel.factory(container.homeRepository, itemId),
             )
             DetailScreen(
-                viewModel        = viewModel,
-                onPlay           = { id, resume ->
+                viewModel          = viewModel,
+                trailerResumeSec   = trailerResume,
+                onPlay             = { id, resume ->
                     navController.navigate(Route.Player.route(id, resume))
                 },
-                onBack           = { navController.popBackStack() },
-                onOpenCollection = openCollection,
+                onBack             = { navController.popBackStack() },
+                onOpenCollection   = openCollection,
             )
         }
 
