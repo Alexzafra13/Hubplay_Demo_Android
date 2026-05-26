@@ -165,6 +165,8 @@ fun HubplayNavGraph(
                 onLogOut        = logOut,
                 onOpenSettings  = openSettings,
                 profileName     = authState.activeProfileName,
+                authState       = authState,
+                okHttpClient    = container.mainOkHttp,
             )
         }
 
