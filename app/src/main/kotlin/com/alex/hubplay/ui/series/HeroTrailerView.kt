@@ -172,11 +172,10 @@ fun HeroTrailerView(
                     val safe = videoKey.replace("\"", "")
                     val startParam = if (startAtSec > 0) "&start=$startAtSec" else ""
                     loadUrl(
-                        "https://www.youtube.com/embed/$safe" +
+                        "https://www.youtube-nocookie.com/embed/$safe" +
                         "?autoplay=1&mute=1&controls=0&modestbranding=1" +
                         "&playsinline=1&rel=0&iv_load_policy=3&disablekb=1" +
-                        "&showinfo=0&enablejsapi=1&vq=hd1080" +
-                        "&origin=https://www.youtube.com$startParam",
+                        "&showinfo=0&enablejsapi=1&vq=hd1080$startParam",
                     )
                     webViewRef = this
                 }
