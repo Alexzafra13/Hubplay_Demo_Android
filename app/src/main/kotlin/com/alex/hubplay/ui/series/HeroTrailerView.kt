@@ -60,15 +60,12 @@ fun HeroTrailerView(
     }
 
     LaunchedEffect(stage) {
-        if (stage == 0) {
-            delay(800)
-            stage = 1
-        }
+        if (stage == 0) { delay(800); stage = 1 }
     }
 
     LaunchedEffect(stage) {
         if (stage == 1) {
-            delay(10_000)
+            delay(12_000)
             if (stage == 1) { stage = 3; onDismiss() }
         }
     }
@@ -77,8 +74,8 @@ fun HeroTrailerView(
         val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
             val web = webViewRef ?: return@LifecycleEventObserver
             when (event) {
-                Lifecycle.Event.ON_RESUME -> web.evaluateJavascript(POST_PLAY, null)
-                Lifecycle.Event.ON_PAUSE  -> web.evaluateJavascript(POST_PAUSE, null)
+                Lifecycle.Event.ON_RESUME -> web.evaluateJavascript(JS_PLAY, null)
+                Lifecycle.Event.ON_PAUSE  -> web.evaluateJavascript(JS_PAUSE, null)
                 else -> Unit
             }
         }
@@ -119,11 +116,7 @@ fun HeroTrailerView(
                         @JavascriptInterface
                         fun onEnded() {
                             mainHandler.post {
-                                Log.d(TAG, "trailer ended via JS bridge: $videoKey")
-                                if (stage == 2) {
-                                    stage = 3
-                                    onDismiss()
-                                }
+                                if (stage == 2) { stage = 3; onDismiss() }
                             }
                         }
                     }, "TrailerBridge")
@@ -131,20 +124,16 @@ fun HeroTrailerView(
                     webChromeClient = WebChromeClient()
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
+                            if (url?.contains("about:blank") == true) return
                             view?.postDelayed({
                                 if (stage == 1) {
+                                    view.evaluateJavascript(JS_HIDE_CHROME, null)
+                                    view.evaluateJavascript(JS_END_LISTENER, null)
                                     stage = 2
                                     onReveal()
-                                    view.evaluateJavascript(POST_HD_QUALITY, null)
-                                    view.evaluateJavascript(POST_UNMUTE, null)
-                                    view.postDelayed({
-                                        view.evaluateJavascript(POST_HD_QUALITY, null)
-                                    }, 2_000)
-                                    view.postDelayed({
-                                        view.evaluateJavascript(POST_HD_QUALITY, null)
-                                    }, 5_000)
+                                    view.evaluateJavascript(JS_UNMUTE, null)
                                 }
-                            }, 500)
+                            }, 800)
                         }
 
                         override fun onReceivedError(
@@ -155,10 +144,12 @@ fun HeroTrailerView(
                         }
                     }
 
-                    loadDataWithBaseURL(
-                        "https://www.youtube-nocookie.com",
-                        buildIframeHtml(videoKey),
-                        "text/html", "UTF-8", null,
+                    val safe = videoKey.replace("\"", "")
+                    loadUrl(
+                        "https://www.youtube-nocookie.com/embed/$safe" +
+                        "?autoplay=1&mute=1&controls=0&modestbranding=1" +
+                        "&playsinline=1&rel=0&iv_load_policy=3&disablekb=1" +
+                        "&showinfo=0&enablejsapi=1&vq=hd1080",
                     )
                     webViewRef = this
                 }
@@ -174,52 +165,6 @@ fun HeroTrailerView(
             },
         )
     }
-}
-
-private fun buildIframeHtml(videoKey: String): String {
-    val safe = videoKey.replace("\"", "")
-    return """
-        <!DOCTYPE html>
-        <html><head><meta name="viewport" content="width=1920">
-        <style>
-          html,body{margin:0;padding:0;background:#000;overflow:hidden;height:100%;width:100%}
-          .wrap{position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden}
-          iframe{
-            position:absolute;
-            top:-4%; left:-4%;
-            width:108%; height:108%;
-            border:0;
-            pointer-events:none;
-          }
-        </style>
-        </head><body>
-          <div class="wrap">
-            <iframe id="yt"
-              src="https://www.youtube-nocookie.com/embed/$safe?autoplay=1&mute=1&controls=0&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3&disablekb=1&showinfo=0&enablejsapi=1&vq=hd1080"
-              allow="autoplay; encrypted-media; picture-in-picture"
-              allowfullscreen></iframe>
-          </div>
-          <script>
-            window.addEventListener('message', function(e) {
-              try {
-                var d = JSON.parse(e.data);
-                if (d.event === 'onStateChange' && d.info === 0) {
-                  TrailerBridge.onEnded();
-                }
-                if (d.info && d.info.playerState === 0) {
-                  TrailerBridge.onEnded();
-                }
-              } catch(x) {}
-            });
-            var f = document.getElementById('yt');
-            if (f) {
-              f.addEventListener('load', function() {
-                f.contentWindow.postMessage('{"event":"listening"}', '*');
-              });
-            }
-          </script>
-        </body></html>
-    """.trimIndent()
 }
 
 private suspend fun isEmbeddable(videoKey: String): Boolean {
@@ -246,15 +191,41 @@ private const val DESKTOP_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 
-private const val POST_PLAY = """
-    (function() { var f = document.querySelector('iframe'); if (f && f.contentWindow) f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); })();
+private const val JS_HIDE_CHROME = """
+    (function() {
+      var s = document.createElement('style');
+      s.textContent = '.ytp-chrome-top,.ytp-chrome-bottom,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-pause-overlay,.ytp-watermark,.ytp-show-cards-title,.ytp-impression-link{display:none!important;opacity:0!important}.html5-video-player{overflow:hidden}';
+      document.head.appendChild(s);
+    })();
 """
-private const val POST_PAUSE = """
-    (function() { var f = document.querySelector('iframe'); if (f && f.contentWindow) f.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*'); })();
+
+private const val JS_END_LISTENER = """
+    (function() {
+      var v = document.querySelector('video');
+      if (v) {
+        v.addEventListener('ended', function() { TrailerBridge.onEnded(); });
+      } else {
+        var t = setInterval(function() {
+          var v2 = document.querySelector('video');
+          if (v2) {
+            clearInterval(t);
+            v2.addEventListener('ended', function() { TrailerBridge.onEnded(); });
+          }
+        }, 500);
+        setTimeout(function() { clearInterval(t); }, 10000);
+      }
+    })();
 """
-private const val POST_HD_QUALITY = """
-    (function() { var f = document.querySelector('iframe'); if (f && f.contentWindow) { f.contentWindow.postMessage('{"event":"command","func":"setPlaybackQuality","args":["hd1080"]}', '*'); f.contentWindow.postMessage('{"event":"command","func":"setPlaybackQualityRange","args":[{"min":"hd1080","max":"hd2160"}]}', '*'); } })();
+
+private const val JS_PLAY = """
+    (function() { var v = document.querySelector('video'); if (v) v.play(); })();
 """
-private const val POST_UNMUTE = """
-    (function() { var f = document.querySelector('iframe'); if (f && f.contentWindow) { f.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}', '*'); f.contentWindow.postMessage('{"event":"command","func":"setVolume","args":[80]}', '*'); } })();
+private const val JS_PAUSE = """
+    (function() { var v = document.querySelector('video'); if (v) v.pause(); })();
+"""
+private const val JS_UNMUTE = """
+    (function() {
+      var v = document.querySelector('video');
+      if (v) { v.muted = false; v.volume = 0.8; }
+    })();
 """
