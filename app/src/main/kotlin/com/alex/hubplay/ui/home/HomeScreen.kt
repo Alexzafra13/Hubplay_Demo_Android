@@ -2,11 +2,13 @@ package com.alex.hubplay.ui.home
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,13 +35,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRestorer
 import kotlinx.coroutines.flow.first
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
 import com.alex.hubplay.data.AuthState
+import com.alex.hubplay.data.HomeData
 import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.IdleController
@@ -82,7 +84,7 @@ private val SuppressVerticalBringIntoView = object : BringIntoViewSpec {
     ): Float = 0f
 }
 
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun HomeScreen(
     viewModel:       HomeViewModel,
@@ -147,7 +149,7 @@ fun HomeScreen(
     //    a través de la transparencia durante todo ese tiempo.
     val backdropAlpha by animateFloatAsState(
         targetValue = if (trailerRevealed) 0f else 1f,
-        animationSpec = if (trailerRevealed) tween(durationMillis = 700) else androidx.compose.animation.core.snap(),
+        animationSpec = if (trailerRevealed) tween(durationMillis = 700) else snap(),
         label = "backdrop-fade",
     )
 
@@ -201,7 +203,7 @@ fun HomeScreen(
                 // que tenía el foco antes — fuerza al sistema a meter el
                 // foco en los rails (no en el sidebar) y deja que el chain
                 // de `focusRestorer`s elija el item correcto dentro.
-                val railFocusRequesters = remember { mutableMapOf<String, androidx.compose.ui.focus.FocusRequester>() }
+                val railFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
 
                 DisposableEffect(Unit) {
                     viewModel.resetFirstFocusGate()
@@ -368,8 +370,7 @@ fun HomeScreen(
                             // ── Rails — LazyColumn, bottom half ───────
                             @OptIn(ExperimentalFoundationApi::class)
                             CompositionLocalProvider(
-                                androidx.compose.foundation.gestures.LocalBringIntoViewSpec
-                                    provides SuppressVerticalBringIntoView,
+                                LocalBringIntoViewSpec provides SuppressVerticalBringIntoView,
                             ) {
                                 LazyColumn(
                                     state = listState,
@@ -382,9 +383,7 @@ fun HomeScreen(
                                         key = { _, config -> config.id },
                                     ) { index, config ->
                                         val railRequester = railFocusRequesters
-                                            .getOrPut(config.id) {
-                                                androidx.compose.ui.focus.FocusRequester()
-                                            }
+                                            .getOrPut(config.id) { FocusRequester() }
                                         Box(
                                             modifier = Modifier
                                                 .fillParentMaxHeight(0.88f)
@@ -430,12 +429,12 @@ fun HomeScreen(
 @Composable
 private fun RenderRail(
     config:               HomeRailConfig,
-    data:                 com.alex.hubplay.data.HomeData,
+    data:                 HomeData,
     onCardFocused:        (MediaItem) -> Unit,
     onOpenItem:           (String, MediaKind) -> Unit,
     onPlayItem:           (String, Long) -> Unit,
     initialFocusedItemId: String? = null,
-    railFocusRequester:   androidx.compose.ui.focus.FocusRequester? = null,
+    railFocusRequester:   FocusRequester? = null,
 ) {
     when (config.type) {
         HomeRailType.ContinueWatching -> HomeRail(

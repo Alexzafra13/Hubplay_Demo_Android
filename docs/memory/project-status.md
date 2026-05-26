@@ -1,11 +1,118 @@
 # Estado del proyecto — HubPlay Android
 
-> **Última sesión**: 2026-05-26/27 — rama `main` (push directo, sin PR).
-> **Estado**: Sistema de trailer hero **completamente reescrito** —
-> WebView singleton compartido entre Home/Detail/Series con continuidad
-> sin cortes, focus restoration tras back-nav, perf optimizado para
-> Mi Box S, fluidez tipo Netflix/Prime.
+> **Última sesión**: 2026-05-26 — rama `claude/project-review-QU5nR`.
+> **Estado**: Code review + refactor del Home. Error handling en refresh,
+> deduplicación HomeRail, limpieza de imports/FQN, cancelación de
+> refreshes concurrentes, tests de TrailerHost (14 tests nuevos).
 > **Leer este fichero al inicio de cada sesión** para retomar contexto.
+
+---
+
+## 🧹 Sesión 2026-05-26 — Home review: buenas prácticas + tests
+
+Revisión profunda del Home Screen y componentes asociados. Se
+encontraron 7 áreas de mejora; todas resueltas en un solo commit.
+
+### Fix: error handling en refresh() — ErrorBanner ya no es código muerto
+
+**Antes**: `HomeViewModel.refresh()` envolvía todos los fetch en
+`runCatching { ... }.getOrElse { emptyList() }`. Si la red fallaba
+al 100%, el usuario veía un Home vacío sin spinner ni mensaje. El campo
+`error` de `HomeUiState` nunca se seteaba → `ErrorBanner` era dead code.
+
+**Ahora**: tras construir `HomeData`, se comprueba si hay al menos un
+rail con contenido. Si todo está vacío, se setea `error` con mensaje
+accionable ("Comprueba tu conexión e inténtalo de nuevo"). `ErrorBanner`
+muestra el retry.
+
+### Fix: cancelación de refresh() concurrentes
+
+**Antes**: si varios SSE events colaban por el debounce de 5s (o el
+usuario forzaba refresh mientras uno estaba en vuelo), múltiples
+coroutines hacían los mismos 6+ fetch en paralelo. La última en
+terminar ganaba, las demás desperdiciaban red.
+
+**Ahora**: `refreshJob?.cancel()` antes de lanzar el nuevo; el anterior
+se cancela limpiamente via `supervisorScope`.
+
+### Deduplicación HomeRail / LiveNowRail
+
+**Antes**: 196 líneas con ~80 líneas duplicadas entre `HomeRail` y
+`LiveNowRail` (misma lógica de scroll, focus, restore — solo difería
+el tipo de card).
+
+**Ahora**: 156 líneas. `BaseRail` privado con slot `card` lambda.
+`HomeRail` y `LiveNowRail` son wrappers de 15 líneas cada uno. API
+pública idéntica — zero cambio en call sites.
+
+### Limpieza de imports y FQN en HomeScreen.kt
+
+- 3 imports muertos eliminados (`mutableStateOf`, `mutableStateMapOf`,
+  `rememberCoroutineScope`).
+- 7 FQN inline reemplazados por imports proper (`FocusRequester`,
+  `snap()`, `LocalBringIntoViewSpec`, `ExperimentalComposeUiApi`,
+  `HomeData`).
+
+### focusedItem hecho privado en HomeViewModel
+
+`focusedItem: StateFlow` era público pero nunca colectado externamente
+(HomeScreen usa `focusedItemForUi`). El backing field `_focusedItem` se
+usa internamente para el trailer fetch. El público estaba de más.
+
+### trending.await() — guardado en val local
+
+`trending.await()` se llamaba dos veces (L178 y L183). `Deferred.await()`
+cachea el resultado, pero leer el código sugería dos fetches. Ahora hay
+un `val trendingItems = trending.await()` antes del constructor de
+`HomeData`.
+
+### Tests: TrailerHost (14 tests nuevos)
+
+`TrailerHostTest.kt` — tests JVM puros con `runTest` + `advanceTimeBy`:
+
+- `activate sets current to the requested trailer`
+- `second activate overrides current with latest claim`
+- `deactivate last claim clears current after debounce`
+- `deactivate with remaining claims keeps current`
+- `same videoKey preserves revealed state on new claim`
+- `different videoKey resets revealed and time`
+- `different videoKey with startAtSec seeds the time`
+- `hideNow clears everything immediately without debounce`
+- `hideNow cancels pending debounce hide`
+- `reportPlaying sets revealed`
+- `reportEnded clears revealed`
+- `reportTime updates currentTimeSec`
+- `embeddability cache stores and retrieves`
+- `debounce hide is cancelled when new claim arrives during nav gap`
+
+Cubren la lógica más crítica del sistema de trailers: claims,
+continuidad, debounce, hideNow, y el cache de embeddability.
+
+### Archivos modificados
+
+- `app/src/main/kotlin/com/alex/hubplay/ui/home/HomeViewModel.kt` —
+  refresh job cancellation, error detection, focusedItem private,
+  trending local, import Job.
+- `app/src/main/kotlin/com/alex/hubplay/ui/home/HomeScreen.kt` —
+  3 imports muertos, 7 FQN → imports, HomeData import.
+- `app/src/main/kotlin/com/alex/hubplay/ui/home/components/HomeRail.kt` —
+  BaseRail extraction, HomeRail/LiveNowRail como wrappers.
+
+### Archivos creados
+
+- `app/src/test/kotlin/com/alex/hubplay/data/TrailerHostTest.kt` —
+  14 tests.
+
+### Nota sobre testabilidad de HomeViewModel
+
+`HomeViewModel` no es directamente testable en JVM porque depende de
+`HomeRepository` (clase concreta) que depende de `TokenStore` (Android
+DataStore). Para testarlo en JVM, necesitaría:
+1. Extraer interfaz de `HomeRepository`, o
+2. Añadir constructor con lambdas al estilo de `ProfileRepository`.
+
+El patrón #2 es el que usa el proyecto. Queda como tarea de refactor
+cuando se decida ampliar los tests.
 
 ---
 
