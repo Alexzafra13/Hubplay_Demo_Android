@@ -3,6 +3,13 @@
 build/
 local.properties
 gradle/wrapper/gradle-wrapper.jar
+# Wrapper scripts are generated locally — CI uses gradle/actions/setup-gradle@v4
+gradlew
+gradlew.bat
+.kotlin/
+
+# Claude Code workspace metadata (local only)
+.claude/
 
 # Android Studio / IntelliJ
 .idea/

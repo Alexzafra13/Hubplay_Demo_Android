@@ -1,12 +1,279 @@
 # Estado del proyecto — HubPlay Android
 
-> **Última sesión**: 2026-05-25 — rama `claude/charming-fermat-y4rPQ`
-> (Home redesign: Amazon Prime Video style layout para Android TV).
-> **Estado**: Home rediseñado con sidebar lateral colapsable, backdrop a
-> pantalla completa que reacciona al foco del primer rail, y panel de hero
-> con logo/descripción/CTAs. Pendiente: trailer integration en hero,
-> ajustes finos de transiciones y scroll behavior.
+> **Última sesión**: 2026-05-26/27 — rama `main` (push directo, sin PR).
+> **Estado**: Sistema de trailer hero **completamente reescrito** —
+> WebView singleton compartido entre Home/Detail/Series con continuidad
+> sin cortes, focus restoration tras back-nav, perf optimizado para
+> Mi Box S, fluidez tipo Netflix/Prime.
 > **Leer este fichero al inicio de cada sesión** para retomar contexto.
+
+---
+
+## 🎬 Sesión 2026-05-26/27 — Trailer hero: continuidad + foco + fluidez
+
+Sesión maratón resolviendo TODO el sistema de trailer hero del Home y
+las pantallas Detail/Series. Empezó con error 153 de YouTube y terminó
+con un sistema completo estilo Netflix/Prime Video.
+
+### Arquitectura nueva: TrailerHost singleton
+
+**Antes**: cada pantalla (Home, Detail, Series) montaba su propio
+`HeroTrailerView` con su `WebView`. Al navegar entre pantallas el vídeo
+se interrumpía y recargaba.
+
+**Ahora**:
+- `data/TrailerHost.kt` — singleton scoped a la Activity. Mantiene un
+  sistema de **claims por referencia** (`claims: LinkedHashMap<UUID, TrailerRequest>`).
+  Cada pantalla activa/desactiva un claim. Si el nuevo claim tiene la
+  misma `videoKey` que el actual → NO recarga, mantiene reproducción.
+- `ui/components/TrailerHostOverlay.kt` — composable montado a nivel
+  root en `HubplayApp.kt`. UN ÚNICO `WebView` vive toda la sesión.
+- `LocalTrailerHost` CompositionLocal para acceso desde cualquier pantalla.
+
+**Continuidad Home → Detail del mismo item**: ambas pantallas claman
+con la misma `videoKey`. El host detecta key igual → no toca el WebView
+→ el vídeo sigue sin parpadeo. Solo cambia el contenido alrededor
+(sidebar/rails desaparecen, carátula/sinopsis/botón Reproducir aparecen).
+
+**Debounce de hide (500ms)**: cuando claims pasa a vacío (durante el
+gap de navegación entre Home y Detail), el host espera 500ms antes de
+limpiar — eso absorbe el frame donde Home se desmonta antes de que
+Detail monte. Si Detail re-clama con misma key dentro de los 500ms,
+se cancela el hide. Sin esto, había un corte.
+
+**`hideNow()` instantáneo**: bypassea el debounce. Se llama:
+- Cuando `activeTrailer` en Home pasa a null (in-screen change a card
+  sin trailer) — el audio del trailer anterior se corta YA.
+- Cuando el `NavController` cambia a una pantalla que NO es trailer
+  screen (Movies grid, Settings, Player, etc.). Listener en `HubplayApp`
+  via `currentBackStackEntryAsState`.
+
+### Sistema iframe (resolvió error 153 de YouTube)
+
+YouTube IFrame Player API es muy sensible al contexto. Usar
+`loadUrl("https://youtube-nocookie.com/embed/X")` como navegación
+top-level del WebView causaba error 153 ("video no permitido para
+embedding") en MUCHOS vídeos — YouTube veía un browser sin Referer/
+Origin de un dominio embedder.
+
+**Fix**: `loadDataWithBaseURL("https://hubplay.app", html, ...)` donde
+`html` contiene un `<iframe src="...&origin=https://hubplay.app">`.
+Así el iframe interno ve un parent legítimo, no una nav top-level.
+Identical a lo que hace la web del proyecto (`HubPlay_demo/web/`).
+
+URL del iframe (mata la "pantalla gris con play"):
+```
+https://www.youtube-nocookie.com/embed/$key?
+  autoplay=1&mute=1&controls=0
+  &modestbranding=1&playsinline=1&rel=0&iv_load_policy=3
+  &disablekb=1&showinfo=0&enablejsapi=1
+  &origin=https://hubplay.app
+```
+
+`mute=1` es OBLIGATORIO — sin él, autoplay falla en WebView y YouTube
+pinta su play button gigante. Después, al detectar PLAYING, mandamos
+`unMute` + `setVolume:80` via postMessage.
+
+### Detección fiable del fin del trailer (anti end-screen gris)
+
+YouTube no siempre dispara `state=0` (ENDED). Para evitar la end-screen
+de sugerencias gris con thumbnails, hay 3 redes de seguridad:
+
+1. **`state === 0` (ENDED)** — caso normal.
+2. **`currentTime >= duration - 1.5s`** — fade-out anticipado, escondemos
+   ANTES de que YouTube pinte la end-screen.
+3. **Stall detection** — si `currentTime` no avanza 3 polls seguidos
+   (~4.5s) tras los primeros 5s, asumimos atasco al final.
+
+NO usamos `state === 2 (PAUSED)` aunque suene fin: YouTube dispara
+PAUSED brevemente mid-play (buffer interno, cambio de calidad) y
+causaba un flicker de ~1s del backdrop a los 2-3s de empezar.
+
+`getDuration` se pide al primer `state=1` con heurística: la primera
+respuesta numérica > 30s tras pedirlo es la duración (los trailers
+duran >30s, currentTime arranca ~0).
+
+Guard `ended` para que `fireEnded()` sea idempotente y para que un
+`state=1` posterior al fade-out anticipado NO re-arranque el polling
+(eso causaba reveal-flicker tras el cierre).
+
+### Reveal basado en `currentTime > 0.1` (no en delay fijo)
+
+YouTube dispara `state=1` (PLAYING) cuando el player arranca, pero el
+primer frame del video tarda 200-600ms en renderizarse (decode + GPU).
+Si revelábamos en `state=1`, la transición backdrop→trailer descubría
+una WebView negra.
+
+**Fix**: polling cada 300ms. Reveal **solo cuando** `currentTime > 0.1`
+(YouTube responde con un tiempo real de progreso, no un 0 inicial).
+Más fiable que un `setTimeout` arbitrario porque se adapta al hardware.
+
+### Focus restoration tras back-nav (Home → Detail → Home)
+
+**El problema**: tras volver de Detail, el foco caía en la lupa del
+sidebar o en la primera card del primer rail, no en la card original.
+
+**Causas raíz auditadas** (sesión de audit con agente):
+1. `focusRestorer` anidado: Box exterior de cada rail + LazyRow interior
+   — el outer asignaba a Default tras el inner asignar al target
+   correcto, causando parpadeo del foco.
+2. `HeroInfo.playFocusRequester` peleaba por foco inicial.
+3. `LaunchedEffect + delay(150)` era racy en Mi Box S.
+4. `listState.firstVisibleItemIndex` al disposing podía estar STALE si
+   el usuario clicaba antes de que el `scrollToItem` se completara
+   (coroutine cancelada por dispose).
+
+**Solución** (combinación de varias capas):
+- `HomeViewModel.HomeScrollSnapshot(railIndex, focusedItemIdByRail)` —
+  persiste estado en el VM (sobrevive disposition de HomeScreen).
+- `LazyListState` inicializado con `firstVisibleItemIndex = snapshot.railIndex`
+  via `rememberSaveable(saver = LazyListState.Saver)`.
+- `activeRailIndex` (no `listState.firstVisibleItemIndex`) se guarda
+  en el snapshot — es síncrono con onFocused, sin depender del scroll.
+- Un `FocusRequester` por rail, creado en `HomeScreen`, pasado a
+  `RenderRail → HomeRail → LazyRow.modifier.focusRequester(...)`.
+- `LaunchedEffect(rails, scrollSnapshot)` que espera al frame en el
+  que el rail-target es visible (vía `snapshotFlow.first { it }`) y
+  llama `requester.requestFocus()`.
+- `Modifier.focusProperties { enter = { railRequester } }` en el Box
+  wrapper de cada rail (declarativo, sin race conditions).
+- `HomeRail` con `Modifier.focusRestorer { restoreRequester }` que
+  routea al item-target dentro del rail.
+- `HeroInfo` con `requestInitialFocus: Boolean` — false si hay snapshot
+  guardado (no compite con railFocusRequester).
+- `MediaCard` con `Modifier.focusRequester(restoreRequester)` atado al
+  item-target.
+- `keys = item.id` (no índice) en `LazyRow.items(...)` — sin keys
+  estables, focusRestorer no puede emparejar item↔nodo.
+- `viewModel.resetFirstFocusGate()` en `DisposableEffect(Unit)` al
+  entrar — el `firstFocusConsumed` no debe pisar la card recordada.
+
+**ELIMINADO**: el `focusRestorer` exterior en el Box wrapper de cada
+rail. Solo el interior del LazyRow. Sin doble capa, sin flickers.
+
+### Layering correcto del backdrop (modifier order gotcha)
+
+Bug muy sutil de Compose: `Modifier.background(BgBase).alpha(backdropAlpha)`
+NO funciona como uno espera. `alpha()` crea un graphics layer que solo
+envuelve lo que viene DESPUÉS en la cadena. El `background()` queda
+FUERA del layer y se dibuja a full opacity siempre.
+
+Resultado: aunque `alpha=0`, el BgBase tapaba la WebView del trailer.
+Audio sonaba pero video no se veía.
+
+**Fix**: orden correcto es `.alpha(backdropAlpha).background(BgBase)`:
+- alpha exterior (graphics layer envuelve TODO lo que viene después)
+- background interior (DENTRO del layer, fade con alpha)
+- AsyncImage del backdrop interior (también DENTRO del layer)
+
+### Backdrop alpha asimétrica
+
+- Trailer REVELANDO (false→true): fade out suave de backdrop 700ms.
+- Trailer OCULTÁNDOSE (true→false): **snap inmediato** a opaco. Sin
+  esto, la WebView del trailer anterior (con su end-screen) se veía
+  durante los 700ms de animación.
+
+```kotlin
+val backdropAlpha by animateFloatAsState(
+    targetValue = if (trailerRevealed) 0f else 1f,
+    animationSpec = if (trailerRevealed) tween(700) else snap(),
+)
+```
+
+### Performance fixes
+
+1. **Split debounce de foco**:
+   - `focusedItemForUi` (150ms) drive heroItem + backdrop. Snappy.
+   - `focusedItem` (500ms) drive trailer fetch. Evita spam.
+2. **Cache de `isEmbeddable`** en `TrailerHost` (`ConcurrentHashMap<String, Boolean>`).
+   Antes: GET HTTPS a `youtube.com/oembed` por cada cambio de foco.
+   Ahora: una sola vez por videoKey en toda la sesión.
+3. **`SSE_REFRESH_DEBOUNCE_MS`** subido de 1.5s → 5s. `ProgressUpdated`
+   ya no recarga el Home varias veces por segundo.
+4. **`perRailFocused` como `mutableMapOf` plano** (no `mutableStateMapOf`).
+   El SnapshotStateMap causaba recomposición cascade de TODOS los rails
+   en cada cambio de foco.
+5. **`animateScrollToItem`** en lugar de `scrollToItem` para vertical
+   entre rails — animación spring estilo Prime.
+
+### Audio: cierre limpio al cambiar card
+
+`JS_PAUSE` (postMessage `pauseVideo` al iframe) **antes** de
+`loadUrl("about:blank")`:
+```kotlin
+wv.evaluateJavascript(JS_PAUSE, null)  // ~10ms — corta audio YA
+wv.stopLoading()
+wv.loadUrl("about:blank")               // 50-100ms — destruye iframe
+```
+
+Sin el pause previo, el audio del trailer anterior seguía sonando
+medio segundo durante la transición.
+
+### Archivos creados
+
+- `app/src/main/kotlin/com/alex/hubplay/data/TrailerHost.kt`
+- `app/src/main/kotlin/com/alex/hubplay/ui/components/TrailerHostOverlay.kt`
+
+### Archivos modificados
+
+- `app/src/main/kotlin/com/alex/hubplay/ui/HubplayApp.kt` — provee
+  TrailerHost via CompositionLocal, monta TrailerHostOverlay a nivel
+  root, listener de navegación para hideNow en pantallas no-trailer,
+  BG=BgBase en root Box.
+- `app/src/main/kotlin/com/alex/hubplay/ui/home/HomeScreen.kt` —
+  Surface transparente, backdrop con alpha asimétrica, claim del
+  trailer, focus restoration completa, snapshot persistence.
+- `app/src/main/kotlin/com/alex/hubplay/ui/home/HomeViewModel.kt` —
+  split focus debounce (UI fast / trailer slow), HomeScrollSnapshot,
+  resetFirstFocusGate, debounces subidos.
+- `app/src/main/kotlin/com/alex/hubplay/ui/home/components/HomeRail.kt` —
+  focusRestorer + key=item.id + railFocusRequester + restoreRequester +
+  pre-scroll a restoreIndex en `rememberLazyListState`.
+- `app/src/main/kotlin/com/alex/hubplay/ui/home/components/HeroInfo.kt` —
+  parámetro `requestInitialFocus`.
+- `app/src/main/kotlin/com/alex/hubplay/ui/detail/DetailScreen.kt` —
+  Surface transparente, claim al trailer host con `startAtSec`.
+- `app/src/main/kotlin/com/alex/hubplay/ui/series/SeriesScreen.kt` —
+  igual que Detail.
+- `app/src/main/kotlin/com/alex/hubplay/ui/series/HeroTrailerView.kt` —
+  conservado como referencia (ya no se usa, pero no se borró por si
+  alguna pantalla futura lo quiere standalone).
+
+### Lessons learned esta sesión
+
+1. **`Modifier.alpha().background()` vs `Modifier.background().alpha()`**
+   producen resultados muy distintos. El primero envuelve TODO en el
+   graphics layer; el segundo deja el BG fuera y siempre visible.
+2. **YouTube `state=1` (PLAYING) ≠ frame visible**. El decode+GPU
+   pipeline tarda 200-600ms más. Esperar a `currentTime > 0.1` (proof
+   de avance real) en vez de a `state=1` o un `setTimeout` fijo.
+3. **YouTube `state=2` (PAUSED) NO es señal de fin** — fire mid-play
+   por buffer interno. Solo state=0 + fade anticipado por duration +
+   stall son fiables.
+4. **`listState.firstVisibleItemIndex` puede estar STALE** al disposing
+   si la coroutine de `scrollToItem` se canceló. Mejor guardar el
+   tracking state síncrono (`activeRailIndex`).
+5. **`focusRestorer` anidados se pelean** — usar uno solo por nivel.
+   Para cross-screen, no es suficiente; necesitas explicit FocusRequester.
+6. **Compose Navigation conserva rememberSaveable** dentro del mismo
+   NavBackStackEntry. Pero remember se descarta. Si necesitas
+   persistencia entre nav, usa ViewModel o rememberSaveable.
+7. **TV box lentas necesitan los snapshots, no las animaciones**.
+   `scrollToItem` para precisión + estado sincrono, `animateScrollTo`
+   para la sensación. Combinarlos bien.
+
+### Pendientes que dejo abiertos
+
+- `HeroTrailerView.kt` (legacy) está sin uso. Borrar en próximo cleanup
+  si nadie lo reclama.
+- `mutableStateMapOf` import en HomeScreen podría haberse quitado
+  cuando cambié a mutableMapOf — no rompe pero es ruido.
+- El polling de 300ms podría bajarse a 500ms si el reveal es ya muy
+  responsivo (menos CPU).
+- Pre-cargar imágenes de backdrop con Coil prefetch durante scroll —
+  hoy AsyncImage carga on-demand y en Mi Box S puede tardar.
+
+---
 
 ---
 

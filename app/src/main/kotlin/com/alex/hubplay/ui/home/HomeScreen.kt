@@ -36,6 +36,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRestorer
+import kotlinx.coroutines.flow.first
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -62,7 +70,7 @@ import com.alex.hubplay.ui.home.components.HomeRail
 import com.alex.hubplay.ui.home.components.LiveNowRail
 import com.alex.hubplay.ui.home.components.LocalVisibleTabs
 import com.alex.hubplay.ui.home.components.Tab
-import com.alex.hubplay.ui.series.HeroTrailerView
+import com.alex.hubplay.data.LocalTrailerHost
 import com.alex.hubplay.ui.theme.BgBase
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -74,6 +82,7 @@ private val SuppressVerticalBringIntoView = object : BringIntoViewSpec {
     ): Float = 0f
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun HomeScreen(
     viewModel:       HomeViewModel,
@@ -88,7 +97,10 @@ fun HomeScreen(
     idleController:  IdleController? = null,
 ) {
     val ui by viewModel.ui.collectAsState()
-    val focusedItem by viewModel.focusedItem.collectAsState()
+    // focusedItemForUi (150ms debounce) drive heroItem + backdrop —
+    // se siente snappy. focusedItem (500ms debounce) sigue siendo el
+    // que activa el trailer fetch, evitando spam durante navegación rápida.
+    val focusedItem by viewModel.focusedItemForUi.collectAsState()
     val trailerInfo by viewModel.trailerInfo.collectAsState()
 
     val isLanding by remember {
@@ -101,14 +113,50 @@ fun HomeScreen(
         }
     }
 
-    var trailerRevealed by remember { mutableStateOf(false) }
+    // El trailer ya no es local: el WebView vive en TrailerHostOverlay (root).
+    // Activamos un claim para el item del hero focused; el host decide si
+    // recargar (key distinta) o continuar (misma key, viene de otra pantalla).
+    val trailerHost = LocalTrailerHost.current
+    val activeTrailer = trailerInfo?.takeIf { it.itemId == heroItem?.id }
+    val currentHostItemId = trailerHost.current.value?.itemId
+    val trailerRevealed = trailerHost.revealed.value && currentHostItemId == heroItem?.id
+
+    DisposableEffect(activeTrailer?.itemId, activeTrailer?.key, activeTrailer?.site) {
+        val token = activeTrailer?.let {
+            trailerHost.activate(it.itemId, it.key, it.site)
+        }
+        onDispose { token?.let { trailerHost.deactivate(it) } }
+    }
+
+    // Cuando el foco cae en una card SIN trailer (in-screen), forzamos
+    // hideNow para que el WebView del trailer anterior desaparezca al
+    // instante (audio incluido). Sin esto, el debounce de 500ms del host
+    // dejaba la WebView activa medio segundo más, mostrando el end-screen
+    // de YouTube con el botón Play sobre la nueva card.
+    LaunchedEffect(activeTrailer) {
+        if (activeTrailer == null) trailerHost.hideNow()
+    }
+
+    // Backdrop alpha asimétrica:
+    //  - Trailer REVELANDO (false→true): fade out suave 700ms (al usuario
+    //    le gusta ver cómo desaparece el backdrop dejando paso al trailer).
+    //  - Trailer OCULTÁNDOSE (true→false): snap inmediato a 1. El backdrop
+    //    de la nueva card aparece YA, cubriendo cualquier resto visual
+    //    del WebView anterior. Si animáramos los 700ms aquí también, la
+    //    WebView del trailer viejo (end-screen gris con play) se vería
+    //    a través de la transparencia durante todo ese tiempo.
     val backdropAlpha by animateFloatAsState(
         targetValue = if (trailerRevealed) 0f else 1f,
-        animationSpec = tween(durationMillis = 700),
+        animationSpec = if (trailerRevealed) tween(durationMillis = 700) else androidx.compose.animation.core.snap(),
         label = "backdrop-fade",
     )
 
-    val activeTrailer = trailerInfo?.takeIf { it.itemId == heroItem?.id }
+    // Reportamos la posición que va devolviendo el host al ViewModel
+    // — lo usa el NavGraph para pasar &trailerResume= al navegar a Detail.
+    LaunchedEffect(Unit) {
+        snapshotFlow { trailerHost.currentTimeSec.value }
+            .collect { viewModel.onTrailerTimeUpdate(it) }
+    }
 
     DisposableEffect(trailerRevealed) {
         if (trailerRevealed) idleController?.setSuspended(true)
@@ -117,7 +165,10 @@ fun HomeScreen(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = BgBase,
+        // Transparente para que se vea el TrailerHostOverlay del root cuando
+        // el backdrop se desvanezca (alpha=0). Color sólido cuando hay
+        // backdrop opaco (alpha=1): el AsyncImage ya cubre todo.
+        color = Color.Transparent,
     ) {
         when {
             ui.isLoading && ui.data.continueWatching.isEmpty()
@@ -128,11 +179,73 @@ fun HomeScreen(
             )
             else -> {
                 val rails = ui.data.rails
-                val listState = rememberLazyListState()
-                var activeRailIndex by remember { mutableIntStateOf(0) }
+                val scrollSnapshot by viewModel.scrollSnapshot.collectAsState()
+
+                // Inicializamos el LazyListState con la posición vertical
+                // guardada por el VM en la sesión anterior. rememberSaveable
+                // con el Saver oficial de LazyListState mantiene el scroll
+                // dentro de la misma sesión de NavHost; el VM lo cubre
+                // contra disposición/recreación de la pantalla entera.
+                val listState = rememberSaveable(saver = LazyListState.Saver) {
+                    LazyListState(
+                        firstVisibleItemIndex       = scrollSnapshot.railIndex,
+                        firstVisibleItemScrollOffset = 0,
+                    )
+                }
+                var activeRailIndex by remember { mutableIntStateOf(scrollSnapshot.railIndex) }
+
+                val perRailFocused = remember { mutableMapOf<String, String>() }
+                // Un FocusRequester por rail — los crea HomeScreen y se los
+                // pasamos a cada `RenderRail`. Al re-entrar la pantalla, el
+                // LaunchedEffect de abajo pide foco al requester del rail
+                // que tenía el foco antes — fuerza al sistema a meter el
+                // foco en los rails (no en el sidebar) y deja que el chain
+                // de `focusRestorer`s elija el item correcto dentro.
+                val railFocusRequesters = remember { mutableMapOf<String, androidx.compose.ui.focus.FocusRequester>() }
+
+                DisposableEffect(Unit) {
+                    viewModel.resetFirstFocusGate()
+                    perRailFocused.putAll(scrollSnapshot.focusedItemIdByRail)
+                    onDispose {
+                        // Usamos `activeRailIndex` (que se setea síncronamente
+                        // en `onCardFocused`) en vez de
+                        // `listState.firstVisibleItemIndex` — éste último
+                        // depende de que `LaunchedEffect(activeRailIndex) {
+                        // scrollToItem(...) }` se haya ejecutado, lo cual NO
+                        // ocurre si el usuario hace foco-en-rail + click muy
+                        // rápido (la coroutine se cancela al disponer antes
+                        // de completar el scroll). Resultado anterior: railIndex
+                        // guardado = 0 (stale), restore a otra rail al volver.
+                        viewModel.saveScrollSnapshot(
+                            railIndex           = activeRailIndex,
+                            focusedItemIdByRail = perRailFocused.toMap(),
+                        )
+                    }
+                }
+
+                // Restauración del foco al re-entrar tras back. Esperamos al
+                // primer frame en el que el rail-target esté en la lista de
+                // items visibles del LazyColumn — más fiable que un
+                // `delay(N)` arbitrario en TVs lentas, y sin race con el
+                // initial focus pass del sistema. El sidebar iría por
+                // defecto a la lupa (primer focusable del Row) sin esto.
+                LaunchedEffect(rails, scrollSnapshot) {
+                    val targetIdx = scrollSnapshot.railIndex
+                    val rail = rails.getOrNull(targetIdx) ?: return@LaunchedEffect
+                    if (!scrollSnapshot.focusedItemIdByRail.containsKey(rail.id)) return@LaunchedEffect
+                    snapshotFlow {
+                        listState.layoutInfo.visibleItemsInfo.any { it.index == targetIdx }
+                    }.first { it }
+                    railFocusRequesters[rail.id]?.let { runCatching { it.requestFocus() } }
+                }
 
                 LaunchedEffect(activeRailIndex) {
-                    listState.scrollToItem(activeRailIndex)
+                    // animateScrollToItem en lugar de scrollToItem para que
+                    // el movimiento vertical entre rails sea suave estilo
+                    // Prime/Netflix — el rail anterior se desliza fuera y
+                    // el nuevo entra. Duración por defecto del spring de
+                    // LazyList (~350-500ms según distancia).
+                    listState.animateScrollToItem(activeRailIndex)
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -144,7 +257,15 @@ fun HomeScreen(
                         label = "home-backdrop",
                         modifier = Modifier
                             .fillMaxSize()
-                            .alpha(backdropAlpha),
+                            // ORDEN CRÍTICO: alpha PRIMERO, background DESPUÉS.
+                            // alpha crea un graphics layer que envuelve a TODO
+                            // lo que viene después (incluyendo el background).
+                            // Si fuese .background().alpha() el BgBase quedaría
+                            // FUERA del layer y se dibujaría siempre a full
+                            // opacity, cubriendo la WebView del trailer aunque
+                            // alpha=0. Audio sonaría pero video no se vería.
+                            .alpha(backdropAlpha)
+                            .background(BgBase),
                     ) { url ->
                         if (url != null) {
                             AsyncImage(
@@ -177,19 +298,12 @@ fun HomeScreen(
                             modifier     = Modifier.fillMaxSize(),
                             fallback     = {},
                         )
-                    } else if (activeTrailer != null) {
-                        HeroTrailerView(
-                            videoKey      = activeTrailer.key,
-                            site          = activeTrailer.site,
-                            onReveal      = { trailerRevealed = true },
-                            onDismiss     = { trailerRevealed = false },
-                            onCurrentTime = viewModel::onTrailerTimeUpdate,
-                            modifier      = Modifier.fillMaxSize(),
-                        )
                     }
-                    LaunchedEffect(activeTrailer) {
-                        if (activeTrailer == null) trailerRevealed = false
-                    }
+                    // El trailer YouTube ya NO se monta aquí — lo dibuja el
+                    // TrailerHostOverlay en el root (detrás del Surface
+                    // transparente). Aquí solo activamos el claim (más arriba)
+                    // y bajamos el alpha del backdrop cuando se revela para
+                    // este item.
 
                     // ── Layer 1: Gradient overlays ──────────────────────
                     Box(
@@ -241,6 +355,11 @@ fun HomeScreen(
                                 onPlay = { it?.let { item -> onPlayItem(item.id, item.resumePosSec) } },
                                 onDetails = { it?.let { item -> onOpenItem(item.id, item.kind) } },
                                 showControls = isLanding,
+                                // Si volvemos de Detail con un rail con foco
+                                // guardado, dejamos que ese rail gane la
+                                // carrera del foco inicial; si no, HeroInfo
+                                // pide foco al Play como antes.
+                                requestInitialFocus = scrollSnapshot.focusedItemIdByRail.isEmpty(),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(0.50f),
@@ -262,19 +381,36 @@ fun HomeScreen(
                                         items = rails,
                                         key = { _, config -> config.id },
                                     ) { index, config ->
+                                        val railRequester = railFocusRequesters
+                                            .getOrPut(config.id) {
+                                                androidx.compose.ui.focus.FocusRequester()
+                                            }
                                         Box(
                                             modifier = Modifier
                                                 .fillParentMaxHeight(0.88f)
                                                 .fillMaxWidth()
-                                                .focusGroup(),
+                                                .focusGroup()
+                                                // Quitamos `focusRestorer()` exterior: tener dos
+                                                // capas de focusRestorer (Box + LazyRow dentro)
+                                                // causaba el "amago" — la outer asignaba foco
+                                                // a Default tras la inner asignar al item-target
+                                                // correcto. Resultado: parpadeo y pérdida.
+                                                // Usamos `focusProperties.enter` para rutear el
+                                                // foco entrante al railRequester de forma
+                                                // declarativa (síncrono al layout, sin race).
+                                                .focusProperties { enter = { railRequester } },
                                             contentAlignment = Alignment.TopStart,
                                         ) {
                                             RenderRail(
                                                 config = config,
                                                 data = ui.data,
+                                                initialFocusedItemId = scrollSnapshot
+                                                    .focusedItemIdByRail[config.id],
+                                                railFocusRequester = railRequester,
                                                 onCardFocused = { item ->
                                                     viewModel.onCardFocused(item)
                                                     activeRailIndex = index
+                                                    perRailFocused[config.id] = item.id
                                                 },
                                                 onOpenItem = onOpenItem,
                                                 onPlayItem = onPlayItem,
@@ -293,11 +429,13 @@ fun HomeScreen(
 
 @Composable
 private fun RenderRail(
-    config:        HomeRailConfig,
-    data:          com.alex.hubplay.data.HomeData,
-    onCardFocused: (MediaItem) -> Unit,
-    onOpenItem:    (String, MediaKind) -> Unit,
-    onPlayItem:    (String, Long) -> Unit,
+    config:               HomeRailConfig,
+    data:                 com.alex.hubplay.data.HomeData,
+    onCardFocused:        (MediaItem) -> Unit,
+    onOpenItem:           (String, MediaKind) -> Unit,
+    onPlayItem:           (String, Long) -> Unit,
+    initialFocusedItemId: String? = null,
+    railFocusRequester:   androidx.compose.ui.focus.FocusRequester? = null,
 ) {
     when (config.type) {
         HomeRailType.ContinueWatching -> HomeRail(
@@ -306,6 +444,8 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, it.resumePosSec) },
+            initialFocusedItemId = initialFocusedItemId,
+            railFocusRequester = railFocusRequester,
         )
         HomeRailType.NextUp -> HomeRail(
             title = config.title,
@@ -313,6 +453,8 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, 0L) },
+            initialFocusedItemId = initialFocusedItemId,
+            railFocusRequester = railFocusRequester,
         )
         HomeRailType.Trending -> HomeRail(
             title = config.title,
@@ -320,6 +462,8 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
+            initialFocusedItemId = initialFocusedItemId,
+            railFocusRequester = railFocusRequester,
         )
         HomeRailType.LatestInLibrary -> HomeRail(
             title = config.title,
@@ -327,12 +471,16 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
+            initialFocusedItemId = initialFocusedItemId,
+            railFocusRequester = railFocusRequester,
         )
         HomeRailType.LiveNow -> LiveNowRail(
             title = config.title,
             items = data.liveNow,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, 0L) },
+            initialFocusedItemId = initialFocusedItemId,
+            railFocusRequester = railFocusRequester,
         )
     }
 }

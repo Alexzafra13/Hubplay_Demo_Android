@@ -40,12 +40,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.alex.hubplay.data.LocalTrailerHost
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -98,7 +100,7 @@ fun SeriesScreen(
     val ui by viewModel.ui.collectAsState()
     var showEpisodes by remember { mutableStateOf(false) }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = BgBase) {
+    Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         when {
             ui.isLoading && ui.data == null -> CenteredSpinner()
             ui.error != null                -> ErrorBanner(
@@ -139,9 +141,20 @@ private fun SeriesHeroFull(
 ) {
     val series = data.series
 
-    // Backdrop ↔ trailer crossfade. The trailer view is the source of
-    // truth via onReveal / onDismiss callbacks; we just animate alpha.
-    var trailerRevealed by remember(series?.id) { mutableStateOf(false) }
+    // Backdrop ↔ trailer crossfade. El trailer vive en TrailerHostOverlay
+    // (root) — esta pantalla solo activa un claim para su serie. Si venimos
+    // de Home con la misma key, el WebView no se recarga y el vídeo sigue.
+    val trailerHost = LocalTrailerHost.current
+    val trailerRevealed = trailerHost.revealed.value &&
+        trailerHost.current.value?.itemId == series?.id
+
+    DisposableEffect(series?.id, series?.trailerKey, series?.trailerSite) {
+        val token = if (series?.trailerKey != null && series.trailerSite != null) {
+            trailerHost.activate(series.id, series.trailerKey, series.trailerSite)
+        } else null
+        onDispose { token?.let { trailerHost.deactivate(it) } }
+    }
+
     val backdropAlpha by animateFloatAsState(
         targetValue   = if (trailerRevealed) 0f else 1f,
         animationSpec = tween(durationMillis = 700),
@@ -158,18 +171,9 @@ private fun SeriesHeroFull(
                 .fillMaxSize()
                 .alpha(backdropAlpha),
         )
-        // ── Optional YouTube trailer overlay ──────────────────────────────
-        // Only mounted when the server picked a trailer for this series.
-        // The component handles its own oEmbed pre-flight, load delay,
-        // reveal timing and watchdog — see HeroTrailerView.kt.
-        if (series?.trailerKey != null && series.trailerSite != null) {
-            HeroTrailerView(
-                videoKey = series.trailerKey,
-                site     = series.trailerSite,
-                onReveal = { trailerRevealed = true },
-                onDismiss = { trailerRevealed = false },
-            )
-        }
+        // El trailer ya no se monta aquí — vive en TrailerHostOverlay (root).
+        // El DisposableEffect de arriba registra el claim; el backdropAlpha
+        // reacciona a `trailerHost.revealed.value` para este item.
         // Left side fade — left half is fully BgBase tone for legibility,
         // right half preserves the backdrop for atmosphere. Netflix /
         // Plex pattern: text always on the dark side, hero art on the

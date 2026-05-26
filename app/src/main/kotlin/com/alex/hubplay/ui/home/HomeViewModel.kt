@@ -33,6 +33,16 @@ class HomeViewModel(
     private val _ui = MutableStateFlow(HomeUiState(isLoading = true))
     val ui: StateFlow<HomeUiState> = _ui.asStateFlow()
 
+    // DOS flows desde el mismo focusBus, con debounces distintos:
+    //  - focusedItemForUi (150ms): drive heroItem + backdrop. Snappy.
+    //  - focusedItem (500ms): drive trailer fetch + activate. Evita spam
+    //    de loads cuando el usuario hace D-pad rápido por las cards.
+    // Esta separación es lo que da el "feel" de Netflix/Prime: la UI
+    // (cover + sinopsis) cambia casi al instante, el trailer espera a
+    // que el foco se estabilice.
+    private val _focusedItemForUi = MutableStateFlow<MediaItem?>(null)
+    val focusedItemForUi: StateFlow<MediaItem?> = _focusedItemForUi.asStateFlow()
+
     private val _focusedItem = MutableStateFlow<MediaItem?>(null)
     val focusedItem: StateFlow<MediaItem?> = _focusedItem.asStateFlow()
 
@@ -56,6 +66,13 @@ class HomeViewModel(
 
     init {
         refresh()
+        // Flow rápido para la UI: hero + backdrop deben sentirse instantáneos.
+        focusBus
+            .debounce(UI_FOCUS_DEBOUNCE_MS)
+            .onEach { _focusedItemForUi.value = it }
+            .launchIn(viewModelScope)
+
+        // Flow lento para el trailer: evita reloads en navegación rápida.
         focusBus
             .debounce(FOCUS_DEBOUNCE_MS)
             .onEach { _focusedItem.value = it }
@@ -192,6 +209,15 @@ class HomeViewModel(
 
     private var firstFocusConsumed: Boolean = false
 
+    /**
+     * Reseteamos la "puerta del primer foco" al re-entrar a HomeScreen.
+     * Sin esto, al volver de Detail el ViewModel sigue creyendo que ya
+     * consumió el primer foco, así que el auto-focus que dispara el sistema
+     * sobre el primer item pisaría `_focusedItem` y borraría la card que el
+     * usuario tenía enfocada antes de irse.
+     */
+    fun resetFirstFocusGate() { firstFocusConsumed = false }
+
     fun onCardFocused(item: MediaItem?) {
         if (!firstFocusConsumed) {
             firstFocusConsumed = true
@@ -200,10 +226,40 @@ class HomeViewModel(
         focusBus.tryEmit(item)
     }
 
+    /**
+     * Snapshot del estado de navegación del Home persistido en el VM para
+     * sobrevivir Home → Detail → back. El NavHost guarda `rememberSaveable`
+     * pero algunas piezas (qué item enfocado en cada rail) no caben ahí —
+     * las guardamos aquí para que la recomposición tras back las pueda
+     * leer y reanudar `LazyRow.scrollToItem` + `FocusRequester.requestFocus`.
+     *
+     * - [railIndex]: scroll vertical del `LazyColumn` de rails.
+     * - [focusedItemIdByRail]: para cada rail (keyed por `config.id`),
+     *   el `MediaItem.id` que tenía el foco.
+     */
+    @androidx.compose.runtime.Immutable
+    data class HomeScrollSnapshot(
+        val railIndex:           Int = 0,
+        val focusedItemIdByRail: Map<String, String> = emptyMap(),
+    )
+
+    private val _scrollSnapshot = MutableStateFlow(HomeScrollSnapshot())
+    val scrollSnapshot: StateFlow<HomeScrollSnapshot> = _scrollSnapshot.asStateFlow()
+
+    fun saveScrollSnapshot(railIndex: Int, focusedItemIdByRail: Map<String, String>) {
+        _scrollSnapshot.value = HomeScrollSnapshot(railIndex, focusedItemIdByRail)
+    }
+
     companion object {
-        private const val FOCUS_DEBOUNCE_MS = 350L
-        private const val SSE_REFRESH_DEBOUNCE_MS = 1_500L
-        private const val TRAILER_FETCH_DELAY_MS = 300L
+        // UI snappy: heroItem/backdrop responden en 150ms tras el último focus.
+        private const val UI_FOCUS_DEBOUNCE_MS = 150L
+        // Trailer: 500ms para evitar spam de loads en barrido rápido.
+        private const val FOCUS_DEBOUNCE_MS = 500L
+        // Refresh por SSE: subido de 1.5s → 5s. ProgressUpdated llega
+        // varias veces por segundo durante playback en otra superficie;
+        // recargar todo el Home cada 1.5s era caro.
+        private const val SSE_REFRESH_DEBOUNCE_MS = 5_000L
+        private const val TRAILER_FETCH_DELAY_MS = 600L
 
         fun factory(repository: HomeRepository, meEventsStream: MeEventsStream) =
             object : ViewModelProvider.Factory {

@@ -55,18 +55,22 @@ import com.alex.hubplay.ui.theme.TextSecondary
 
 @Composable
 fun HeroInfo(
-    item:         MediaItem?,
-    onPlay:       (MediaItem?) -> Unit,
-    onDetails:    (MediaItem?) -> Unit,
-    showControls: Boolean,
-    modifier:     Modifier = Modifier,
+    item:                MediaItem?,
+    onPlay:              (MediaItem?) -> Unit,
+    onDetails:           (MediaItem?) -> Unit,
+    showControls:        Boolean,
+    /** Si false, HeroInfo NO pelea por el foco inicial — útil cuando hay
+     *  un foco previo guardado en otro sitio (p.ej. un rail tras back-nav)
+     *  que debe ganar la carrera. */
+    requestInitialFocus: Boolean = true,
+    modifier:            Modifier = Modifier,
 ) {
     if (item == null) return
 
     val playFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(showControls) {
-        if (showControls) {
+    LaunchedEffect(showControls, requestInitialFocus) {
+        if (showControls && requestInitialFocus) {
             runCatching { playFocusRequester.requestFocus() }
         }
     }

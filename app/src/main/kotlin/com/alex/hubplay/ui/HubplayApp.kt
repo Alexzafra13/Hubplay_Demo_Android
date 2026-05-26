@@ -10,11 +10,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.alex.hubplay.data.AppContainer
+import com.alex.hubplay.data.LocalTrailerHost
+import com.alex.hubplay.data.TrailerHost
+import androidx.compose.foundation.background
 import com.alex.hubplay.ui.components.CertTrustDialog
+import com.alex.hubplay.ui.components.TrailerHostOverlay
+import com.alex.hubplay.ui.theme.BgBase
 import com.alex.hubplay.ui.home.components.LocalVisibleTabs
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.nav.HubplayNavGraph
@@ -70,13 +78,42 @@ fun HubplayApp(container: AppContainer) {
         else                                -> Route.Home
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        CompositionLocalProvider(LocalVisibleTabs provides visibleTabs) {
-            HubplayNavGraph(
-                navController = navController,
-                startRoute    = startRoute,
-                container     = container,
-            )
+    // TrailerHost singleton — un único WebView vive aquí mientras la app
+    // está abierta. Las pantallas claman/liberan el trailer activo; al
+    // navegar entre Home → Detail del mismo item, el vídeo no se interrumpe.
+    val trailerScope = rememberCoroutineScope()
+    val trailerHost  = remember { TrailerHost(trailerScope) }
+
+    // Limpieza agresiva al entrar en pantallas que NO muestran trailer
+    // (Movies grid, Series grid, Search, Settings, Player, etc). Si el
+    // usuario venía de Home/Detail/Series con un trailer activo, lo cerramos
+    // al instante — sin esto el debounce de 500ms del host dejaba el audio
+    // sonando medio segundo y la WebView visible si la pantalla destino
+    // tiene áreas transparentes. Sólo las 3 pantallas con trailer hero
+    // (Home, Detail, Series) están exentas.
+    val currentBackEntry by navController.currentBackStackEntryAsState()
+    androidx.compose.runtime.LaunchedEffect(currentBackEntry?.destination?.route) {
+        val route = currentBackEntry?.destination?.route ?: return@LaunchedEffect
+        val isTrailerScreen = route == Route.Home.path ||
+            route.startsWith("detail/") ||
+            route.startsWith("series/")
+        if (!isTrailerScreen) trailerHost.hideNow()
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(BgBase)) {
+        // Capa 0: el WebView del trailer, detrás de todo el contenido. Las
+        // pantallas tienen fondos transparentes (o backdrops con alpha
+        // condicionada al estado revealed del host) para que se vea.
+        CompositionLocalProvider(LocalTrailerHost provides trailerHost) {
+            TrailerHostOverlay(modifier = Modifier.fillMaxSize())
+
+            CompositionLocalProvider(LocalVisibleTabs provides visibleTabs) {
+                HubplayNavGraph(
+                    navController = navController,
+                    startRoute    = startRoute,
+                    container     = container,
+                )
+            }
         }
 
         // The screensaver only ever shows when:

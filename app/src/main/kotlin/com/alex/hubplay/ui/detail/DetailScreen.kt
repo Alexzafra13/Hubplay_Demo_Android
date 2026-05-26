@@ -34,6 +34,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -62,7 +63,7 @@ import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.ui.components.BackPill
 import com.alex.hubplay.ui.components.HeroCtaButton
 import com.alex.hubplay.ui.components.HeroIconButton
-import com.alex.hubplay.ui.series.HeroTrailerView
+import com.alex.hubplay.data.LocalTrailerHost
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.BgBase
 
@@ -93,7 +94,7 @@ fun DetailScreen(
 ) {
     val ui by viewModel.ui.collectAsState()
 
-    Surface(modifier = Modifier.fillMaxSize(), color = BgBase) {
+    Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         when {
             ui.isLoading       -> CenteredSpinner()
             ui.error != null   -> ErrorBanner(message = ui.error!!, onRetry = viewModel::load)
@@ -118,8 +119,31 @@ private fun HeroFull(
     onOpenCollection:   (String) -> Unit,
     trailerResumeSec:   Long = 0L,
 ) {
-    // Backdrop ↔ trailer crossfade — same machinery as the SeriesScreen.
-    var trailerRevealed by remember(item.id) { mutableStateOf(false) }
+    // Backdrop ↔ trailer crossfade. El trailer ya no es local: vive en
+    // TrailerHostOverlay (root). Si llegamos desde Home con el trailer
+    // sonando para este mismo item, el host detecta misma key y NO recarga
+    // — el vídeo sigue sin corte. Si llegamos con otro item, el host
+    // recarga al nuevo trailer y el reveal cae automático en seg.
+    val trailerHost = LocalTrailerHost.current
+    val trailerRevealed = trailerHost.revealed.value &&
+        trailerHost.current.value?.itemId == item.id
+
+    DisposableEffect(item.id, item.trailerKey, item.trailerSite, trailerResumeSec) {
+        // trailerResumeSec se pasa como startAtSec al host. Solo se usa si
+        // la key es NUEVA (deep link directo a Detail, o item distinto al
+        // que sonaba). Si venimos de Home con la misma key, el WebView ni
+        // se entera — sigue reproduciendo donde iba.
+        val token = if (item.trailerKey != null && item.trailerSite != null) {
+            trailerHost.activate(
+                itemId     = item.id,
+                videoKey   = item.trailerKey,
+                site       = item.trailerSite,
+                startAtSec = trailerResumeSec,
+            )
+        } else null
+        onDispose { token?.let { trailerHost.deactivate(it) } }
+    }
+
     val backdropAlpha by animateFloatAsState(
         targetValue   = if (trailerRevealed) 0f else 1f,
         animationSpec = tween(durationMillis = 700),
@@ -137,16 +161,9 @@ private fun HeroFull(
                 .alpha(backdropAlpha),
         )
 
-        // ── Optional trailer overlay ───────────────────────────────────────
-        if (item.trailerKey != null && item.trailerSite != null) {
-            HeroTrailerView(
-                videoKey   = item.trailerKey,
-                site       = item.trailerSite,
-                startAtSec = trailerResumeSec,
-                onReveal   = { trailerRevealed = true },
-                onDismiss  = { trailerRevealed = false },
-            )
-        }
+        // El trailer ya no se monta aquí — vive en TrailerHostOverlay (root).
+        // El DisposableEffect de arriba registra el claim; el alpha del
+        // backdrop reacciona a `trailerHost.revealed.value` para este item.
 
         // ── Left fade so info reads against the backdrop ──────────────────
         Box(

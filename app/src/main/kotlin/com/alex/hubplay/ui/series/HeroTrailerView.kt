@@ -46,9 +46,14 @@ fun HeroTrailerView(
     val lifecycleOwner = LocalLifecycleOwner.current
     var stage by remember(videoKey) { mutableStateOf(-1) }
     var webViewRef by remember(videoKey) { mutableStateOf<WebView?>(null) }
+    var hasPlaybackTick by remember(videoKey) { mutableStateOf(false) }
 
+    // Solo revelamos cuando el <video> real ha empezado a reproducir
+    // (hasPlaybackTick = true). Si YouTube pinta error 153 / "no embebible",
+    // nunca llega el tick → alpha se queda en 0 → el usuario solo ve el
+    // backdrop estático, nunca el error.
     val alpha by animateFloatAsState(
-        targetValue   = if (stage == 2) 1f else 0f,
+        targetValue   = if (stage == 2 && hasPlaybackTick) 1f else 0f,
         animationSpec = tween(durationMillis = 400),
         label         = "trailer-alpha",
     )
@@ -69,6 +74,27 @@ fun HeroTrailerView(
         if (stage == 1) {
             delay(12_000)
             if (stage == 1) { stage = 3; onDismiss() }
+        }
+    }
+
+    // Watchdog: si tras 5s en stage 2 el <video> no ha hecho ningún tick,
+    // YouTube pintó su pantalla de error (153, restricted, etc). Dismiss
+    // silencioso — como alpha sigue en 0, el usuario nunca vio nada.
+    LaunchedEffect(stage) {
+        if (stage == 2) {
+            delay(5_000)
+            if (stage == 2 && !hasPlaybackTick) {
+                stage = 3
+                onDismiss()
+            }
+        }
+    }
+
+    // Cuando el primer tick llega, sabemos que el embed ESTÁ reproduciendo —
+    // ahora sí avisamos al padre (onReveal suspende screensaver, etc).
+    LaunchedEffect(hasPlaybackTick, stage) {
+        if (hasPlaybackTick && stage == 2) {
+            onReveal()
         }
     }
 
@@ -126,6 +152,7 @@ fun HeroTrailerView(
                         }
                         @JavascriptInterface
                         fun reportTime(seconds: Double) {
+                            mainHandler.post { hasPlaybackTick = true }
                             onCurrentTime?.invoke(seconds.toLong())
                         }
                     }, "TrailerBridge")
@@ -136,10 +163,13 @@ fun HeroTrailerView(
                             if (url?.contains("about:blank") == true) return
                             view?.postDelayed({
                                 if (stage == 1) {
-                                    view.evaluateJavascript(JS_HIDE_CHROME, null)
-                                    view.evaluateJavascript(JS_END_LISTENER, null)
+                                    // La página synthetic ya tiene el script
+                                    // inline que subscribe al player y reporta
+                                    // estados. No necesitamos inyectar nada más.
+                                    // onReveal lo dispara el LaunchedEffect
+                                    // cuando llegue el primer state=playing
+                                    // del iframe (vía postMessage).
                                     stage = 2
-                                    onReveal()
                                     view.evaluateJavascript(JS_UNMUTE, null)
                                 }
                             }, 800)
@@ -153,13 +183,18 @@ fun HeroTrailerView(
                         }
                     }
 
-                    val safe = videoKey.replace("\"", "")
-                    val startParam = if (startAtSec > 0) "&start=$startAtSec" else ""
-                    loadUrl(
-                        "https://www.youtube-nocookie.com/embed/$safe" +
-                        "?autoplay=1&mute=1&controls=0&modestbranding=1" +
-                        "&playsinline=1&rel=0&iv_load_policy=3&disablekb=1" +
-                        "&showinfo=0&enablejsapi=1&vq=hd1080$startParam",
+                    // Cargamos un HTML synthetic propio que aloja el iframe
+                    // de YouTube. baseUrl real (no synthetic) para que YouTube
+                    // nos vea como un embed legítimo de terceros con Referer
+                    // y Origin coherentes — sin esto, loadUrl directo es una
+                    // navegación top-level y YouTube aplica restricciones
+                    // estrictas (error 153 / player no arranca).
+                    loadDataWithBaseURL(
+                        TRAILER_BASE_URL,
+                        buildIframeHtml(videoKey, startAtSec),
+                        "text/html",
+                        "UTF-8",
+                        null,
                     )
                     webViewRef = this
                 }
@@ -197,46 +232,116 @@ private suspend fun isEmbeddable(videoKey: String): Boolean {
 
 private const val TAG = "HeroTrailerView"
 
+// baseUrl para loadDataWithBaseURL. Tiene que ser un dominio "real" (no
+// "about:blank" ni "data:") para que YouTube nos trate como embed normal de
+// terceros. No necesita resolver — solo importa que esté en los headers
+// Referer/Origin que envía el WebView al cargar el iframe.
+private const val TRAILER_BASE_URL = "https://hubplay.app"
+
 private const val DESKTOP_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 
-private const val JS_HIDE_CHROME = """
-    (function() {
-      var s = document.createElement('style');
-      s.textContent = '.ytp-chrome-top,.ytp-chrome-bottom,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-pause-overlay,.ytp-watermark,.ytp-show-cards-title,.ytp-impression-link{display:none!important;opacity:0!important}.html5-video-player{overflow:hidden}';
-      document.head.appendChild(s);
-    })();
-"""
+// HTML synthetic que aloja el iframe de YouTube. Mimetiza el flujo de la web:
+// iframe con origin matching el baseUrl + script que subscribe a eventos del
+// player vía postMessage (YouTube IFrame Player API).
+//
+// reportTime(0) se llama cuando el player entra en state 1 (PLAYING) — es
+// nuestra señal de "el video está reproduciendo DE VERDAD". Si YouTube
+// rechaza el embed (error 153, dominio no permitido, etc), state 1 nunca
+// llega y el watchdog dismissa silenciosamente.
+private fun buildIframeHtml(videoKey: String, startAtSec: Long): String {
+    val safe = videoKey.replace("\"", "").replace("<", "").replace(">", "")
+    val startParam = if (startAtSec > 0) "&start=$startAtSec" else ""
+    // Sin loop: queremos single-play en home. Cuando termina, YouTube dispara
+    // state=0 (ENDED) → onEnded → dismiss → vuelve el backdrop estático.
+    val src =
+        "https://www.youtube-nocookie.com/embed/$safe" +
+        "?autoplay=1&mute=1&controls=0" +
+        "&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3" +
+        "&disablekb=1&showinfo=0&enablejsapi=1" +
+        "&origin=$TRAILER_BASE_URL$startParam"
+    return """
+        <!DOCTYPE html>
+        <html><head><meta name="viewport" content="width=1920">
+        <style>
+          html,body{margin:0;padding:0;background:#000;overflow:hidden;height:100%;width:100%}
+          .wrap{position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden}
+          iframe{position:absolute;top:-4%;left:-4%;width:108%;height:108%;border:0;pointer-events:none}
+        </style>
+        </head><body>
+          <div class="wrap">
+            <iframe id="yt" src="$src"
+              allow="autoplay; encrypted-media; picture-in-picture"
+              referrerpolicy="strict-origin-when-cross-origin"
+              allowfullscreen></iframe>
+          </div>
+          <script>
+            (function(){
+              var f = document.getElementById('yt');
+              var polling = null;
+              function parse(d){ try { return (typeof d==='string')?JSON.parse(d):d; } catch(e){ return null; } }
+              function send(cmd){
+                if (f.contentWindow) {
+                  f.contentWindow.postMessage(JSON.stringify({event:'command',func:cmd,args:''}), '*');
+                }
+              }
+              window.addEventListener('message', function(e){
+                var d = parse(e.data); if (!d) return;
+                // YouTube IFrame API postea {event:'onStateChange', info:N}
+                // donde info es el playerState: -1 unstarted, 0 ended,
+                // 1 playing, 2 paused, 3 buffering, 5 cued.
+                var state = (d.event === 'onStateChange') ? d.info :
+                            (d.info && typeof d.info.playerState !== 'undefined') ? d.info.playerState : null;
+                if (state === 1) {
+                  TrailerBridge.reportTime(0);
+                  // Empezamos a sondear currentTime para que HomeViewModel
+                  // pueda pasar &start=X a Detail al navegar.
+                  if (!polling) polling = setInterval(function(){ send('getCurrentTime'); }, 2000);
+                }
+                if (state === 0) {
+                  if (polling) { clearInterval(polling); polling = null; }
+                  TrailerBridge.onEnded();
+                }
+                // Respuesta a getCurrentTime: YouTube manda
+                // {event:'infoDelivery', info:<segundos>} o, en variantes,
+                // {event:'infoDelivery', info:{currentTime:X}}.
+                if (d.event === 'infoDelivery' && d.info != null) {
+                  if (typeof d.info === 'number') {
+                    TrailerBridge.reportTime(d.info);
+                  } else if (typeof d.info.currentTime === 'number') {
+                    TrailerBridge.reportTime(d.info.currentTime);
+                  }
+                }
+              });
+              f.addEventListener('load', function(){
+                // Necesario para que YouTube empiece a emitir onStateChange
+                // a este window. Sin este postMessage inicial, el player
+                // reproduce pero NO emite eventos.
+                f.contentWindow.postMessage('{"event":"listening"}', '*');
+              });
+            })();
+          </script>
+        </body></html>
+    """.trimIndent()
+}
 
-private const val JS_END_LISTENER = """
-    (function() {
-      function setup(v) {
-        v.addEventListener('ended', function() { TrailerBridge.onEnded(); });
-        setInterval(function() {
-          if (!v.paused && !v.ended) TrailerBridge.reportTime(v.currentTime);
-        }, 2000);
-      }
-      var v = document.querySelector('video');
-      if (v) { setup(v); } else {
-        var t = setInterval(function() {
-          var v2 = document.querySelector('video');
-          if (v2) { clearInterval(t); setup(v2); }
-        }, 500);
-        setTimeout(function() { clearInterval(t); }, 10000);
-      }
-    })();
-"""
-
+// Helpers postMessage hacia el iframe — ya no podemos tocar el <video>
+// directamente porque vive en otro origin (youtube-nocookie.com) dentro
+// del iframe. La YouTube IFrame Player API expone estos comandos vía
+// postMessage cuando enablejsapi=1.
 private const val JS_PLAY = """
-    (function() { var v = document.querySelector('video'); if (v) v.play(); })();
+    (function() { var f = document.getElementById('yt'); if (f && f.contentWindow) f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); })();
 """
 private const val JS_PAUSE = """
-    (function() { var v = document.querySelector('video'); if (v) v.pause(); })();
+    (function() { var f = document.getElementById('yt'); if (f && f.contentWindow) f.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*'); })();
 """
 private const val JS_UNMUTE = """
     (function() {
-      var v = document.querySelector('video');
-      if (v) { v.muted = false; v.volume = 0.8; }
+      var f = document.getElementById('yt');
+      if (f && f.contentWindow) {
+        f.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}', '*');
+        f.contentWindow.postMessage('{"event":"command","func":"setVolume","args":[80]}', '*');
+      }
     })();
 """
