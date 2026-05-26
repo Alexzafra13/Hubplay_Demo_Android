@@ -1,7 +1,5 @@
 package com.alex.hubplay.ui.home.components
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,7 +24,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -37,24 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.alex.hubplay.data.MediaItem
-import com.alex.hubplay.ui.theme.Accent
 
-/**
- * Card for the "En directo ahora" rail.
- *
- * Channels are different from movies/series in two ways the generic
- * MediaCard doesn't handle:
- *
- *   1. **Logo fallback** — a fair chunk of M3U channels have no logo at
- *      all, and our LiveNow endpoint always emits a deterministic
- *      `logo_initials` + `logo_bg` + `logo_fg` placeholder triple
- *      (same one the web LiveNowCard uses). We render that instead
- *      of leaving the card empty when channel_logo is null.
- *   2. **Identification** — without a poster, the only thing telling
- *      the user "this is RTVE2" is the channel name. Plain MediaCard
- *      hides text under the card; the LiveNow rail puts it back
- *      because the name IS the identification.
- */
 @Composable
 fun LiveChannelCard(
     item:      MediaItem,
@@ -63,18 +43,12 @@ fun LiveChannelCard(
     modifier:  Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue   = if (focused) 1.06f else 1.0f,
-        animationSpec = tween(180),
-        label         = "live-channel-scale",
-    )
-
     val interactionSource = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(8.dp)
 
     Column(
         modifier = modifier
-            .width(220.dp)
-            .scale(scale)
+            .width(240.dp)
             .onFocusChanged { state ->
                 focused = state.isFocused
                 if (state.isFocused) onFocused(item)
@@ -85,15 +59,14 @@ fun LiveChannelCard(
                 onClick           = { onClick(item) },
             ),
     ) {
-        // ── Card body: 16:9 with logo OR initials placeholder ─────────────
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(shape)
                 .background(parseHex(item.logoBg) ?: MaterialTheme.colorScheme.surfaceVariant)
                 .then(
-                    if (focused) Modifier.border(2.dp, Accent, RoundedCornerShape(10.dp))
+                    if (focused) Modifier.border(3.dp, Color.White, shape)
                     else Modifier,
                 ),
             contentAlignment = Alignment.Center,
@@ -119,7 +92,7 @@ fun LiveChannelCard(
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             text       = item.title,
             style      = MaterialTheme.typography.bodyMedium,
@@ -140,12 +113,6 @@ fun LiveChannelCard(
     }
 }
 
-/**
- * Best-effort initials when the server didn't send `logo_initials` (an
- * older backend that hasn't shipped that field, or a channel inserted
- * by hand). Picks the first letter of the first two whitespace-split
- * tokens, falls back to the first two characters of a single-word name.
- */
 private fun initialsFromName(name: String): String {
     val cleaned = name.trim()
     if (cleaned.isEmpty()) return "TV"
@@ -157,12 +124,6 @@ private fun initialsFromName(name: String): String {
     }
 }
 
-/**
- * Parse a `#rrggbb` / `rgb(r,g,b)` / `#aarrggbb` hex string into a
- * Compose Color. Returns null on anything we can't parse so the caller
- * can fall back to a theme colour rather than crash on a malformed
- * backend payload.
- */
 private fun parseHex(s: String?): Color? {
     if (s.isNullOrBlank()) return null
     return try {

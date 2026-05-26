@@ -3,7 +3,10 @@ package com.alex.hubplay.ui.home
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,20 +17,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.pager.PageSize
-import androidx.compose.foundation.pager.PagerState
-import androidx.compose.foundation.pager.VerticalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,17 +44,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
+import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRailType
+import com.alex.hubplay.data.IdleController
+import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.MediaItem
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.HeroInfo
 import com.alex.hubplay.ui.home.components.HomeSidebar
+import com.alex.hubplay.ui.livetv.ChannelPreviewPlayer
 import com.alex.hubplay.ui.home.components.HomeRail
 import com.alex.hubplay.ui.home.components.LiveNowRail
 import com.alex.hubplay.ui.home.components.LocalVisibleTabs
@@ -57,11 +65,13 @@ import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.series.HeroTrailerView
 import com.alex.hubplay.ui.theme.BgBase
 
-private val RailPageSize = object : PageSize {
-    override fun Density.calculateMainAxisPageSize(
-        availableSpace: Int,
-        pageSpacing: Int,
-    ): Int = (availableSpace * 0.80f).toInt()
+@OptIn(ExperimentalFoundationApi::class)
+private val SuppressVerticalBringIntoView = object : BringIntoViewSpec {
+    override fun calculateScrollDistance(
+        offset: Float,
+        size: Float,
+        containerSize: Float,
+    ): Float = 0f
 }
 
 @Composable
@@ -73,6 +83,9 @@ fun HomeScreen(
     onLogOut:        () -> Unit,
     onOpenSettings:  () -> Unit = {},
     profileName:     String?   = null,
+    authState:       AuthState? = null,
+    okHttpClient:    okhttp3.OkHttpClient? = null,
+    idleController:  IdleController? = null,
 ) {
     val ui by viewModel.ui.collectAsState()
     val focusedItem by viewModel.focusedItem.collectAsState()
@@ -97,6 +110,11 @@ fun HomeScreen(
 
     val activeTrailer = trailerInfo?.takeIf { it.itemId == heroItem?.id }
 
+    DisposableEffect(trailerRevealed) {
+        if (trailerRevealed) idleController?.setSuspended(true)
+        onDispose { if (trailerRevealed) idleController?.setSuspended(false) }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = BgBase,
@@ -110,17 +128,19 @@ fun HomeScreen(
             )
             else -> {
                 val rails = ui.data.rails
-                val pagerState = rememberPagerState(
-                    initialPage = 0,
-                    pageCount = { rails.size },
-                )
+                val listState = rememberLazyListState()
+                var activeRailIndex by remember { mutableIntStateOf(0) }
+
+                LaunchedEffect(activeRailIndex) {
+                    listState.scrollToItem(activeRailIndex)
+                }
 
                 Box(modifier = Modifier.fillMaxSize()) {
 
                     // ── Layer 0: Full-screen backdrop ──────────────────
                     Crossfade(
                         targetState = heroItem?.backdropUrl ?: heroItem?.posterUrl,
-                        animationSpec = tween(durationMillis = 500),
+                        animationSpec = tween(durationMillis = 300),
                         label = "home-backdrop",
                         modifier = Modifier
                             .fillMaxSize()
@@ -136,13 +156,35 @@ fun HomeScreen(
                         }
                     }
 
-                    if (activeTrailer != null) {
+                    if (heroItem?.kind == MediaKind.LiveChannel && authState != null && okHttpClient != null) {
+                        val liveChannel = remember(heroItem?.id) {
+                            heroItem?.let { item ->
+                                LiveChannel(
+                                    id = item.id, name = item.title, number = 0,
+                                    groupName = "", category = "",
+                                    logoUrl = item.logoUrl,
+                                    logoInitials = item.logoInitials,
+                                    logoBg = item.logoBg, logoFg = item.logoFg,
+                                    libraryId = "", isActive = true,
+                                    healthStatus = "ok",
+                                )
+                            }
+                        }
+                        ChannelPreviewPlayer(
+                            channel      = liveChannel,
+                            authState    = authState,
+                            okHttpClient = okHttpClient,
+                            modifier     = Modifier.fillMaxSize(),
+                            fallback     = {},
+                        )
+                    } else if (activeTrailer != null) {
                         HeroTrailerView(
-                            videoKey = activeTrailer.key,
-                            site = activeTrailer.site,
-                            onReveal = { trailerRevealed = true },
-                            onDismiss = { trailerRevealed = false },
-                            modifier = Modifier.fillMaxSize(),
+                            videoKey      = activeTrailer.key,
+                            site          = activeTrailer.site,
+                            onReveal      = { trailerRevealed = true },
+                            onDismiss     = { trailerRevealed = false },
+                            onCurrentTime = viewModel::onTrailerTimeUpdate,
+                            modifier      = Modifier.fillMaxSize(),
                         )
                     }
                     LaunchedEffect(activeTrailer) {
@@ -153,11 +195,11 @@ fun HomeScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
-                            .fillMaxWidth(0.65f)
+                            .fillMaxWidth(0.55f)
                             .background(
                                 Brush.horizontalGradient(
-                                    0f to BgBase.copy(alpha = 0.95f),
-                                    0.6f to BgBase.copy(alpha = 0.75f),
+                                    0f to BgBase.copy(alpha = 0.92f),
+                                    0.55f to BgBase.copy(alpha = 0.70f),
                                     1f to Color.Transparent,
                                 ),
                             ),
@@ -166,11 +208,12 @@ fun HomeScreen(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .fillMaxHeight(0.6f)
+                            .fillMaxHeight(0.58f)
                             .background(
                                 Brush.verticalGradient(
                                     0f to Color.Transparent,
-                                    0.3f to BgBase.copy(alpha = 0.65f),
+                                    0.20f to BgBase.copy(alpha = 0.50f),
+                                    0.50f to BgBase.copy(alpha = 0.88f),
                                     1f to BgBase,
                                 ),
                             ),
@@ -192,6 +235,7 @@ fun HomeScreen(
                                 .weight(1f)
                                 .fillMaxHeight(),
                         ) {
+                            // ── Hero info — fixed, top half ───────────
                             HeroInfo(
                                 item = heroItem,
                                 onPlay = { it?.let { item -> onPlayItem(item.id, item.resumePosSec) } },
@@ -199,34 +243,44 @@ fun HomeScreen(
                                 showControls = isLanding,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(0.40f),
+                                    .weight(0.50f),
                             )
 
-                            // ── Rails (VerticalPager) ──────────────────
-                            // Each page = one rail. The pager clips
-                            // pages natively — previous rails are never
-                            // visible. pageSize = 80% of viewport so the
-                            // next rail title peeks at the bottom.
-                            VerticalPager(
-                                state = pagerState,
-                                pageSize = RailPageSize,
-                                pageSpacing = 8.dp,
-                                beyondViewportPageCount = 1,
-                                userScrollEnabled = false,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(0.60f),
-                            ) { page ->
-                                if (page in rails.indices) {
-                                    RenderRail(
-                                        config = rails[page],
-                                        data = ui.data,
-                                        onCardFocused = viewModel::onCardFocused,
-                                        onOpenItem = onOpenItem,
-                                        onPlayItem = onPlayItem,
-                                        pagerState = pagerState,
-                                        pageIndex = page,
-                                    )
+                            // ── Rails — LazyColumn, bottom half ───────
+                            @OptIn(ExperimentalFoundationApi::class)
+                            CompositionLocalProvider(
+                                androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+                                    provides SuppressVerticalBringIntoView,
+                            ) {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(0.50f),
+                                ) {
+                                    itemsIndexed(
+                                        items = rails,
+                                        key = { _, config -> config.id },
+                                    ) { index, config ->
+                                        Box(
+                                            modifier = Modifier
+                                                .fillParentMaxHeight(0.88f)
+                                                .fillMaxWidth()
+                                                .focusGroup(),
+                                            contentAlignment = Alignment.TopStart,
+                                        ) {
+                                            RenderRail(
+                                                config = config,
+                                                data = ui.data,
+                                                onCardFocused = { item ->
+                                                    viewModel.onCardFocused(item)
+                                                    activeRailIndex = index
+                                                },
+                                                onOpenItem = onOpenItem,
+                                                onPlayItem = onPlayItem,
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -244,8 +298,6 @@ private fun RenderRail(
     onCardFocused: (MediaItem) -> Unit,
     onOpenItem:    (String, MediaKind) -> Unit,
     onPlayItem:    (String, Long) -> Unit,
-    pagerState:    PagerState,
-    pageIndex:     Int,
 ) {
     when (config.type) {
         HomeRailType.ContinueWatching -> HomeRail(
@@ -254,8 +306,6 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, it.resumePosSec) },
-            pagerState = pagerState,
-            pageIndex = pageIndex,
         )
         HomeRailType.NextUp -> HomeRail(
             title = config.title,
@@ -263,8 +313,6 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, 0L) },
-            pagerState = pagerState,
-            pageIndex = pageIndex,
         )
         HomeRailType.Trending -> HomeRail(
             title = config.title,
@@ -272,8 +320,6 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
-            pagerState = pagerState,
-            pageIndex = pageIndex,
         )
         HomeRailType.LatestInLibrary -> HomeRail(
             title = config.title,
@@ -281,16 +327,12 @@ private fun RenderRail(
             style = CardStyle.Landscape,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
-            pagerState = pagerState,
-            pageIndex = pageIndex,
         )
         HomeRailType.LiveNow -> LiveNowRail(
             title = config.title,
             items = data.liveNow,
             onFocused = onCardFocused,
             onClick = { onPlayItem(it.id, 0L) },
-            pagerState = pagerState,
-            pageIndex = pageIndex,
         )
     }
 }
