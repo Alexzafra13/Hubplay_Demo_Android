@@ -3,11 +3,8 @@ package com.alex.hubplay.ui.home
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.LocalBringIntoViewSpec
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,7 +24,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -61,16 +57,6 @@ import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.series.HeroTrailerView
 import com.alex.hubplay.ui.theme.BgBase
 
-@OptIn(ExperimentalFoundationApi::class)
-private val NoOpBringIntoViewSpec = object : BringIntoViewSpec {
-    override fun calculateScrollDistance(
-        offset: Float,
-        size: Float,
-        containerSize: Float,
-    ): Float = 0f
-}
-
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     viewModel:       HomeViewModel,
@@ -214,42 +200,34 @@ fun HomeScreen(
                             )
 
                             // ── Rails — LazyColumn, bottom half ───────
-                            // Suppress BringIntoView on the vertical
-                            // axis so horizontal focus changes inside
-                            // LazyRow never cause vertical micro-scrolls.
-                            // We manage vertical scroll ourselves via
-                            // activeRailIndex + scrollToItem.
-                            CompositionLocalProvider(
-                                LocalBringIntoViewSpec provides NoOpBringIntoViewSpec,
+                            LazyColumn(
+                                state = listState,
+                                userScrollEnabled = false,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(0.50f),
                             ) {
-                                LazyColumn(
-                                    state = listState,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(0.50f),
-                                ) {
-                                    itemsIndexed(
-                                        items = rails,
-                                        key = { _, config -> config.id },
-                                    ) { index, config ->
-                                        Box(
-                                            modifier = Modifier
-                                                .fillParentMaxHeight(0.88f)
-                                                .fillMaxWidth()
-                                                .focusGroup(),
-                                            contentAlignment = Alignment.TopStart,
-                                        ) {
-                                            RenderRail(
-                                                config = config,
-                                                data = ui.data,
-                                                onCardFocused = { item ->
-                                                    viewModel.onCardFocused(item)
-                                                    activeRailIndex = index
-                                                },
-                                                onOpenItem = onOpenItem,
-                                                onPlayItem = onPlayItem,
-                                            )
-                                        }
+                                itemsIndexed(
+                                    items = rails,
+                                    key = { _, config -> config.id },
+                                ) { index, config ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillParentMaxHeight(0.88f)
+                                            .fillMaxWidth()
+                                            .focusGroup(),
+                                        contentAlignment = Alignment.TopStart,
+                                    ) {
+                                        RenderRail(
+                                            config = config,
+                                            data = ui.data,
+                                            onCardFocused = { item ->
+                                                viewModel.onCardFocused(item)
+                                                activeRailIndex = index
+                                            },
+                                            onOpenItem = onOpenItem,
+                                            onPlayItem = onPlayItem,
+                                        )
                                     }
                                 }
                             }
