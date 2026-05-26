@@ -3,8 +3,10 @@ package com.alex.hubplay.ui.home
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -56,6 +59,15 @@ import com.alex.hubplay.ui.home.components.LocalVisibleTabs
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.series.HeroTrailerView
 import com.alex.hubplay.ui.theme.BgBase
+
+@OptIn(ExperimentalFoundationApi::class)
+private val SuppressVerticalBringIntoView = object : BringIntoViewSpec {
+    override fun calculateScrollDistance(
+        offset: Float,
+        size: Float,
+        containerSize: Float,
+    ): Float = 0f
+}
 
 @Composable
 fun HomeScreen(
@@ -200,9 +212,12 @@ fun HomeScreen(
                             )
 
                             // ── Rails — LazyColumn, bottom half ───────
+                            @OptIn(ExperimentalFoundationApi::class)
+                            CompositionLocalProvider(
+                                androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides SuppressVerticalBringIntoView,
+                            ) {
                             LazyColumn(
                                 state = listState,
-                                userScrollEnabled = false,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(0.50f),
@@ -231,6 +246,7 @@ fun HomeScreen(
                                     }
                                 }
                             }
+                            } // CompositionLocalProvider
                         }
                     }
                 }
