@@ -127,7 +127,7 @@ fun HomeScreen(
                     // ── Layer 0: Full-screen backdrop ──────────────────
                     Crossfade(
                         targetState = heroItem?.backdropUrl ?: heroItem?.posterUrl,
-                        animationSpec = tween(durationMillis = 500),
+                        animationSpec = tween(durationMillis = 300),
                         label = "home-backdrop",
                         modifier = Modifier
                             .fillMaxSize()
@@ -214,39 +214,40 @@ fun HomeScreen(
                             // ── Rails — LazyColumn, bottom half ───────
                             @OptIn(ExperimentalFoundationApi::class)
                             CompositionLocalProvider(
-                                androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides SuppressVerticalBringIntoView,
+                                androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+                                    provides SuppressVerticalBringIntoView,
                             ) {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(0.50f),
-                            ) {
-                                itemsIndexed(
-                                    items = rails,
-                                    key = { _, config -> config.id },
-                                ) { index, config ->
-                                    Box(
-                                        modifier = Modifier
-                                            .fillParentMaxHeight(0.88f)
-                                            .fillMaxWidth()
-                                            .focusGroup(),
-                                        contentAlignment = Alignment.TopStart,
-                                    ) {
-                                        RenderRail(
-                                            config = config,
-                                            data = ui.data,
-                                            onCardFocused = { item ->
-                                                viewModel.onCardFocused(item)
-                                                activeRailIndex = index
-                                            },
-                                            onOpenItem = onOpenItem,
-                                            onPlayItem = onPlayItem,
-                                        )
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(0.50f),
+                                ) {
+                                    itemsIndexed(
+                                        items = rails,
+                                        key = { _, config -> config.id },
+                                    ) { index, config ->
+                                        Box(
+                                            modifier = Modifier
+                                                .fillParentMaxHeight(0.88f)
+                                                .fillMaxWidth()
+                                                .focusGroup(),
+                                            contentAlignment = Alignment.TopStart,
+                                        ) {
+                                            RenderRail(
+                                                config = config,
+                                                data = ui.data,
+                                                onCardFocused = { item ->
+                                                    viewModel.onCardFocused(item)
+                                                    activeRailIndex = index
+                                                },
+                                                onOpenItem = onOpenItem,
+                                                onPlayItem = onPlayItem,
+                                            )
+                                        }
                                     }
                                 }
                             }
-                            } // CompositionLocalProvider
                         }
                     }
                 }

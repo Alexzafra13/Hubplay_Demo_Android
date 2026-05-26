@@ -82,7 +82,7 @@ fun HeroTrailerView(
 
     val alpha by animateFloatAsState(
         targetValue   = if (stage == 2) 1f else 0f,
-        animationSpec = tween(durationMillis = 700),
+        animationSpec = tween(durationMillis = 400),
         label         = "trailer-alpha",
     )
 
@@ -97,7 +97,7 @@ fun HeroTrailerView(
     // ── 2. Load delay ────────────────────────────────────────────────────
     LaunchedEffect(stage) {
         if (stage == 0) {
-            delay(2_500)
+            delay(800)
             Log.d(TAG, "load delay elapsed, mounting WebView for $videoKey")
             stage = 1
         }
@@ -200,7 +200,7 @@ fun HeroTrailerView(
                                 } else {
                                     Log.d(TAG, "reveal skipped, stage=$stage (already revealed or dismissed)")
                                 }
-                            }, 1_200)
+                            }, 500)
                         }
 
                         override fun onReceivedError(
@@ -272,7 +272,7 @@ private fun buildIframeHtml(videoKey: String): String {
     val safe = videoKey.replace("\"", "")
     return """
         <!DOCTYPE html>
-        <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+        <html><head><meta name="viewport" content="width=1920">
         <style>
           html,body{margin:0;padding:0;background:#000;overflow:hidden;height:100%;width:100%}
           .wrap{position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden}

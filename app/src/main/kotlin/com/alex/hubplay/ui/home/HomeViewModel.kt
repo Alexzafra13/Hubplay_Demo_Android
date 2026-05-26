@@ -195,15 +195,9 @@ class HomeViewModel(
     }
 
     companion object {
-        private const val FOCUS_DEBOUNCE_MS = 800L
+        private const val FOCUS_DEBOUNCE_MS = 350L
         private const val SSE_REFRESH_DEBOUNCE_MS = 1_500L
-
-        /**
-         * Extra delay after focused item settles before fetching trailer
-         * info from the server. Gives the hero crossfade time to paint
-         * before the network round-trip starts.
-         */
-        private const val TRAILER_FETCH_DELAY_MS = 1_200L
+        private const val TRAILER_FETCH_DELAY_MS = 300L
 
         fun factory(repository: HomeRepository, meEventsStream: MeEventsStream) =
             object : ViewModelProvider.Factory {
