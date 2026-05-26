@@ -6,11 +6,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -46,9 +45,12 @@ fun LiveChannelCard(
     val interactionSource = remember { MutableInteractionSource() }
     val shape = RoundedCornerShape(8.dp)
 
-    Column(
+    Box(
         modifier = modifier
             .width(240.dp)
+            .aspectRatio(16f / 9f)
+            .clip(shape)
+            .background(parseHex(item.logoBg) ?: MaterialTheme.colorScheme.surfaceVariant)
             .onFocusChanged { state ->
                 focused = state.isFocused
                 if (state.isFocused) onFocused(item)
@@ -57,58 +59,66 @@ fun LiveChannelCard(
                 interactionSource = interactionSource,
                 indication        = null,
                 onClick           = { onClick(item) },
+            )
+            .then(
+                if (focused) Modifier.border(3.dp, Color.White, shape)
+                else Modifier,
             ),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(shape)
-                .background(parseHex(item.logoBg) ?: MaterialTheme.colorScheme.surfaceVariant)
-                .then(
-                    if (focused) Modifier.border(3.dp, Color.White, shape)
-                    else Modifier,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (!item.logoUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model              = item.logoUrl,
-                    contentDescription = item.title,
-                    contentScale       = ContentScale.Fit,
-                    modifier           = Modifier
-                        .fillMaxSize()
-                        .padding(20.dp),
-                )
-            } else {
-                Text(
-                    text       = (item.logoInitials ?: initialsFromName(item.title)).take(3),
-                    style      = MaterialTheme.typography.headlineLarge,
-                    color      = parseHex(item.logoFg) ?: Color.White,
-                    fontSize   = 42.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign  = TextAlign.Center,
-                )
-            }
+        if (!item.logoUrl.isNullOrBlank()) {
+            AsyncImage(
+                model              = item.logoUrl,
+                contentDescription = item.title,
+                contentScale       = ContentScale.Fit,
+                modifier           = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+            )
+        } else {
+            Text(
+                text       = (item.logoInitials ?: initialsFromName(item.title)).take(3),
+                style      = MaterialTheme.typography.headlineLarge,
+                color      = parseHex(item.logoFg) ?: Color.White,
+                fontSize   = 42.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign  = TextAlign.Center,
+            )
         }
 
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text       = item.title,
-            style      = MaterialTheme.typography.bodyMedium,
-            color      = Color.White,
-            maxLines   = 1,
-            overflow   = TextOverflow.Ellipsis,
-            fontWeight = FontWeight.Medium,
-        )
-        item.subtitle?.takeIf { it.isNotBlank() }?.let { sub ->
-            Text(
-                text     = sub,
-                style    = MaterialTheme.typography.bodySmall,
-                color    = Color(0xFFB0B7C5),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        // Channel name overlay at bottom
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        1f to Color.Black.copy(alpha = 0.7f),
+                    ),
+                )
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            contentAlignment = Alignment.BottomStart,
+        ) {
+            Column {
+                Text(
+                    text       = item.title,
+                    color      = Color.White,
+                    fontSize   = 11.sp,
+                    maxLines   = 1,
+                    overflow   = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.Medium,
+                )
+                item.subtitle?.takeIf { it.isNotBlank() }?.let { sub ->
+                    Text(
+                        text     = sub,
+                        color    = Color(0xFFB0B7C5),
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }
