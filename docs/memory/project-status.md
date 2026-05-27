@@ -108,15 +108,54 @@ cambiar query.
 
 ---
 
+## 🛠️ Sesión 2026-05-27 (tarde) — Detekt hard mode + Sealed Content
+
+Dos tareas grandes de la deuda viva, ahora que el usuario tiene Android Studio.
+
+### #1: Detekt baseline + flip a hard mode (commit `faed620`)
+
+3576 findings preexistentes → 380 baselineados (-89%). Reglas relajadas
+en `config/detekt.yml` porque peleaban con el estilo del proyecto:
+- `NoMultipleSpaces` desactivada (2920) — alineación por columnas es deliberada.
+- `ModifierListSpacing` desactivada (102) — `@Composable\n  fun` alineado.
+- `TopLevelPropertyNaming.{property,private}Pattern` → `_?[A-Za-z][_A-Za-z0-9]*`
+  para tokens en PascalCase (BgBase, RailContentPadding) y UPPER_SNAKE
+  (ROW_HEIGHT, CELL_WIDTH).
+
+Inline cleanup: 16 imports muertos en 10 ficheros (sobras de refactors
+anteriores). `ignoreFailures=false` activado; CI ya gate-ea findings nuevos.
+
+### #2: Sealed hierarchy MediaItem → Content (commit `4c2d7c4`)
+
+`MediaItem` (27 campos nullables) reemplazado por `sealed interface Content`:
+- Variantes `Movie / Series / Season / Episode / LiveChannel / Unknown`,
+  cada una con sus campos. `Unknown` para forward-compat con types nuevos.
+- Sub-interface `Resumable : Content` agrupa Movie + Episode (los únicos
+  con `progressPct / resumePosSec / durationSec`).
+- HomeRepository expresa returns honestos: `fetchContinueWatching() →
+  List<Content.Resumable>`, `fetchNextUp() → List<Content.Episode>`,
+  `fetchLiveNow() → List<Content.LiveChannel>`. Adiós a filterInstance.
+- HomeRail ahora es genérico `<T : Content>` — el lambda onClick recibe
+  el subtipo correcto en cada call site.
+- LiveChannelCard pide `Content.LiveChannel` concretamente.
+- SeriesResumeResolver / SeriesViewModel usan `filterIsInstance<Episode>()`
+  en vez de `it.kind == MediaKind.Episode`.
+
+21 ficheros tocados, ~5300 LOC. Tests reescritos (62/62 pass). Detekt
+hard mode + APK build verde local.
+
+**Quedan**: la tercera Prioridad Alta del roadmap (Hilt) y todo lo de
+Prioridad Media. Live-TV polish ("Recientemente visto", EPG grid) y
+DetailScreen overflow menu siguen pendientes también.
+
+---
+
 ## 📋 Roadmap técnico — lo que queda (TODO necesita Android SDK)
 
 ### Prioridad Alta (hacer en Android Studio)
 
-1. **detekt `ignoreFailures=false`** — `./gradlew :app:detektBaseline`,
-   commitear `config/detekt-baseline.xml`, flip flag. 1h.
-2. **Sealed hierarchy para Content** — reemplazar `MediaItem` god-class
-   por `Content.Movie`/`Content.Series`/`Content.Episode`/`Content.LiveChannel`.
-   Toca 30+ archivos. 1 día.
+1. ~~**detekt `ignoreFailures=false`**~~ — **HECHO** (sesión 2026-05-27, commit `faed620`).
+2. ~~**Sealed hierarchy para Content**~~ — **HECHO** (sesión 2026-05-27, commit `4c2d7c4`).
 3. **Hilt** — reemplaza AppContainer (210 LOC) + 10+ factories manuales.
    `@HiltViewModel` en cada VM. 1-2 días.
 
