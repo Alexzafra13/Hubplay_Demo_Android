@@ -63,7 +63,13 @@ class HomeViewModel(
         replay = 0, extraBufferCapacity = 8,
     )
 
-    private val trailerCache = java.util.concurrent.ConcurrentHashMap<String, TrailerInfo?>()
+    // Two-collection cache. ConcurrentHashMap doesn't allow null values, so
+    // we split "fetched and has a trailer" from "fetched and confirmed no
+    // trailer" instead of using a nullable map. Without this, focusing a
+    // live channel (or any item the server returns without trailer pair)
+    // would crash with NPE inside ConcurrentHashMap.putVal.
+    private val trailerCache       = java.util.concurrent.ConcurrentHashMap<String, TrailerInfo>()
+    private val noTrailerItems     = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private var refreshJob: Job? = null
 
     init {
@@ -112,7 +118,7 @@ class HomeViewModel(
             _trailerInfo.value = cached
             return
         }
-        if (trailerCache.containsKey(item.id)) {
+        if (item.id in noTrailerItems) {
             _trailerInfo.value = null
             return
         }
@@ -135,7 +141,11 @@ class HomeViewModel(
                 Log.w("HomeViewModel", "trailer fetch failed for ${item.id}: ${err.message}")
                 null
             }
-            trailerCache[item.id] = info
+            if (info != null) {
+                trailerCache[item.id] = info
+            } else {
+                noTrailerItems.add(item.id)
+            }
             if (_focusedItem.value?.id == item.id) {
                 _trailerInfo.value = info
             }
