@@ -114,10 +114,12 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         vm.onCardFocused(item("gate"))
+        advanceUntilIdle()
         vm.onCardFocused(item("real"))
         advanceUntilIdle()
 
-        assertThat(vm.focusedItemForUi.value?.id).isEqualTo("real")
+        assertThat(vm.focusedItemForUi.value).isNotNull()
+        assertThat(vm.focusedItemForUi.value!!.id).isEqualTo("real")
     }
 
     @Test
@@ -125,9 +127,10 @@ class HomeViewModelTest {
         val vm = viewModel(FakeHomeRepository(trending = listOf(item("t1"))))
         advanceUntilIdle()
 
-        vm.onCardFocused(item("gate"))
-        vm.resetFirstFocusGate()
-        vm.onCardFocused(item("after-reset"))
+        vm.onCardFocused(item("gate"))  // consumed by gate
+        advanceUntilIdle()
+        vm.resetFirstFocusGate()       // re-arm
+        vm.onCardFocused(item("after-reset"))  // consumed again
         advanceUntilIdle()
 
         assertThat(vm.focusedItemForUi.value).isNull()
