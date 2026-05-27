@@ -52,6 +52,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
 import com.alex.hubplay.data.AuthState
@@ -79,6 +80,13 @@ import com.alex.hubplay.ui.theme.BgBase
  * cualquier card de rail tiene foco.
  */
 private const val HERO_AUTOROTATE_MS = 8000L
+
+/**
+ * zIndex con el que el HomeSidebar se dibuja encima del rail vecino
+ * cuando se expande. Cualquier valor > 1 sirve mientras no sea menor
+ * que el del TrailerHostOverlay (que va más alto a nivel de app).
+ */
+private const val SidebarZIndex = 5f
 
 @OptIn(ExperimentalFoundationApi::class)
 private val SuppressVerticalBringIntoView = object : BringIntoViewSpec {
@@ -364,6 +372,12 @@ fun HomeScreen(
                             onOpenSearch = { onNavigateToTab(Tab.Search) },
                             onOpenSettings = onOpenSettings,
                             visibleTabs = visibleTabs,
+                            // zIndex alto para que cuando el sidebar se
+                            // expande (foco entrando), el overflow visual
+                            // se dibuje POR ENCIMA del rail vecino — sin
+                            // tocar la geometría del Row (que sigue
+                            // viendo el sidebar a SIDEBAR_WIDTH).
+                            modifier = Modifier.zIndex(SidebarZIndex),
                         )
 
                         Column(
