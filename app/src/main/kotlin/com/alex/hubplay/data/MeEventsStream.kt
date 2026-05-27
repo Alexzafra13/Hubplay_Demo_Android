@@ -59,7 +59,7 @@ class MeEventsStream(
      */
     fun events(): Flow<MeEvent> = flow {
         while (true) {
-            val base = tokenStore.serverUrlBlocking()
+            val base = tokenStore.snapshotNow().serverUrl
             if (base.isNullOrBlank()) {
                 // Not paired yet — wait and re-check rather than crash.
                 delay(2_000L)

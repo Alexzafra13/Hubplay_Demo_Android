@@ -1,6 +1,5 @@
 package com.alex.hubplay.data
 
-import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -14,15 +13,16 @@ import okhttp3.Response
  * interceptor lets us hand Retrofit a placeholder (`http://server/`)
  * and rewrite it on every request.
  *
- * Falls back to the placeholder when no serverUrl is stored — Retrofit
- * will just fail the request with a connection error which we handle
- * upstream as "no server configured".
+ * Reads the server URL from [TokenStore.snapshotNow] — a non-blocking
+ * in-memory read. Falls back to the placeholder when no serverUrl is
+ * stored — Retrofit will just fail the request with a connection error
+ * which we handle upstream as "no server configured".
  */
 class BaseUrlInterceptor(private val tokenStore: TokenStore) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val original = chain.request()
-        val serverUrl = runBlocking { tokenStore.snapshot().serverUrl } ?: return chain.proceed(original)
+        val serverUrl = tokenStore.snapshotNow().serverUrl ?: return chain.proceed(original)
 
         val configured = serverUrl.toHttpUrl()
         val rewritten  = original.url.newBuilder()
