@@ -1,14 +1,17 @@
 package com.alex.hubplay.ui.home
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -271,12 +274,29 @@ fun HomeScreen(
                 }
 
                 LaunchedEffect(activeRailIndex) {
-                    // animateScrollToItem en lugar de scrollToItem para que
-                    // el movimiento vertical entre rails sea suave estilo
-                    // Prime/Netflix — el rail anterior se desliza fuera y
-                    // el nuevo entra. Duración por defecto del spring de
-                    // LazyList (~350-500ms según distancia).
-                    listState.animateScrollToItem(activeRailIndex)
+                    // El spring por defecto de `animateScrollToItem`
+                    // (StiffnessLow) tarda ~500ms en asentar el rail —
+                    // demasiado lento para D-pad TV: el usuario pulsa ↓
+                    // y siente lag antes de ver el siguiente rail.
+                    //
+                    // Calculamos el offset al rail objetivo y animamos con
+                    // un spring StiffnessMedium NoBouncy (~250-300ms). Si
+                    // el rail no está en la ventana visible (jump grande
+                    // tras back-restore), saltamos sin animar — la
+                    // animación de cientos de pixels sería ruido visual.
+                    val target = listState.layoutInfo.visibleItemsInfo
+                        .firstOrNull { it.index == activeRailIndex }
+                    if (target == null) {
+                        listState.scrollToItem(activeRailIndex)
+                    } else if (target.offset != 0) {
+                        listState.animateScrollBy(
+                            value         = target.offset.toFloat(),
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness    = Spring.StiffnessMedium,
+                            ),
+                        )
+                    }
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
