@@ -58,8 +58,15 @@ naming:
     functionPattern: '[a-zA-Z][a-zA-Z0-9]*'  # Allow PascalCase @Composable funs.
   TopLevelPropertyNaming:
     constantPattern: '[A-Z][_A-Z0-9]*'
-    propertyPattern: '[a-z][A-Za-z0-9]*'
-    privatePropertyPattern: '_?[a-z][A-Za-z0-9]*'
+    # Patrones permisivos: el proyecto usa varias convenciones para
+    # top-level vals que actúan como constantes:
+    #   - PascalCase para theme tokens (BgBase, Accent) y dimensiones
+    #     genéricas (RailContentPadding, SuppressVerticalBringIntoView)
+    #   - UPPER_SNAKE_CASE para dimensiones agrupadas por screen
+    #     (ROW_HEIGHT, CELL_WIDTH, HERO_HEIGHT)
+    # Ambos estilos están bien si son consistentes dentro del fichero.
+    propertyPattern: '_?[A-Za-z][_A-Za-z0-9]*'
+    privatePropertyPattern: '_?[A-Za-z][_A-Za-z0-9]*'
 
 # ─── Empty blocks — we use `Unit` on purpose in `when` exhaustives ──────────
 empty-blocks:
@@ -91,6 +98,11 @@ formatting:
     active: false
   TrailingCommaOnDeclarationSite:
     active: false
+  NoMultipleSpaces:
+    active: false          # El proyecto alinea por columnas (val foo   = ...,
+                           # padding = 16.dp, etc.) — estilo deliberado.
+  ModifierListSpacing:
+    active: false          # Mismo motivo: @Composable\n        fun alineado.
 
 # ─── Performance — extra strict, matches our "rendimiento top" goal ────────
 performance:

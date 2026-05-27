@@ -29,12 +29,11 @@ detekt {
     autoCorrect            = false
     parallel               = true
     ignoredBuildTypes      = listOf("release")
-    // Soft mode while we baseline existing findings. The first attempt
-    // at hard mode (commit 887d93c) found pre-existing issues we hadn't
-    // captured in detekt-baseline.xml. Next session: download the
-    // detekt-report artifact from the failing run, fix or baseline each
-    // finding, then flip this back to false. See docs/memory/project-status.md.
-    ignoreFailures         = true
+    // Hard mode: any new finding (not in detekt-baseline.xml) breaks CI.
+    // Si aceptas un finding nuevo: `./gradlew :app:detektBaseline` + commit.
+    // Para reglas que pelean con el estilo del proyecto: relajar en
+    // config/detekt.yml en vez de baseline (más sostenible).
+    ignoreFailures         = false
 }
 
 tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
