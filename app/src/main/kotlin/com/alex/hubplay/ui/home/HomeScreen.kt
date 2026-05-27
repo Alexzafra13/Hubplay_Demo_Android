@@ -36,6 +36,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -91,6 +92,23 @@ private const val HERO_AUTOROTATE_MS = 8000L
  */
 private const val SidebarZIndex = 5f
 
+/** Fracción que ocupa el hero del alto disponible en modo landing
+ *  (no hay foco sobre ningún rail card). Casi 1 — un poco menos que
+ *  1.0 para evitar `weight(0f)` en el LazyColumn vecino (Compose no
+ *  acepta weights de 0). El usuario percibe "hero pantalla completa". */
+private const val HERO_WEIGHT_LANDING = 0.99f
+
+/** Fracción del hero cuando el usuario baja a los rails. El restante
+ *  (~0.45) lo consume la LazyColumn de rails, donde caben 1 rail
+ *  completo + peek del siguiente — patrón Netflix / Prime Video. */
+private const val HERO_WEIGHT_REDUCED = 0.55f
+
+/** Altura por rail dentro de la LazyColumn, relativa al alto del
+ *  propio LazyColumn (que es ~45% del alto de pantalla cuando el hero
+ *  está reducido). 0.70 deja un ~30% del rail siguiente asomando
+ *  debajo, lo justo para que el usuario sepa que hay más contenido. */
+private const val RAIL_HEIGHT_FRACTION = 0.70f
+
 @OptIn(ExperimentalFoundationApi::class)
 private val SuppressVerticalBringIntoView = object : BringIntoViewSpec {
     override fun calculateScrollDistance(
@@ -122,9 +140,28 @@ fun HomeScreen(
     val trailerInfo by viewModel.trailerInfo.collectAsState()
     val heroSlideIndex by viewModel.heroSlideIndex.collectAsState()
 
+    // `heroButtonsFocused` lo reportan los botones Play / Detalles de
+    // HeroInfo. `isLanding` (= "estamos en el modo hero pantalla
+    // completa") es true tanto en arranque (sin focused card) como
+    // cuando el usuario sube otra vez a los botones del hero — sin
+    // esto, volver con ↑ desde un rail no haría re-expandirse el hero.
+    var heroButtonsFocused by remember { mutableStateOf(false) }
     val isLanding by remember {
-        derivedStateOf { focusedItem == null }
+        derivedStateOf { focusedItem == null || heroButtonsFocused }
     }
+
+    // Hero ocupa toda la pantalla en landing (1.0) y se reduce a 0.55
+    // dejando espacio a los rails cuando el usuario baja a un card.
+    // Spring snappy NoBouncy — la transición se siente parte del propio
+    // movimiento de foco (no una animación añadida).
+    val heroWeight by animateFloatAsState(
+        targetValue = if (isLanding) HERO_WEIGHT_LANDING else HERO_WEIGHT_REDUCED,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness    = Spring.StiffnessMediumLow,
+        ),
+        label = "hero-weight",
+    )
 
     // El hero rinde un item del carousel propio (data.hero, los 5 trending)
     // SALVO que el usuario haya movido el foco a un rail de abajo — en ese
@@ -418,12 +455,13 @@ fun HomeScreen(
                                 carouselSize  = if (focusedItem == null) ui.data.hero.size else 0,
                                 carouselIndex = heroSlideIndex,
                                 onShiftSlide  = { delta -> viewModel.shiftHeroSlide(delta) },
+                                onHeroFocusedChange = { f -> heroButtonsFocused = f },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(0.50f),
+                                    .weight(heroWeight),
                             )
 
-                            // ── Rails — LazyColumn, bottom half ───────
+                            // ── Rails — LazyColumn, peso restante ─────
                             @OptIn(ExperimentalFoundationApi::class)
                             CompositionLocalProvider(
                                 LocalBringIntoViewSpec provides SuppressVerticalBringIntoView,
@@ -432,7 +470,12 @@ fun HomeScreen(
                                     state = listState,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .weight(0.50f),
+                                        // El peso "restante" se anima
+                                        // inversamente al del hero —
+                                        // landing: ~0.01 (rails casi
+                                        // invisibles), reduced: ~0.45
+                                        // (rails con peek del siguiente).
+                                        .weight(1f - heroWeight),
                                 ) {
                                     itemsIndexed(
                                         items = rails,
@@ -442,7 +485,7 @@ fun HomeScreen(
                                             .getOrPut(config.id) { FocusRequester() }
                                         Box(
                                             modifier = Modifier
-                                                .fillParentMaxHeight(0.88f)
+                                                .fillParentMaxHeight(RAIL_HEIGHT_FRACTION)
                                                 .fillMaxWidth()
                                                 .focusGroup()
                                                 // Quitamos `focusRestorer()` exterior: tener dos

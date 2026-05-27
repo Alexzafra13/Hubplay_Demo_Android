@@ -79,6 +79,10 @@ fun HeroInfo(
     carouselIndex:       Int      = 0,
     /** Callback al pulsar ←/→ con foco en el botón Play. ±1 normalmente. */
     onShiftSlide:        (Int) -> Unit = {},
+    /** True cuando cualquier botón del hero (Play o Detalles) tiene foco
+     *  — usado por HomeScreen para decidir si el hero ocupa toda la
+     *  pantalla (true) o se reduce dejando ver los rails (false). */
+    onHeroFocusedChange: (Boolean) -> Unit = {},
     modifier:            Modifier = Modifier,
 ) {
     if (item == null) return
@@ -163,7 +167,14 @@ fun HeroInfo(
                             ),
                             modifier = Modifier
                                 .focusRequester(playFocusRequester)
-                                .onFocusChanged { playFocused = it.isFocused }
+                                .onFocusChanged {
+                                    playFocused = it.isFocused
+                                    if (it.isFocused) {
+                                        onHeroFocusedChange(true)
+                                    } else if (!detailsFocused) {
+                                        onHeroFocusedChange(false)
+                                    }
+                                }
                                 .scale(playScale)
                                 // Capturamos ←/→ ANTES de que llegue al focus
                                 // engine para que el carousel del hero rote
@@ -202,7 +213,14 @@ fun HeroInfo(
                             onClick = { onDetails(displayItem) },
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier
-                                .onFocusChanged { detailsFocused = it.isFocused }
+                                .onFocusChanged {
+                                    detailsFocused = it.isFocused
+                                    if (it.isFocused) {
+                                        onHeroFocusedChange(true)
+                                    } else if (!playFocused) {
+                                        onHeroFocusedChange(false)
+                                    }
+                                }
                                 .scale(detailsScale)
                                 .then(
                                     if (detailsFocused)

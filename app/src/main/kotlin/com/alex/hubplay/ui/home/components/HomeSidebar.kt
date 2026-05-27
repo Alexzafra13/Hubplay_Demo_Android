@@ -37,7 +37,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -112,7 +114,16 @@ fun HomeSidebar(
     // basta para decidir colapsado vs expandido. Cuando el usuario pulsa
     // → desde el último icono el focus engine lleva el foco fuera del
     // grupo y el callback baja a false, colapsando con animación.
-    var groupFocused by remember { mutableStateOf(false) }
+    // Tracking per-row del foco en vez de `hasFocus` sobre el padre con
+    // focusGroup() — en Mi Box S el callback del focusGroup no siempre
+    // dispara con `hasFocus=false` cuando el foco sale del sidebar
+    // hacia un rail, dejando el menú expandido "pegado". Agregando los
+    // flags de cada fila garantiza que sólo está expandido si AL MENOS
+    // una fila tiene foco real.
+    val rowsFocused  = remember { mutableStateMapOf<Int, Boolean>() }
+    val groupFocused by remember {
+        derivedStateOf { rowsFocused.values.any { it } }
+    }
     // Spring snappy pero sin rebote — apertura/cierre que se siente
     // rápido y orgánico. StiffnessMediumLow ≈ 400, da unos 280ms
     // efectivos al recorrer 52→220dp. Mucho más vivo que un tween
@@ -152,59 +163,82 @@ fun HomeSidebar(
                 .width(animatedWidth)
                 .fillMaxHeight()
                 .background(sidebarBrush)
-                .focusGroup()
-                .onFocusChanged { state -> groupFocused = state.hasFocus },
+                .focusGroup(),
             verticalArrangement = Arrangement.Center,
         ) {
+            // Construimos la lista de entradas en runtime para asignar
+            // un índice estable a cada SidebarRow (clave del map de
+            // foco). El índice es 0..6 y NO depende de qué tabs estén
+            // visibles — un SidebarRow oculto simplemente no aparece.
+            var rowIndex = 0
             SidebarRow(
+                index    = rowIndex++,
                 icon     = Icons.Default.Search,
                 label    = stringResource(R.string.home_sidebar_search),
                 onClick  = onOpenSearch,
                 expanded = groupFocused,
+                onFocusedChange = { f -> rowsFocused[0] = f },
             )
             SidebarRow(
+                index    = rowIndex++,
                 icon     = Icons.Default.Home,
                 label    = stringResource(R.string.home_sidebar_home),
                 onClick  = { onNavigateToTab(Tab.Home) },
                 expanded = groupFocused,
+                onFocusedChange = { f -> rowsFocused[1] = f },
             )
             if (Tab.Movies in visibleTabs) {
+                val i = rowIndex++
                 SidebarRow(
+                    index    = i,
                     icon     = Icons.Default.Movie,
                     label    = stringResource(R.string.home_sidebar_movies),
                     onClick  = { onNavigateToTab(Tab.Movies) },
                     expanded = groupFocused,
+                    onFocusedChange = { f -> rowsFocused[i] = f },
                 )
             }
             if (Tab.Series in visibleTabs) {
+                val i = rowIndex++
                 SidebarRow(
+                    index    = i,
                     icon     = Icons.Default.VideoLibrary,
                     label    = stringResource(R.string.home_sidebar_series),
                     onClick  = { onNavigateToTab(Tab.Series) },
                     expanded = groupFocused,
+                    onFocusedChange = { f -> rowsFocused[i] = f },
                 )
             }
             if (Tab.Collections in visibleTabs) {
+                val i = rowIndex++
                 SidebarRow(
+                    index    = i,
                     icon     = Icons.Outlined.CollectionsBookmark,
                     label    = stringResource(R.string.home_sidebar_collections),
                     onClick  = { onNavigateToTab(Tab.Collections) },
                     expanded = groupFocused,
+                    onFocusedChange = { f -> rowsFocused[i] = f },
                 )
             }
             if (Tab.LiveTv in visibleTabs) {
+                val i = rowIndex++
                 SidebarRow(
+                    index    = i,
                     icon     = Icons.Default.LiveTv,
                     label    = stringResource(R.string.home_sidebar_livetv),
                     onClick  = { onNavigateToTab(Tab.LiveTv) },
                     expanded = groupFocused,
+                    onFocusedChange = { f -> rowsFocused[i] = f },
                 )
             }
+            val settingsIndex = rowIndex
             SidebarRow(
+                index    = settingsIndex,
                 icon     = Icons.Default.Settings,
                 label    = stringResource(R.string.home_sidebar_settings),
                 onClick  = onOpenSettings,
                 expanded = groupFocused,
+                onFocusedChange = { f -> rowsFocused[settingsIndex] = f },
             )
         }
     }
@@ -224,12 +258,14 @@ fun HomeSidebar(
  */
 @Composable
 private fun SidebarRow(
-    icon:     ImageVector,
-    label:    String,
-    onClick:  () -> Unit,
-    expanded: Boolean,
+    index:           Int,
+    icon:            ImageVector,
+    label:           String,
+    onClick:         () -> Unit,
+    expanded:        Boolean,
+    onFocusedChange: (Boolean) -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
+    var focused by remember(index) { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue   = if (focused) 1.04f else 1.0f,
         animationSpec = spring(
@@ -248,7 +284,10 @@ private fun SidebarRow(
             .padding(horizontal = 6.dp, vertical = 2.dp)
             .height(SidebarRowHeight)
             .scale(scale)
-            .onFocusChanged { focused = it.isFocused }
+            .onFocusChanged {
+                focused = it.isFocused
+                onFocusedChange(it.isFocused)
+            }
             .clickable(
                 interactionSource = interactionSource,
                 indication        = null,
