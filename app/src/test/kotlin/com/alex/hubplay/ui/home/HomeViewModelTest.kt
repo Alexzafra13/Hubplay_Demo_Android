@@ -10,6 +10,7 @@ import com.alex.hubplay.data.MediaKind
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -112,9 +113,8 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         vm.onCardFocused(item("gate"))
-        advanceUntilIdle()
         vm.onCardFocused(item("real"))
-        advanceUntilIdle()
+        delay(200) // advance virtual time past the 150ms focusBus debounce
 
         assertThat(vm.focusedItemForUi.value).isNotNull()
         assertThat(vm.focusedItemForUi.value!!.id).isEqualTo("real")
