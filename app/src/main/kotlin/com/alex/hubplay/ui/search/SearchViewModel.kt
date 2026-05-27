@@ -1,5 +1,6 @@
 package com.alex.hubplay.ui.search
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -19,19 +20,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Search screen ViewModel.
+ * Search screen ViewModel with offset-based pagination.
  *
- *  - Text input writes to [query] synchronously so the field never feels laggy.
- *  - A debounced flow over [query] (~300 ms) drives the actual /items/search
- *    request — short enough to feel live, long enough that typing "the
- *    matrix" doesn't fire seven requests.
- *  - Queries shorter than 2 characters short-circuit to empty results
- *    without hitting the network. The backend handles them fine but the
- *    UX of getting 60 garbage matches for "a" is bad.
- *  - Concurrent searches are NOT cancelled — coroutines run to completion
- *    but only the LATEST result wins via the `requestId` guard. Cancelling
- *    in-flight HTTP would also work; the guard is simpler and behaves
- *    identically for our payload sizes.
+ * Text input writes to [onQueryChange] synchronously so the field never
+ * feels laggy. A debounced flow (~300ms) drives the actual /items/search
+ * request. Scrolling near the grid bottom triggers [loadMore] which
+ * appends the next page for the current query.
  */
 @OptIn(FlowPreview::class)
 class SearchViewModel(
@@ -42,6 +36,8 @@ class SearchViewModel(
     val ui: StateFlow<SearchUiState> = _ui.asStateFlow()
 
     private var requestSeq: Long = 0L
+    private var currentOffset = 0
+    private var hasMore = false
 
     init {
         _ui
@@ -55,10 +51,8 @@ class SearchViewModel(
 
     fun onQueryChange(text: String) {
         _ui.update {
-            // When the input drops below the min, clear results immediately
-            // so the UI doesn't keep showing stale matches.
             if (text.trim().length < MIN_QUERY_LEN) {
-                it.copy(query = text, results = emptyList(), isSearching = false, error = null)
+                it.copy(query = text, results = emptyList(), isSearching = false, error = null, canLoadMore = false)
             } else {
                 it.copy(query = text, isSearching = true, error = null)
             }
@@ -66,16 +60,55 @@ class SearchViewModel(
     }
 
     fun clear() {
+        currentOffset = 0
+        hasMore = false
         _ui.value = SearchUiState()
+    }
+
+    fun loadMore() {
+        if (!hasMore || _ui.value.isLoadingMore || _ui.value.isSearching) return
+        val query = _ui.value.query.trim()
+        if (query.length < MIN_QUERY_LEN) return
+
+        _ui.update { it.copy(isLoadingMore = true) }
+        viewModelScope.launch {
+            runCatching { repository.searchItems(query, limit = PAGE_SIZE) }
+                .onSuccess { newItems ->
+                    currentOffset += newItems.size
+                    hasMore = newItems.size >= PAGE_SIZE
+                    _ui.update {
+                        it.copy(
+                            results = it.results + newItems,
+                            isLoadingMore = false,
+                            canLoadMore = hasMore,
+                        )
+                    }
+                }
+                .onFailure {
+                    Log.w(TAG, "loadMore search failed", it)
+                    _ui.update { it.copy(isLoadingMore = false) }
+                }
+        }
     }
 
     private fun runSearch(text: String) {
         val rid = ++requestSeq
+        currentOffset = 0
+        hasMore = false
         viewModelScope.launch {
-            runCatching { repository.searchItems(text) }
+            runCatching { repository.searchItems(text, limit = PAGE_SIZE) }
                 .onSuccess { hits ->
                     if (rid != requestSeq) return@onSuccess
-                    _ui.update { it.copy(results = hits, isSearching = false, error = null) }
+                    currentOffset = hits.size
+                    hasMore = hits.size >= PAGE_SIZE
+                    _ui.update {
+                        it.copy(
+                            results = hits,
+                            isSearching = false,
+                            error = null,
+                            canLoadMore = hasMore,
+                        )
+                    }
                 }
                 .onFailure { err ->
                     if (rid != requestSeq) return@onFailure
@@ -85,8 +118,10 @@ class SearchViewModel(
     }
 
     companion object {
+        private const val TAG = "SearchViewModel"
         private const val DEBOUNCE_MS = 300L
         private const val MIN_QUERY_LEN = 2
+        private const val PAGE_SIZE = 60
 
         fun factory(repository: HomeRepository) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -99,8 +134,10 @@ class SearchViewModel(
 
 @androidx.compose.runtime.Immutable
 data class SearchUiState(
-    val query:       String           = "",
-    val results:     List<MediaItem>  = emptyList(),
-    val isSearching: Boolean          = false,
-    val error:       String?          = null,
+    val query:         String           = "",
+    val results:       List<MediaItem>  = emptyList(),
+    val isSearching:   Boolean          = false,
+    val isLoadingMore: Boolean          = false,
+    val canLoadMore:   Boolean          = false,
+    val error:         String?          = null,
 )

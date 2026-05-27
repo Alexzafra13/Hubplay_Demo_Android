@@ -6,17 +6,24 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -32,32 +39,21 @@ import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.home.components.TopNav
 import com.alex.hubplay.ui.theme.BgBase
 
-/**
- * Shared shell for the Películas / Series / TV en vivo screens.
- *
- * Each tab in the TopNav resolves to a CatalogScreen flavoured by:
- *   - The active [Tab] (so the TopNav highlights the right entry).
- *   - The [items] to render in the grid.
- *   - The card factory ([cardContent]) so movies/series get
- *     MediaCard with Portrait posters and channels get
- *     LiveChannelCard with their initials placeholder.
- *
- * The TopNav lives inside the screen rather than in a parent shell so
- * each route owns its own scaffolding — simpler today, easy to lift
- * up later if we add a persistent layout.
- */
 @Composable
 fun CatalogScreen(
-    selectedTab: Tab,
-    title:       String,
-    items:       List<MediaItem>,
-    isLoading:   Boolean,
-    error:       String?,
-    onRetry:     () -> Unit,
+    selectedTab:   Tab,
+    title:         String,
+    items:         List<MediaItem>,
+    isLoading:     Boolean,
+    isLoadingMore: Boolean        = false,
+    canLoadMore:   Boolean        = false,
+    error:         String?,
+    onRetry:       () -> Unit,
+    onLoadMore:    () -> Unit     = {},
     onTabSelected: (Tab) -> Unit,
-    onLogOut:    () -> Unit,
-    onSettings:  () -> Unit = {},
-    cardContent: @Composable (MediaItem) -> Unit,
+    onLogOut:      () -> Unit,
+    onSettings:    () -> Unit     = {},
+    cardContent:   @Composable (MediaItem) -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = BgBase) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -78,25 +74,51 @@ fun CatalogScreen(
                 isLoading && items.isEmpty() -> CenteredSpinner()
                 error != null && items.isEmpty() -> ErrorBanner(message = error, onRetry = onRetry)
                 items.isEmpty() -> EmptyBanner()
-                else -> LazyVerticalGrid(
-                    // Slot ~160dp matches the Portrait card's 150dp footprint
-                    // closely, so most of the visual "air" between cards
-                    // comes from the explicit horizontal spacing — not
-                    // from the slot being wider than its content.
-                    columns               = GridCells.Adaptive(minSize = 160.dp),
-                    contentPadding        = PaddingValues(start = 32.dp, end = 32.dp, top = 12.dp, bottom = 40.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement   = Arrangement.spacedBy(14.dp),
-                    modifier              = Modifier.fillMaxSize(),
-                ) {
-                    items(items, key = { it.id }) { item ->
-                        cardContent(item)
+                else -> {
+                    val gridState = rememberLazyGridState()
+
+                    val nearBottom by remember {
+                        derivedStateOf {
+                            val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                            val total = gridState.layoutInfo.totalItemsCount
+                            total > 0 && last >= total - LOAD_MORE_THRESHOLD
+                        }
+                    }
+                    LaunchedEffect(nearBottom) {
+                        if (nearBottom && canLoadMore) onLoadMore()
+                    }
+
+                    LazyVerticalGrid(
+                        columns               = GridCells.Adaptive(minSize = 160.dp),
+                        state                 = gridState,
+                        contentPadding        = PaddingValues(start = 32.dp, end = 32.dp, top = 12.dp, bottom = 40.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement   = Arrangement.spacedBy(14.dp),
+                        modifier              = Modifier.fillMaxSize(),
+                    ) {
+                        items(items, key = { it.id }) { item ->
+                            cardContent(item)
+                        }
+                        if (isLoadingMore) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
 }
+
+private const val LOAD_MORE_THRESHOLD = 8
 
 @Composable
 private fun CenteredSpinner() {
@@ -137,10 +159,6 @@ private fun EmptyBanner() {
     }
 }
 
-/**
- * Helper card factories so each catalog screen doesn't repeat the
- * MediaCard wiring inline.
- */
 @Composable
 fun PortraitCatalogCard(
     item:       MediaItem,
@@ -149,8 +167,7 @@ fun PortraitCatalogCard(
     MediaCard(
         item      = item,
         style     = CardStyle.Portrait,
-        onFocused = { /* no focus preview on catalog screens */ },
+        onFocused = {},
         onClick   = { onOpen(it.id, it.kind) },
     )
 }
-

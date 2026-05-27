@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -30,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -92,8 +95,11 @@ fun SearchScreen(
                     ui.query.trim().length < 2               -> EmptyHint()
                     !ui.isSearching && ui.results.isEmpty()  -> NoMatches(ui.query)
                     else                                     -> ResultsGrid(
-                        items      = ui.results,
-                        onOpenItem = onOpenItem,
+                        items         = ui.results,
+                        isLoadingMore = ui.isLoadingMore,
+                        canLoadMore   = ui.canLoadMore,
+                        onLoadMore    = viewModel::loadMore,
+                        onOpenItem    = onOpenItem,
                     )
                 }
             }
@@ -154,11 +160,28 @@ private fun SearchInputBar(
 
 @Composable
 private fun ResultsGrid(
-    items:       List<com.alex.hubplay.data.MediaItem>,
-    onOpenItem:  (String, MediaKind) -> Unit,
+    items:         List<com.alex.hubplay.data.MediaItem>,
+    isLoadingMore: Boolean,
+    canLoadMore:   Boolean,
+    onLoadMore:    () -> Unit,
+    onOpenItem:    (String, MediaKind) -> Unit,
 ) {
+    val gridState = rememberLazyGridState()
+
+    val nearBottom by remember {
+        derivedStateOf {
+            val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val total = gridState.layoutInfo.totalItemsCount
+            total > 0 && last >= total - 8
+        }
+    }
+    LaunchedEffect(nearBottom) {
+        if (nearBottom && canLoadMore) onLoadMore()
+    }
+
     LazyVerticalGrid(
         columns               = GridCells.Adaptive(minSize = 160.dp),
+        state                 = gridState,
         contentPadding        = PaddingValues(start = 32.dp, end = 32.dp, top = 4.dp, bottom = 40.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement   = Arrangement.spacedBy(14.dp),
@@ -166,6 +189,16 @@ private fun ResultsGrid(
     ) {
         items(items, key = { it.id }) { item ->
             PortraitCatalogCard(item, onOpenItem)
+        }
+        if (isLoadingMore) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            }
         }
     }
 }
