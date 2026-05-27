@@ -1,15 +1,16 @@
 package com.alex.hubplay.ui.home.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -73,15 +74,19 @@ private val SidebarExpandedWidth = 220.dp
 /** Altura de cada fila (icono + posible label). */
 private val SidebarRowHeight = 44.dp
 
+/** Tamaño del "pill" blanco que rodea al icono cuando la fila está
+ *  enfocada — estilo Prime Video TV. El icono mismo (20dp) queda
+ *  centrado con margen. */
+private val SidebarIconPillSize = 36.dp
+
+/** Duraciones de las animaciones de fade del label (in/out). */
+private const val LABEL_FADE_IN_MS  = 180
+private const val LABEL_FADE_OUT_MS = 120
+
 /** Stops del horizontal gradient que da el "glass" look. */
 private const val SidebarBgAlphaLeft   = 0.96f
 private const val SidebarBgAlphaMid    = 0.92f
 private const val SidebarBgStopMid     = 0.65f
-
-/** Highlight de la fila enfocada — fondo blanco translúcido + borde. */
-private const val FocusedRowBgAlpha    = 0.10f
-private const val FocusedRowBorderAlpha = 0.6f
-private val FocusedRowBorderWidth      = 1.5.dp
 
 /**
  * Lateral nav rail estilo Prime Video TV: colapsado muestra iconos,
@@ -108,11 +113,30 @@ fun HomeSidebar(
     // → desde el último icono el focus engine lleva el foco fuera del
     // grupo y el callback baja a false, colapsando con animación.
     var groupFocused by remember { mutableStateOf(false) }
+    // Spring snappy pero sin rebote — apertura/cierre que se siente
+    // rápido y orgánico. StiffnessMediumLow ≈ 400, da unos 280ms
+    // efectivos al recorrer 52→220dp. Mucho más vivo que un tween
+    // lineal del mismo tiempo y menos pesado en CPU porque no necesita
+    // hacer animateFloatAsState para cada propiedad — width manda.
     val animatedWidth by animateDpAsState(
         targetValue   = if (groupFocused) SidebarExpandedWidth else SIDEBAR_WIDTH,
-        animationSpec = tween(durationMillis = 220),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness    = Spring.StiffnessMediumLow,
+        ),
         label         = "sidebar-width",
     )
+
+    // Cachear el brush para que la animación no cree un objeto Brush
+    // nuevo en cada frame — directamente notable en Mi Box S al
+    // entrar/salir del sidebar.
+    val sidebarBrush = remember {
+        Brush.horizontalGradient(
+            0f               to BgBase.copy(alpha = SidebarBgAlphaLeft),
+            SidebarBgStopMid to BgBase.copy(alpha = SidebarBgAlphaMid),
+            1f               to Color.Transparent,
+        )
+    }
 
     // El sidebar se ancla a la izquierda del Box padre (HomeScreen lo
     // posiciona con `align(CenterStart)` + `zIndex`). El Column toma su
@@ -127,13 +151,7 @@ fun HomeSidebar(
             modifier = Modifier
                 .width(animatedWidth)
                 .fillMaxHeight()
-                .background(
-                    Brush.horizontalGradient(
-                        0f               to BgBase.copy(alpha = SidebarBgAlphaLeft),
-                        SidebarBgStopMid to BgBase.copy(alpha = SidebarBgAlphaMid),
-                        1f               to Color.Transparent,
-                    ),
-                )
+                .background(sidebarBrush)
                 .focusGroup()
                 .onFocusChanged { state -> groupFocused = state.hasFocus },
             verticalArrangement = Arrangement.Center,
@@ -193,10 +211,16 @@ fun HomeSidebar(
 }
 
 /**
- * Una fila del sidebar: icono fijo + label que aparece con
- * expandHorizontally + fadeIn al expandirse. Cuando la fila tiene
- * foco directo (no sólo el grupo), se resalta con border + leve scale
- * y el texto pasa a SemiBold.
+ * Una fila del sidebar — estilo Prime Video TV:
+ *
+ * - Sólo el **icono** se resalta cuando la fila tiene foco: pill blanco
+ *   detrás del icono, con el icono mismo en color oscuro (BgBase) para
+ *   alto contraste. El label, si está visible, NO tiene highlight de
+ *   fondo — sólo cambia a color claro + SemiBold.
+ * - Scale ligero (1.04) en TODA la fila para que el highlight respire.
+ * - Label aparece con `expandHorizontally + fadeIn` cuando el sidebar
+ *   está expandido, con springs ligeros para que entre/salga suave sin
+ *   sentirse pesado.
  */
 @Composable
 private fun SidebarRow(
@@ -207,61 +231,62 @@ private fun SidebarRow(
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue   = if (focused) 1.05f else 1.0f,
-        animationSpec = tween(150),
+        targetValue   = if (focused) 1.04f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness    = Spring.StiffnessMediumLow,
+        ),
         label         = "sidebar-row-scale",
     )
-    val tint = if (focused) TextPrimary else TextMuted
+    val iconBg     = if (focused) Color.White       else Color.Transparent
+    val iconTint   = if (focused) BgBase             else TextMuted
+    val labelColor = if (focused) TextPrimary        else TextMuted
     val interactionSource = remember { MutableInteractionSource() }
-    val shape = RoundedCornerShape(8.dp)
 
     Row(
         modifier = Modifier
-            // Le damos toda la anchura que el grupo padre tenga ahora
-            // mismo — así el highlight focused cubre la fila entera y
-            // arrastra el label dentro del mismo rectángulo.
             .padding(horizontal = 6.dp, vertical = 2.dp)
             .height(SidebarRowHeight)
-            .clip(shape)
             .scale(scale)
             .onFocusChanged { focused = it.isFocused }
             .clickable(
                 interactionSource = interactionSource,
                 indication        = null,
                 onClick           = onClick,
-            )
-            .then(
-                if (focused) {
-                    Modifier
-                        .background(Color.White.copy(alpha = FocusedRowBgAlpha))
-                        .border(
-                            FocusedRowBorderWidth,
-                            TextPrimary.copy(alpha = FocusedRowBorderAlpha),
-                            shape,
-                        )
-                } else {
-                    Modifier
-                },
-            )
-            .padding(horizontal = 12.dp),
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector        = icon,
-            contentDescription = label,
-            tint               = tint,
-            modifier           = Modifier.size(20.dp),
-        )
+        // ── Icono con su pill blanco (sólo visible focused) ───────
+        Box(
+            modifier = Modifier
+                .size(SidebarIconPillSize)
+                .clip(RoundedCornerShape(10.dp))
+                .background(iconBg),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector        = icon,
+                contentDescription = label,
+                tint               = iconTint,
+                modifier           = Modifier.size(20.dp),
+            )
+        }
+
+        // ── Label: aparece/desaparece con la expansión ────────────
         AnimatedVisibility(
             visible = expanded,
-            enter   = expandHorizontally(animationSpec = tween(180)) + fadeIn(tween(220)),
-            exit    = shrinkHorizontally(animationSpec = tween(160)) + fadeOut(tween(140)),
+            enter   = expandHorizontally(
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+            ) + fadeIn(animationSpec = tween(LABEL_FADE_IN_MS)),
+            exit    = shrinkHorizontally(
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+            ) + fadeOut(animationSpec = tween(LABEL_FADE_OUT_MS)),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Spacer(Modifier.width(14.dp))
                 Text(
                     text       = label,
-                    color      = tint,
+                    color      = labelColor,
                     style      = MaterialTheme.typography.bodyMedium,
                     fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines   = 1,
