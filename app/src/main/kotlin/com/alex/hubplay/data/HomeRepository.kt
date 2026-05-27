@@ -14,20 +14,20 @@ import com.alex.hubplay.data.api.dto.TrendingItemDto
  * Retrofit + TokenStore. Tests swap in a [FakeHomeRepository].
  */
 interface HomeRepository {
-    suspend fun fetchContinueWatching(): List<MediaItem>
-    suspend fun fetchTrending(limit: Int = 12): List<MediaItem>
-    suspend fun fetchLatest(libraryId: String? = null, type: String? = null, limit: Int = 20): List<MediaItem>
+    suspend fun fetchContinueWatching(): List<Content.Resumable>
+    suspend fun fetchTrending(limit: Int = 12): List<Content>
+    suspend fun fetchLatest(libraryId: String? = null, type: String? = null, limit: Int = 20): List<Content>
     suspend fun fetchLibraries(): Map<String, String>
-    suspend fun fetchLiveNow(limit: Int = 10): List<MediaItem>
+    suspend fun fetchLiveNow(limit: Int = 10): List<Content.LiveChannel>
     suspend fun fetchHomeLayout(): List<HomeRailConfig>
-    suspend fun fetchChildren(parentId: String): List<MediaItem>
-    suspend fun fetchNextUp(): List<MediaItem>
-    suspend fun fetchCatalogue(type: String, limit: Int = 60, offset: Int = 0, sortBy: String = "added_at", sortOrder: String = "desc"): List<MediaItem>
+    suspend fun fetchChildren(parentId: String): List<Content>
+    suspend fun fetchNextUp(): List<Content.Episode>
+    suspend fun fetchCatalogue(type: String, limit: Int = 60, offset: Int = 0, sortBy: String = "added_at", sortOrder: String = "desc"): List<Content>
     suspend fun fetchCollections(): List<CollectionSummary>
     suspend fun fetchCollectionDetail(id: String): CollectionDetail
-    suspend fun fetchItemDetail(itemId: String): MediaItem
+    suspend fun fetchItemDetail(itemId: String): Content
     suspend fun toggleItemFavorite(itemId: String): Boolean
-    suspend fun searchItems(query: String, limit: Int = 60): List<MediaItem>
+    suspend fun searchItems(query: String, limit: Int = 60): List<Content>
 }
 
 /**
@@ -39,14 +39,14 @@ class HomeRepositoryImpl(
     private val tokenStore: TokenStore,
 ) : HomeRepository {
 
-    override suspend fun fetchContinueWatching(): List<MediaItem> {
+    override suspend fun fetchContinueWatching(): List<Content.Resumable> {
         val server = serverUrl()
-        return api.getContinueWatching().data.orEmpty().map { it.toMedia(server) }
+        return api.getContinueWatching().data.orEmpty().mapNotNull { it.toResumable(server) }
     }
 
-    override suspend fun fetchTrending(limit: Int): List<MediaItem> {
+    override suspend fun fetchTrending(limit: Int): List<Content> {
         val server = serverUrl()
-        return api.getTrending(limit).data?.items.orEmpty().map { it.toMedia(server) }
+        return api.getTrending(limit).data?.items.orEmpty().map { it.toContent(server) }
     }
 
     /**
@@ -64,11 +64,11 @@ class HomeRepositoryImpl(
         libraryId: String?,
         type:      String?,
         limit:     Int,
-    ): List<MediaItem> {
+    ): List<Content> {
         val server = serverUrl()
         return api.getLatest(limit, libraryId, type)
             .data?.items.orEmpty()
-            .map { it.toMedia(server) }
+            .map { it.toContent(server) }
     }
 
     /**
@@ -82,9 +82,9 @@ class HomeRepositoryImpl(
         }
     }
 
-    override suspend fun fetchLiveNow(limit: Int): List<MediaItem> {
+    override suspend fun fetchLiveNow(limit: Int): List<Content.LiveChannel> {
         val server = serverUrl()
-        return api.getLiveNow(limit).data?.items.orEmpty().map { it.toMedia(server) }
+        return api.getLiveNow(limit).data?.items.orEmpty().map { it.toContent(server) }
     }
 
     /**
@@ -133,14 +133,14 @@ class HomeRepositoryImpl(
      * The list comes back in scanner order; SeriesScreen filters by type
      * and sorts by season_number / episode_number itself.
      */
-    override suspend fun fetchChildren(parentId: String): List<MediaItem> {
+    override suspend fun fetchChildren(parentId: String): List<Content> {
         val server = serverUrl()
-        return api.getChildren(parentId).data.orEmpty().map { it.toMedia(server) }
+        return api.getChildren(parentId).data.orEmpty().map { it.toContent(server) }
     }
 
     /** /me/next-up — queued episodes across every series. */
-    override suspend fun fetchNextUp(): List<MediaItem> {
-        return api.getNextUp().data.orEmpty().map { it.toMedia() }
+    override suspend fun fetchNextUp(): List<Content.Episode> {
+        return api.getNextUp().data.orEmpty().map { it.toEpisode() }
     }
 
     /**
@@ -155,7 +155,7 @@ class HomeRepositoryImpl(
         offset:    Int,
         sortBy:    String,
         sortOrder: String,
-    ): List<MediaItem> {
+    ): List<Content> {
         val server = serverUrl()
         return api.listItems(
             type      = type,
@@ -163,7 +163,7 @@ class HomeRepositoryImpl(
             offset    = offset,
             sortBy    = sortBy,
             sortOrder = sortOrder,
-        ).data?.items.orEmpty().map { it.toMedia(server) }
+        ).data?.items.orEmpty().map { it.toContent(server) }
     }
 
     /**
@@ -196,7 +196,7 @@ class HomeRepositoryImpl(
             overview    = data.overview,
             posterUrl   = absolutize(data.posterUrl, server),
             backdropUrl = absolutize(data.backdropUrl, server),
-            items       = data.items.map { it.toMedia(server) },
+            items       = data.items.map { it.toContent(server) },
         )
     }
 
@@ -208,7 +208,7 @@ class HomeRepositoryImpl(
         backdropUrl = absolutize(backdropUrl, server),
     )
 
-    override suspend fun fetchItemDetail(itemId: String): MediaItem {
+    override suspend fun fetchItemDetail(itemId: String): Content {
         val server = serverUrl()
         val data = api.getItem(itemId).data
             ?: error("items/$itemId returned no data envelope")
@@ -223,26 +223,89 @@ class HomeRepositoryImpl(
             "fetchItemDetail($itemId) type=${data.type} trailer=${data.trailer} title=${data.title}",
         )
 
-        return MediaItem(
-            id                = data.id,
-            kind              = MediaKind.from(data.type),
-            title             = data.title.orEmpty(),
-            subtitle          = data.tagline,
-            posterUrl         = absolutize(data.posterUrl, server),
-            backdropUrl       = absolutize(data.backdropUrl, server),
-            logoUrl           = absolutize(data.logoUrl ?: data.studioLogoUrl, server),
-            overview          = data.overview,
-            genres            = data.genres,
-            rating            = data.communityRating,
-            year              = data.year,
-            progressPct       = progress,
-            resumePosSec      = resumeSec,
-            trailerKey        = data.trailer?.key,
-            trailerSite       = data.trailer?.site,
-            isFavorite        = data.userData?.isFavorite == true,
-            collectionId      = data.collection?.id,
-            collectionName    = data.collection?.name,
-        )
+        // /items/{id} returns the rich detail payload. Only movies and
+        // series carry trailer + collection metadata; the wire `type`
+        // tells us which variant to emit. Episodes / seasons fall through
+        // to the generic mapping (they're rarely surfaced by this endpoint
+        // but the server can return them when deep-linked).
+        return when (MediaKind.from(data.type)) {
+            MediaKind.Movie -> Content.Movie(
+                id             = data.id,
+                title          = data.title.orEmpty(),
+                subtitle       = data.tagline,
+                posterUrl      = absolutize(data.posterUrl, server),
+                backdropUrl    = absolutize(data.backdropUrl, server),
+                logoUrl        = absolutize(data.logoUrl ?: data.studioLogoUrl, server),
+                overview       = data.overview,
+                genres         = data.genres,
+                rating         = data.communityRating,
+                year           = data.year,
+                progressPct    = progress,
+                resumePosSec   = resumeSec,
+                durationSec    = totalSec,
+                trailerKey     = data.trailer?.key,
+                trailerSite    = data.trailer?.site,
+                isFavorite     = data.userData?.isFavorite == true,
+                collectionId   = data.collection?.id,
+                collectionName = data.collection?.name,
+            )
+            MediaKind.Series -> Content.Series(
+                id          = data.id,
+                title       = data.title.orEmpty(),
+                subtitle    = data.tagline,
+                posterUrl   = absolutize(data.posterUrl, server),
+                backdropUrl = absolutize(data.backdropUrl, server),
+                logoUrl     = absolutize(data.logoUrl ?: data.studioLogoUrl, server),
+                overview    = data.overview,
+                genres      = data.genres,
+                rating      = data.communityRating,
+                year        = data.year,
+                trailerKey  = data.trailer?.key,
+                trailerSite = data.trailer?.site,
+                isFavorite  = data.userData?.isFavorite == true,
+            )
+            MediaKind.Episode -> Content.Episode(
+                id           = data.id,
+                title        = data.title.orEmpty(),
+                subtitle     = data.tagline,
+                posterUrl    = absolutize(data.posterUrl, server),
+                backdropUrl  = absolutize(data.backdropUrl, server),
+                logoUrl      = absolutize(data.logoUrl, server),
+                overview     = data.overview,
+                genres       = data.genres,
+                rating       = data.communityRating,
+                year         = data.year,
+                progressPct  = progress,
+                resumePosSec = resumeSec,
+                durationSec  = totalSec,
+                isFavorite   = data.userData?.isFavorite == true,
+            )
+            MediaKind.Season -> Content.Season(
+                id          = data.id,
+                title       = data.title.orEmpty(),
+                subtitle    = data.tagline,
+                posterUrl   = absolutize(data.posterUrl, server),
+                backdropUrl = absolutize(data.backdropUrl, server),
+                logoUrl     = absolutize(data.logoUrl, server),
+                overview    = data.overview,
+                genres      = data.genres,
+                rating      = data.communityRating,
+                year        = data.year,
+            )
+            MediaKind.LiveChannel,
+            MediaKind.Unknown -> Content.Unknown(
+                id          = data.id,
+                title       = data.title.orEmpty(),
+                subtitle    = data.tagline,
+                posterUrl   = absolutize(data.posterUrl, server),
+                backdropUrl = absolutize(data.backdropUrl, server),
+                logoUrl     = absolutize(data.logoUrl, server),
+                overview    = data.overview,
+                genres      = data.genres,
+                rating      = data.communityRating,
+                year        = data.year,
+            )
+        }
     }
 
     /**
@@ -258,62 +321,77 @@ class HomeRepositoryImpl(
     }
 
     /**
-     * Full-text search across the catalogue. Returns the same MediaItem
+     * Full-text search across the catalogue. Returns the same [Content]
      * shape Home rails use so the result grid can reuse MediaCard +
      * navigate to Detail/Series with the existing rules. Empty query
      * short-circuits without hitting the network.
      */
-    override suspend fun searchItems(query: String, limit: Int): List<MediaItem> {
+    override suspend fun searchItems(query: String, limit: Int): List<Content> {
         val q = query.trim()
         if (q.isEmpty()) return emptyList()
         val server = serverUrl()
-        return api.searchItems(query = q, limit = limit).data.map { it.toMedia(server) }
+        return api.searchItems(query = q, limit = limit).data.map { it.toContent(server) }
     }
 
     private suspend fun serverUrl(): String =
         tokenStore.snapshot().serverUrl?.trimEnd('/').orEmpty()
 
-    // ─── DTO → MediaItem mappers ─────────────────────────────────────────────
+    // ─── DTO → Content mappers ───────────────────────────────────────────────
 
-    private fun ContinueWatchingEntryDto.toMedia(server: String): MediaItem {
+    /**
+     * Continue-watching only ever contains movies and episodes — the
+     * server filters out anything else before publishing this rail.
+     * Returns `null` for the rare malformed entry (unknown type) so
+     * the caller can `mapNotNull` and skip it without a runtime cast.
+     */
+    private fun ContinueWatchingEntryDto.toResumable(server: String): Content.Resumable? {
         val resumeSec = positionTicks?.let { ticksToSeconds(it) } ?: 0L
         val totalSec  = durationTicks?.let { ticksToSeconds(it) } ?: 0L
         val progress  = userData?.progress?.percentage?.let { it / 100f }
             ?: if (totalSec > 0) (resumeSec.toFloat() / totalSec).coerceIn(0f, 1f) else 0f
 
-        // Episodes are best displayed as "Series · S2 E4" — promote the
-        // series title when the entry carries it; movies just use their
-        // own title.
-        val displayTitle = if (type == "episode" && !seriesTitle.isNullOrBlank())
-            seriesTitle else title.orEmpty()
-        val episodeSubtitle = if (type == "episode") {
-            val s = seasonIndex; val e = episodeIndex
-            if (s != null && e != null) "S$s · E$e · ${title.orEmpty()}".trimEnd(' ', '·')
-            else                        title
-        } else null
-
-        return MediaItem(
-            id           = id,
-            kind         = MediaKind.from(type),
-            title        = displayTitle,
-            subtitle     = episodeSubtitle,
-            // 16:9 thumb when present (movies); fall back to backdrop
-            // (per-episode still on episodes); poster as a last resort.
-            posterUrl    = absolutize(posterUrl, server),
-            backdropUrl  = absolutize(thumbUrl ?: backdropUrl ?: posterUrl, server),
-            logoUrl      = absolutize(logoUrl, server),
-            overview     = null,
-            genres       = emptyList(),
-            rating       = null,
-            year         = seriesYear,
-            progressPct  = progress,
-            resumePosSec = resumeSec,
-            seriesId     = seriesId,
-            parentId     = parentId,
-            seasonNumber = seasonIndex,
-            episodeNumber = episodeIndex,
-            durationSec  = totalSec,
-        )
+        return when (MediaKind.from(type)) {
+            MediaKind.Movie -> Content.Movie(
+                id           = id,
+                title        = title.orEmpty(),
+                posterUrl    = absolutize(posterUrl, server),
+                backdropUrl  = absolutize(thumbUrl ?: backdropUrl ?: posterUrl, server),
+                logoUrl      = absolutize(logoUrl, server),
+                year         = seriesYear,
+                progressPct  = progress,
+                resumePosSec = resumeSec,
+                durationSec  = totalSec,
+            )
+            MediaKind.Episode -> {
+                // Episodes display as "Series · S2 E4 · Title" — promote
+                // the series title when present so the card reads naturally.
+                val displayTitle = if (!seriesTitle.isNullOrBlank()) seriesTitle else title.orEmpty()
+                val episodeSubtitle = run {
+                    val s = seasonIndex; val e = episodeIndex
+                    if (s != null && e != null)
+                        "S$s · E$e · ${title.orEmpty()}".trimEnd(' ', '·')
+                    else
+                        title
+                }
+                Content.Episode(
+                    id            = id,
+                    title         = displayTitle,
+                    subtitle      = episodeSubtitle,
+                    posterUrl     = absolutize(posterUrl, server),
+                    backdropUrl   = absolutize(thumbUrl ?: backdropUrl ?: posterUrl, server),
+                    logoUrl       = absolutize(logoUrl, server),
+                    year          = seriesYear,
+                    progressPct   = progress,
+                    resumePosSec  = resumeSec,
+                    durationSec   = totalSec,
+                    seriesId      = seriesId,
+                    parentId      = parentId,
+                    seasonNumber  = seasonIndex,
+                    episodeNumber = episodeIndex,
+                )
+            }
+            else -> null
+        }
     }
 
     /**
@@ -322,8 +400,8 @@ class HomeRepositoryImpl(
      * the resume resolver. SeriesScreen tops up the missing fields via
      * children when it needs to render rich episode cards.
      */
-    private fun NextUpItemDto.toMedia(): MediaItem {
-        val totalSec  = durationTicks?.let { ticksToSeconds(it) } ?: 0L
+    private fun NextUpItemDto.toEpisode(): Content.Episode {
+        val totalSec = durationTicks?.let { ticksToSeconds(it) } ?: 0L
         val episodeLabel = buildString {
             val s = seasonNumber; val e = episodeNumber
             if (s != null && e != null) append("S$s · E$e")
@@ -333,29 +411,18 @@ class HomeRepositoryImpl(
             }
         }.ifBlank { null }
 
-        return MediaItem(
-            id           = id,
-            kind         = MediaKind.Episode,
-            title        = seriesTitle.orEmpty(),
-            subtitle     = episodeLabel,
-            posterUrl    = null,
-            backdropUrl  = null,
-            logoUrl      = null,
-            overview     = null,
-            genres       = emptyList(),
-            rating       = null,
-            year         = null,
-            progressPct  = 0f,
-            resumePosSec = 0L,
-            seriesId     = seriesId,
-            parentId     = null,
-            seasonNumber = seasonNumber,
+        return Content.Episode(
+            id            = id,
+            title         = seriesTitle.orEmpty(),
+            subtitle      = episodeLabel,
+            seriesId      = seriesId,
+            seasonNumber  = seasonNumber,
             episodeNumber = episodeNumber,
-            durationSec  = totalSec,
+            durationSec   = totalSec,
         )
     }
 
-    private fun ItemSummaryDto.toMedia(server: String): MediaItem {
+    private fun ItemSummaryDto.toContent(server: String): Content {
         val kindFromType = MediaKind.from(type)
         // For episodes inside a season's children, the more useful subtitle
         // is "S2 · E4" rather than the year (which is the series year).
@@ -371,29 +438,90 @@ class HomeRepositoryImpl(
         }
         val totalSec = durationTicks?.let { ticksToSeconds(it) } ?: 0L
         val resumeSec = userData?.progress?.positionTicks?.let { ticksToSeconds(it) } ?: 0L
-        val progressPct = if (totalSec > 0 && resumeSec > 0)
+        val progress = if (totalSec > 0 && resumeSec > 0)
             (resumeSec.toFloat() / totalSec).coerceIn(0f, 1f) else 0f
+        val poster = absolutize(posterUrl, server)
+        val backdrop = absolutize(backdropUrl ?: posterUrl, server)
+        val logo = absolutize(logoUrl, server)
+        val favorite = userData?.isFavorite == true
 
-        return MediaItem(
-            id            = id,
-            kind          = kindFromType,
-            title         = title.orEmpty(),
-            subtitle      = sub,
-            posterUrl     = absolutize(posterUrl, server),
-            backdropUrl   = absolutize(backdropUrl ?: posterUrl, server),
-            logoUrl       = absolutize(logoUrl, server),
-            overview      = overview,
-            genres        = genres,
-            rating        = communityRating,
-            year          = year,
-            progressPct   = progressPct,
-            resumePosSec  = resumeSec,
-            parentId      = parentId,
-            seasonNumber  = seasonNumber,
-            episodeNumber = episodeNumber,
-            durationSec   = totalSec,
-            isFavorite    = userData?.isFavorite == true,
-        )
+        return when (kindFromType) {
+            MediaKind.Movie -> Content.Movie(
+                id           = id,
+                title        = title.orEmpty(),
+                subtitle     = sub,
+                posterUrl    = poster,
+                backdropUrl  = backdrop,
+                logoUrl      = logo,
+                overview     = overview,
+                genres       = genres,
+                rating       = communityRating,
+                year         = year,
+                progressPct  = progress,
+                resumePosSec = resumeSec,
+                durationSec  = totalSec,
+                isFavorite   = favorite,
+            )
+            MediaKind.Series -> Content.Series(
+                id          = id,
+                title       = title.orEmpty(),
+                subtitle    = sub,
+                posterUrl   = poster,
+                backdropUrl = backdrop,
+                logoUrl     = logo,
+                overview    = overview,
+                genres      = genres,
+                rating      = communityRating,
+                year        = year,
+                isFavorite  = favorite,
+            )
+            MediaKind.Season -> Content.Season(
+                id           = id,
+                title        = title.orEmpty(),
+                subtitle     = sub,
+                posterUrl    = poster,
+                backdropUrl  = backdrop,
+                logoUrl      = logo,
+                overview     = overview,
+                genres       = genres,
+                rating       = communityRating,
+                year         = year,
+                parentId     = parentId,
+                seasonNumber = seasonNumber,
+            )
+            MediaKind.Episode -> Content.Episode(
+                id            = id,
+                title         = title.orEmpty(),
+                subtitle      = sub,
+                posterUrl     = poster,
+                backdropUrl   = backdrop,
+                logoUrl       = logo,
+                overview      = overview,
+                genres        = genres,
+                rating        = communityRating,
+                year          = year,
+                progressPct   = progress,
+                resumePosSec  = resumeSec,
+                durationSec   = totalSec,
+                parentId      = parentId,
+                seasonNumber  = seasonNumber,
+                episodeNumber = episodeNumber,
+                isFavorite    = favorite,
+            )
+            MediaKind.LiveChannel,
+            MediaKind.Unknown -> Content.Unknown(
+                id          = id,
+                title       = title.orEmpty(),
+                subtitle    = sub,
+                posterUrl   = poster,
+                backdropUrl = backdrop,
+                logoUrl     = logo,
+                overview    = overview,
+                genres      = genres,
+                rating      = communityRating,
+                year        = year,
+            )
+        }
     }
 
     /**
@@ -402,34 +530,66 @@ class HomeRepositoryImpl(
      * trending was "already absolute" was wrong; pass them through
      * absolutize() like every other rail.
      */
-    private fun TrendingItemDto.toMedia(server: String): MediaItem = MediaItem(
-        id           = id,
-        kind         = MediaKind.from(type),
-        title        = title.orEmpty(),
-        subtitle     = year?.toString(),
-        posterUrl    = absolutize(posterUrl, server),
-        backdropUrl  = absolutize(backdropUrl, server),
-        logoUrl      = absolutize(logoUrl, server),
-        overview     = overview,
-        genres       = genres,
-        rating       = communityRating,
-        year         = year,
-    )
+    /**
+     * Trending only carries movies and series — that's enforced on the
+     * server. Anything else (episodes via mismatched libraries) becomes
+     * [Content.Unknown] so the rail still renders the poster but Detail
+     * navigation safely falls back.
+     */
+    private fun TrendingItemDto.toContent(server: String): Content {
+        val poster = absolutize(posterUrl, server)
+        val backdrop = absolutize(backdropUrl, server)
+        val logo = absolutize(logoUrl, server)
+        return when (MediaKind.from(type)) {
+            MediaKind.Movie -> Content.Movie(
+                id          = id,
+                title       = title.orEmpty(),
+                subtitle    = year?.toString(),
+                posterUrl   = poster,
+                backdropUrl = backdrop,
+                logoUrl     = logo,
+                overview    = overview,
+                genres      = genres,
+                rating      = communityRating,
+                year        = year,
+            )
+            MediaKind.Series -> Content.Series(
+                id          = id,
+                title       = title.orEmpty(),
+                subtitle    = year?.toString(),
+                posterUrl   = poster,
+                backdropUrl = backdrop,
+                logoUrl     = logo,
+                overview    = overview,
+                genres      = genres,
+                rating      = communityRating,
+                year        = year,
+            )
+            else -> Content.Unknown(
+                id          = id,
+                title       = title.orEmpty(),
+                subtitle    = year?.toString(),
+                posterUrl   = poster,
+                backdropUrl = backdrop,
+                logoUrl     = logo,
+                overview    = overview,
+                genres      = genres,
+                rating      = communityRating,
+                year        = year,
+            )
+        }
+    }
 
-    private fun LiveNowChannelDto.toMedia(server: String): MediaItem {
+    private fun LiveNowChannelDto.toContent(server: String): Content.LiveChannel {
         val absoluteLogo = absolutize(channelLogo, server)
-        return MediaItem(
+        return Content.LiveChannel(
             id           = channelId,
-            kind         = MediaKind.LiveChannel,
             title        = channelName.orEmpty(),
             subtitle     = programTitle,
             posterUrl    = absoluteLogo,
             backdropUrl  = absoluteLogo,
             logoUrl      = absoluteLogo,
             overview     = programTitle,
-            genres       = emptyList(),
-            rating       = null,
-            year         = null,
             logoInitials = logoInitials,
             logoBg       = logoBg,
             logoFg       = logoFg,
@@ -453,83 +613,10 @@ class HomeRepositoryImpl(
 }
 
 // ─── Domain types ────────────────────────────────────────────────────────────
-
-enum class MediaKind {
-    Movie, Series, Season, Episode, LiveChannel, Unknown;
-    companion object {
-        fun from(s: String?): MediaKind = when (s) {
-            "movie"   -> Movie
-            "series"  -> Series
-            "season"  -> Season
-            "episode" -> Episode
-            else      -> Unknown
-        }
-    }
-}
-
-/**
- * Marked `@Immutable` so the Compose compiler treats `MediaItem` as a
- * stable parameter and skips recomposition for unchanged instances.
- * Every field below is a read-only `val` of a stable type (String,
- * primitive, immutable List<String>), so the marker is honest — Compose
- * would have inferred stability for most fields but `List<String>` is
- * conservatively treated as unstable without the explicit annotation.
- */
-@androidx.compose.runtime.Immutable
-data class MediaItem(
-    val id:           String,
-    val kind:         MediaKind,
-    val title:        String,
-    val subtitle:     String?,
-    val posterUrl:    String?,
-    val backdropUrl:  String?,
-    val logoUrl:      String?,
-    val overview:     String?,
-    val genres:       List<String>,
-    val rating:       Float?,
-    val year:         Int?,
-    val progressPct:  Float = 0f,
-    val resumePosSec: Long  = 0L,
-    /**
-     * Series / season / episode hierarchy. Set on items that participate
-     * in a series. The Series resume resolver matches by these.
-     */
-    val seriesId:     String? = null,
-    val parentId:     String? = null,
-    val seasonNumber: Int?    = null,
-    val episodeNumber: Int?   = null,
-    val durationSec:  Long    = 0L,
-    /**
-     * YouTube/Vimeo trailer pair when the server has picked one for
-     * this item. Set on /items/{id} responses only (Home / Trending
-     * rails do not include it to keep payloads small).
-     */
-    val trailerKey:   String? = null,
-    val trailerSite:  String? = null,
-    /**
-     * Channel placeholder. Set on LiveNow rail items when the channel
-     * has no logo (or as a fallback for when the logo fetch fails) so
-     * the card can render an initials-on-coloured-circle avatar à la
-     * Plex / Jellyfin instead of an empty grey rectangle.
-     */
-    val logoInitials: String? = null,
-    val logoBg:       String? = null,
-    val logoFg:       String? = null,
-    /**
-     * Whether the authenticated user has marked this item as a favourite.
-     * Driven by user_data.is_favorite from the server; toggled via
-     * POST /me/progress/{id}/favorite. Defaults to false so rails that
-     * don't bother fetching user_data (Trending, LiveNow) keep working.
-     */
-    val isFavorite:   Boolean = false,
-    /**
-     * TMDb saga membership. Set only on /items/{id} responses for movies
-     * that belong to a collection — drives the "Parte de: <name>" chip
-     * on the Detail screen.
-     */
-    val collectionId:    String? = null,
-    val collectionName:  String? = null,
-)
+//
+// MediaKind + sealed Content hierarchy live in Content.kt. This file keeps
+// only the home-screen-specific aggregates (HomeData, HomeRailConfig, …) and
+// the Collections types that re-use Content for their member lists.
 
 /**
  * Row in the Collections tab grid. Trimmed to what the tile renders:
@@ -546,8 +633,8 @@ data class CollectionSummary(
 
 /**
  * Full collection detail with member movies in release order. Members
- * reuse [MediaItem] so the same grid + card code as Movies/Series
- * works without translation.
+ * reuse [Content] so the same grid + card code as Movies/Series works
+ * without translation.
  */
 @androidx.compose.runtime.Immutable
 data class CollectionDetail(
@@ -557,24 +644,24 @@ data class CollectionDetail(
     val overview:    String?,
     val posterUrl:   String?,
     val backdropUrl: String?,
-    val items:       List<MediaItem>,
+    val items:       List<Content>,
 )
 
 @androidx.compose.runtime.Immutable
 data class HomeData(
-    val hero:             List<MediaItem> = emptyList(),
-    val continueWatching: List<MediaItem> = emptyList(),
-    val nextUp:           List<MediaItem> = emptyList(),
-    val trending:         List<MediaItem> = emptyList(),
-    val liveNow:          List<MediaItem> = emptyList(),
-    val rails:            List<HomeRailConfig> = emptyList(),
+    val hero:             List<Content>             = emptyList(),
+    val continueWatching: List<Content.Resumable>   = emptyList(),
+    val nextUp:           List<Content.Episode>     = emptyList(),
+    val trending:         List<Content>             = emptyList(),
+    val liveNow:          List<Content.LiveChannel> = emptyList(),
+    val rails:            List<HomeRailConfig>      = emptyList(),
     /**
      * Per-rail latest items, keyed by HomeRailConfig.id. Each
      * `latest_in_library` rail in the layout gets its own entry,
      * fetched with the library_id + type=movie|series filter so the
      * card shape matches what the user expects (no episode pollution).
      */
-    val latestByRailId:   Map<String, List<MediaItem>> = emptyMap(),
+    val latestByRailId:   Map<String, List<Content>> = emptyMap(),
 )
 
 /** A single rail's place in the home layout. */

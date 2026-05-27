@@ -4,9 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRepository
-import com.alex.hubplay.data.MediaItem
-import com.alex.hubplay.data.MediaKind
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,9 +50,12 @@ class SeriesViewModel(
                                             .onFailure { Log.w(TAG, "fetchNextUp", it) }
                                             .getOrElse { emptyList() } }
 
-                val series  = seriesDef.await()
+                // /items/{seriesId} should return a Series; tolerate other
+                // variants (e.g. a deep link to a Movie id) by falling back
+                // to null instead of crashing.
+                val series  = seriesDef.await() as? Content.Series
                 val seasons = seasonsDef.await()
-                    .filter { it.kind == MediaKind.Season }
+                    .filterIsInstance<Content.Season>()
                     .sortedBy { it.seasonNumber ?: Int.MAX_VALUE }
                 val cw      = cwDef.await()
                 val nextUp  = nextUpDef.await()
@@ -66,7 +68,7 @@ class SeriesViewModel(
                     runCatching { repository.fetchChildren(sid) }
                         .onFailure { Log.w(TAG, "fetchChildren($sid) season episodes", it) }
                         .getOrElse { emptyList() }
-                        .filter { it.kind == MediaKind.Episode }
+                        .filterIsInstance<Content.Episode>()
                         .sortedBy { it.episodeNumber ?: Int.MAX_VALUE }
                 } ?: emptyList()
 
@@ -110,7 +112,7 @@ class SeriesViewModel(
                         val episodes = runCatching { repository.fetchChildren(season.id) }
                             .onFailure { Log.w(TAG, "prefetch fetchChildren(${season.id})", it) }
                             .getOrElse { emptyList() }
-                            .filter { it.kind == MediaKind.Episode }
+                            .filterIsInstance<Content.Episode>()
                             .sortedBy { it.episodeNumber ?: Int.MAX_VALUE }
                         season.id to episodes
                     }
@@ -173,7 +175,7 @@ class SeriesViewModel(
             val episodes = runCatching { repository.fetchChildren(seasonId) }
                 .onFailure { Log.w(TAG, "fetchChildren($seasonId)", it) }
                 .getOrElse { emptyList() }
-                .filter { it.kind == MediaKind.Episode }
+                .filterIsInstance<Content.Episode>()
                 .sortedBy { it.episodeNumber ?: Int.MAX_VALUE }
             val updated = _ui.value.data ?: return@launch
             _ui.value = _ui.value.copy(
@@ -206,9 +208,9 @@ data class SeriesUiState(
 
 @androidx.compose.runtime.Immutable
 data class SeriesData(
-    val series:             MediaItem?,
-    val seasons:            List<MediaItem>,
-    val episodesBySeasonId: Map<String, List<MediaItem>>,
+    val series:             Content.Series?,
+    val seasons:            List<Content.Season>,
+    val episodesBySeasonId: Map<String, List<Content.Episode>>,
     val selectedSeasonId:   String?,
     val resume:             SeriesResumeTarget,
 )

@@ -48,16 +48,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
-import com.alex.hubplay.data.MediaItem
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.OnAccent
 import com.alex.hubplay.ui.theme.TextSecondary
 
 @Composable
 fun HeroInfo(
-    item:                MediaItem?,
-    onPlay:              (MediaItem?) -> Unit,
-    onDetails:           (MediaItem?) -> Unit,
+    item:                Content?,
+    onPlay:              (Content?) -> Unit,
+    onDetails:           (Content?) -> Unit,
     showControls:        Boolean,
     /** Si false, HeroInfo NO pelea por el foco inicial — útil cuando hay
      *  un foco previo guardado en otro sitio (p.ej. un rail tras back-nav)
@@ -191,7 +191,7 @@ fun HeroInfo(
 }
 
 @Composable
-private fun HeroMetaRow(item: MediaItem) {
+private fun HeroMetaRow(item: Content) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -208,8 +208,11 @@ private fun HeroMetaRow(item: MediaItem) {
             }
         }
 
-        if (item.durationSec > 0) {
-            val mins = item.durationSec / 60
+        // Only Movies and Episodes carry a runtime — Series store an
+        // "episode average" elsewhere and Live channels are continuous.
+        val durationSec = (item as? Content.Resumable)?.durationSec ?: 0L
+        if (durationSec > 0) {
+            val mins = durationSec / 60
             parts.add {
                 Text(
                     text = "${mins} min",

@@ -8,8 +8,8 @@ import com.alex.hubplay.data.HomeData
 import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.MeEvent
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.MeEventsStream
-import com.alex.hubplay.data.MediaItem
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -42,10 +42,10 @@ class HomeViewModel(
     // Esta separación es lo que da el "feel" de Netflix/Prime: la UI
     // (cover + sinopsis) cambia casi al instante, el trailer espera a
     // que el foco se estabilice.
-    private val _focusedItemForUi = MutableStateFlow<MediaItem?>(null)
-    val focusedItemForUi: StateFlow<MediaItem?> = _focusedItemForUi.asStateFlow()
+    private val _focusedItemForUi = MutableStateFlow<Content?>(null)
+    val focusedItemForUi: StateFlow<Content?> = _focusedItemForUi.asStateFlow()
 
-    private val _focusedItem = MutableStateFlow<MediaItem?>(null)
+    private val _focusedItem = MutableStateFlow<Content?>(null)
 
     /**
      * Trailer info for the currently focused item. Fetched lazily when
@@ -55,7 +55,7 @@ class HomeViewModel(
     private val _trailerInfo = MutableStateFlow<TrailerInfo?>(null)
     val trailerInfo: StateFlow<TrailerInfo?> = _trailerInfo.asStateFlow()
 
-    private val focusBus = MutableSharedFlow<MediaItem?>(
+    private val focusBus = MutableSharedFlow<Content?>(
         replay = 0, extraBufferCapacity = 16,
     )
 
@@ -102,7 +102,7 @@ class HomeViewModel(
             .launchIn(viewModelScope)
     }
 
-    private fun fetchTrailerInfo(item: MediaItem?) {
+    private fun fetchTrailerInfo(item: Content?) {
         if (item == null) {
             _trailerInfo.value = null
             return
@@ -118,13 +118,18 @@ class HomeViewModel(
         }
         viewModelScope.launch {
             val info = runCatching {
+                // Only movies and series carry a trailer pair on the
+                // /items/{id} response — episodes and live channels never
+                // populate it. We pattern-match instead of using a nullable
+                // common field so the type system reflects reality.
                 val detail = repository.fetchItemDetail(item.id)
-                if (detail.trailerKey != null && detail.trailerSite != null) {
-                    TrailerInfo(
-                        itemId = item.id,
-                        key = detail.trailerKey,
-                        site = detail.trailerSite,
-                    )
+                val (key, site) = when (detail) {
+                    is Content.Movie  -> detail.trailerKey to detail.trailerSite
+                    is Content.Series -> detail.trailerKey to detail.trailerSite
+                    else              -> null to null
+                }
+                if (key != null && site != null) {
+                    TrailerInfo(itemId = item.id, key = key, site = site)
                 } else null
             }.getOrElse { err ->
                 Log.w("HomeViewModel", "trailer fetch failed for ${item.id}: ${err.message}")
@@ -209,7 +214,7 @@ class HomeViewModel(
         else     -> null
     }
 
-    private inline fun safeFetch(label: String, block: () -> List<MediaItem>): List<MediaItem> {
+    private inline fun <T : Content> safeFetch(label: String, block: () -> List<T>): List<T> {
         return runCatching(block).getOrElse { err ->
             Log.w("HomeViewModel", "rail '$label' failed: ${err.message}", err)
             emptyList()
@@ -232,7 +237,7 @@ class HomeViewModel(
      */
     fun resetFirstFocusGate() { firstFocusConsumed = false }
 
-    fun onCardFocused(item: MediaItem?) {
+    fun onCardFocused(item: Content?) {
         if (!firstFocusConsumed) {
             firstFocusConsumed = true
             return
@@ -249,7 +254,7 @@ class HomeViewModel(
      *
      * - [railIndex]: scroll vertical del `LazyColumn` de rails.
      * - [focusedItemIdByRail]: para cada rail (keyed por `config.id`),
-     *   el `MediaItem.id` que tenía el foco.
+     *   el `Content.id` que tenía el foco.
      */
     @androidx.compose.runtime.Immutable
     data class HomeScrollSnapshot(

@@ -31,7 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.R
-import com.alex.hubplay.data.MediaItem
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.MediaCard
@@ -43,7 +43,7 @@ import com.alex.hubplay.ui.theme.BgBase
 fun CatalogScreen(
     selectedTab:   Tab,
     title:         String,
-    items:         List<MediaItem>,
+    items:         List<Content>,
     isLoading:     Boolean,
     isLoadingMore: Boolean        = false,
     canLoadMore:   Boolean        = false,
@@ -53,7 +53,7 @@ fun CatalogScreen(
     onTabSelected: (Tab) -> Unit,
     onLogOut:      () -> Unit,
     onSettings:    () -> Unit     = {},
-    cardContent:   @Composable (MediaItem) -> Unit,
+    cardContent:   @Composable (Content) -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = BgBase) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -161,7 +161,7 @@ private fun EmptyBanner() {
 
 @Composable
 fun PortraitCatalogCard(
-    item:       MediaItem,
+    item:       Content,
     onOpen:     (String, MediaKind) -> Unit,
 ) {
     MediaCard(

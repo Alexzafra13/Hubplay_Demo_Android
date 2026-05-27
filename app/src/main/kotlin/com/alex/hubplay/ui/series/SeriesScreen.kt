@@ -65,7 +65,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
-import com.alex.hubplay.data.MediaItem
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.ui.components.BackPill
 import com.alex.hubplay.ui.components.HeroCtaButton
 import com.alex.hubplay.ui.components.HeroIconButton
@@ -312,7 +312,7 @@ private fun SeriesHeroFull(
  */
 @Composable
 private fun MetaRow(
-    item:         MediaItem?,
+    item:         Content.Series?,
     seasonsCount: Int,
     episodeCount: Int,
     compact:      Boolean = false,
@@ -551,7 +551,7 @@ private fun SeriesEpisodesPanel(
 
 @Composable
 private fun SeasonRow(
-    season:       MediaItem,
+    season:       Content.Season,
     episodeCount: Int?,
     selected:     Boolean,
     onClick:      () -> Unit,
@@ -605,7 +605,7 @@ private fun SeasonRow(
 
 @Composable
 private fun EpisodeRow(
-    episode: MediaItem,
+    episode: Content.Episode,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }

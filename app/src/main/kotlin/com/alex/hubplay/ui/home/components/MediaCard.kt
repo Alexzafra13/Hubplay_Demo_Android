@@ -25,7 +25,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.alex.hubplay.data.MediaItem
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.ui.theme.Accent
 
 enum class CardStyle(val aspect: Float, val defaultWidth: Dp) {
@@ -35,13 +35,17 @@ enum class CardStyle(val aspect: Float, val defaultWidth: Dp) {
 
 @Composable
 fun MediaCard(
-    item:         MediaItem,
-    onFocused:    (MediaItem) -> Unit,
-    onClick:      (MediaItem) -> Unit,
+    item:         Content,
+    onFocused:    (Content) -> Unit,
+    onClick:      (Content) -> Unit,
     style:        CardStyle = CardStyle.Landscape,
     slotWidth:    Dp        = style.defaultWidth,
     modifier:     Modifier  = Modifier,
 ) {
+    // Only Resumable variants (Movie + Episode) ever show a progress bar
+    // — series posters and live channels don't carry per-user progress.
+    val progressPct = (item as? Content.Resumable)?.progressPct ?: 0f
+
     var focused by remember { mutableStateOf(false) }
 
     val cardHeight = when (style) {
@@ -86,7 +90,7 @@ fun MediaCard(
             modifier           = Modifier.fillMaxSize(),
         )
 
-        if (item.progressPct > 0f) {
+        if (progressPct > 0f) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -95,7 +99,7 @@ fun MediaCard(
                     .background(Color.Black.copy(alpha = 0.5f)),
             ) {
                 LinearProgressIndicator(
-                    progress   = { item.progressPct },
+                    progress   = { progressPct },
                     modifier   = Modifier
                         .fillMaxWidth()
                         .height(3.dp),

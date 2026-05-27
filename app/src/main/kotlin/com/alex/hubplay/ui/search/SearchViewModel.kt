@@ -4,8 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRepository
-import com.alex.hubplay.data.MediaItem
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -135,7 +135,7 @@ class SearchViewModel(
 @androidx.compose.runtime.Immutable
 data class SearchUiState(
     val query:         String           = "",
-    val results:       List<MediaItem>  = emptyList(),
+    val results:       List<Content>    = emptyList(),
     val isSearching:   Boolean          = false,
     val isLoadingMore: Boolean          = false,
     val canLoadMore:   Boolean          = false,

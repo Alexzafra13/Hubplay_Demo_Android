@@ -15,9 +15,9 @@ import kotlinx.coroutines.launch
 /**
  * Drives the Collections index — TMDb sagas matched by the scanner.
  * Same shape as [com.alex.hubplay.ui.catalog.CatalogViewModel] for
- * Movies / Series, just emitting [CollectionSummary] instead of
- * MediaItem because the tile shows an item-count badge that doesn't
- * fit the MediaItem model.
+ * Movies / Series, just emitting [CollectionSummary] instead of a
+ * generic [com.alex.hubplay.data.Content] because the tile shows an
+ * item-count badge that doesn't fit the Content variants.
  */
 class CollectionsViewModel(
     private val repository: HomeRepository,

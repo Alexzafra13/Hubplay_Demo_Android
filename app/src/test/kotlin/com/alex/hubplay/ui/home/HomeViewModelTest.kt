@@ -2,11 +2,10 @@ package com.alex.hubplay.ui.home
 
 import com.alex.hubplay.data.CollectionDetail
 import com.alex.hubplay.data.CollectionSummary
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.MeEvent
-import com.alex.hubplay.data.MediaItem
-import com.alex.hubplay.data.MediaKind
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -41,8 +40,8 @@ class HomeViewModelTest {
     fun `refresh populates ui with data from repository`() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val vm = viewModel(FakeHomeRepository(
-            trending = listOf(item("t1"), item("t2")),
-            continueWatching = listOf(item("cw1")),
+            trending = listOf(movie("t1"), movie("t2")),
+            continueWatching = listOf(movie("cw1")),
         ))
         advanceUntilIdle()
 
@@ -69,7 +68,7 @@ class HomeViewModelTest {
     fun `refresh shows partial data when some fetches fail`() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val vm = viewModel(FakeHomeRepository(
-            trending = listOf(item("t1")),
+            trending = listOf(movie("t1")),
             throwOnContinueWatching = true,
         ))
         advanceUntilIdle()
@@ -84,7 +83,7 @@ class HomeViewModelTest {
     @Test
     fun `hero is first 5 trending items`() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
-        val trending = (1..8).map { item("t$it") }
+        val trending = (1..8).map { movie("t$it") }
         val vm = viewModel(FakeHomeRepository(trending = trending))
         advanceUntilIdle()
 
@@ -96,10 +95,10 @@ class HomeViewModelTest {
     @Test
     fun `first onCardFocused is consumed by the gate`() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
-        val vm = viewModel(FakeHomeRepository(trending = listOf(item("t1"))))
+        val vm = viewModel(FakeHomeRepository(trending = listOf(movie("t1"))))
         advanceUntilIdle()
 
-        vm.onCardFocused(item("t1"))
+        vm.onCardFocused(movie("t1"))
         advanceUntilIdle()
 
         assertThat(vm.focusedItemForUi.value).isNull()
@@ -108,13 +107,13 @@ class HomeViewModelTest {
     @Test
     fun `resetFirstFocusGate re-arms the gate`() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
-        val vm = viewModel(FakeHomeRepository(trending = listOf(item("t1"))))
+        val vm = viewModel(FakeHomeRepository(trending = listOf(movie("t1"))))
         advanceUntilIdle()
 
-        vm.onCardFocused(item("gate"))
+        vm.onCardFocused(movie("gate"))
         advanceUntilIdle()
         vm.resetFirstFocusGate()
-        vm.onCardFocused(item("after-reset"))
+        vm.onCardFocused(movie("after-reset"))
         advanceUntilIdle()
 
         assertThat(vm.focusedItemForUi.value).isNull()
@@ -149,37 +148,33 @@ class HomeViewModelTest {
     private fun viewModel(repo: HomeRepository) =
         HomeViewModel(repo, emptyFlow<MeEvent>())
 
-    private fun item(id: String) = MediaItem(
-        id = id, kind = MediaKind.Movie, title = "Title $id",
-        subtitle = null, posterUrl = null, backdropUrl = null,
-        logoUrl = null, overview = null, genres = emptyList(),
-        rating = null, year = null,
-    )
+    private fun movie(id: String): Content.Movie =
+        Content.Movie(id = id, title = "Title $id")
 
     private class FakeHomeRepository(
-        private val trending: List<MediaItem> = emptyList(),
-        private val continueWatching: List<MediaItem> = emptyList(),
-        private val nextUp: List<MediaItem> = emptyList(),
-        private val liveNow: List<MediaItem> = emptyList(),
+        private val trending: List<Content> = emptyList(),
+        private val continueWatching: List<Content.Resumable> = emptyList(),
+        private val nextUp: List<Content.Episode> = emptyList(),
+        private val liveNow: List<Content.LiveChannel> = emptyList(),
         private val layout: List<HomeRailConfig> = emptyList(),
         private val libraries: Map<String, String> = emptyMap(),
         private val throwOnAll: Boolean = false,
         private val throwOnContinueWatching: Boolean = false,
     ) : HomeRepository {
 
-        override suspend fun fetchTrending(limit: Int): List<MediaItem> {
+        override suspend fun fetchTrending(limit: Int): List<Content> {
             if (throwOnAll) throw RuntimeException("network")
             return trending
         }
-        override suspend fun fetchContinueWatching(): List<MediaItem> {
+        override suspend fun fetchContinueWatching(): List<Content.Resumable> {
             if (throwOnAll || throwOnContinueWatching) throw RuntimeException("network")
             return continueWatching
         }
-        override suspend fun fetchNextUp(): List<MediaItem> {
+        override suspend fun fetchNextUp(): List<Content.Episode> {
             if (throwOnAll) throw RuntimeException("network")
             return nextUp
         }
-        override suspend fun fetchLiveNow(limit: Int): List<MediaItem> {
+        override suspend fun fetchLiveNow(limit: Int): List<Content.LiveChannel> {
             if (throwOnAll) throw RuntimeException("network")
             return liveNow
         }
@@ -191,20 +186,20 @@ class HomeViewModelTest {
             if (throwOnAll) throw RuntimeException("network")
             return libraries
         }
-        override suspend fun fetchLatest(libraryId: String?, type: String?, limit: Int): List<MediaItem> {
+        override suspend fun fetchLatest(libraryId: String?, type: String?, limit: Int): List<Content> {
             if (throwOnAll) throw RuntimeException("network")
             return emptyList()
         }
-        override suspend fun fetchItemDetail(itemId: String): MediaItem {
+        override suspend fun fetchItemDetail(itemId: String): Content {
             if (throwOnAll) throw RuntimeException("network")
             return trending.firstOrNull { it.id == itemId }
                 ?: throw RuntimeException("not found")
         }
-        override suspend fun fetchChildren(parentId: String) = emptyList<MediaItem>()
-        override suspend fun fetchCatalogue(type: String, limit: Int, offset: Int, sortBy: String, sortOrder: String) = emptyList<MediaItem>()
+        override suspend fun fetchChildren(parentId: String) = emptyList<Content>()
+        override suspend fun fetchCatalogue(type: String, limit: Int, offset: Int, sortBy: String, sortOrder: String) = emptyList<Content>()
         override suspend fun fetchCollections() = emptyList<CollectionSummary>()
         override suspend fun fetchCollectionDetail(id: String): CollectionDetail = throw RuntimeException("unused")
         override suspend fun toggleItemFavorite(itemId: String) = false
-        override suspend fun searchItems(query: String, limit: Int) = emptyList<MediaItem>()
+        override suspend fun searchItems(query: String, limit: Int) = emptyList<Content>()
     }
 }

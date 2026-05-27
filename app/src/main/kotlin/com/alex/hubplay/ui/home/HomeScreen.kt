@@ -60,7 +60,7 @@ import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.IdleController
 import com.alex.hubplay.data.LiveChannel
-import com.alex.hubplay.data.MediaItem
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.HeroInfo
@@ -277,19 +277,18 @@ fun HomeScreen(
                         }
                     }
 
-                    if (heroItem?.kind == MediaKind.LiveChannel && authState != null && okHttpClient != null) {
-                        val liveChannel = remember(heroItem?.id) {
-                            heroItem?.let { item ->
-                                LiveChannel(
-                                    id = item.id, name = item.title, number = 0,
-                                    groupName = "", category = "",
-                                    logoUrl = item.logoUrl,
-                                    logoInitials = item.logoInitials,
-                                    logoBg = item.logoBg, logoFg = item.logoFg,
-                                    libraryId = "", isActive = true,
-                                    healthStatus = "ok",
-                                )
-                            }
+                    val liveChannelItem = heroItem as? Content.LiveChannel
+                    if (liveChannelItem != null && authState != null && okHttpClient != null) {
+                        val liveChannel = remember(liveChannelItem.id) {
+                            LiveChannel(
+                                id = liveChannelItem.id, name = liveChannelItem.title, number = 0,
+                                groupName = "", category = "",
+                                logoUrl = liveChannelItem.logoUrl,
+                                logoInitials = liveChannelItem.logoInitials,
+                                logoBg = liveChannelItem.logoBg, logoFg = liveChannelItem.logoFg,
+                                libraryId = "", isActive = true,
+                                healthStatus = "ok",
+                            )
                         }
                         ChannelPreviewPlayer(
                             channel      = liveChannel,
@@ -352,7 +351,10 @@ fun HomeScreen(
                             // ── Hero info — fixed, top half ───────────
                             HeroInfo(
                                 item = heroItem,
-                                onPlay = { it?.let { item -> onPlayItem(item.id, item.resumePosSec) } },
+                                onPlay = { it?.let { item ->
+                                    val resumeSec = (item as? Content.Resumable)?.resumePosSec ?: 0L
+                                    onPlayItem(item.id, resumeSec)
+                                } },
                                 onDetails = { it?.let { item -> onOpenItem(item.id, item.kind) } },
                                 showControls = isLanding,
                                 // Si volvemos de Detail con un rail con foco
@@ -428,7 +430,7 @@ fun HomeScreen(
 private fun RenderRail(
     config:               HomeRailConfig,
     data:                 HomeData,
-    onCardFocused:        (MediaItem) -> Unit,
+    onCardFocused:        (Content) -> Unit,
     onOpenItem:           (String, MediaKind) -> Unit,
     onPlayItem:           (String, Long) -> Unit,
     initialFocusedItemId: String? = null,

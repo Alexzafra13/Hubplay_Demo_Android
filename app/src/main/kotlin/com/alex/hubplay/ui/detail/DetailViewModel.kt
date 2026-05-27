@@ -3,15 +3,20 @@ package com.alex.hubplay.ui.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRepository
-import com.alex.hubplay.data.MediaItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Loads /items/{id} and exposes a single MediaItem to the Detail screen.
+ * Loads /items/{id} and exposes a single Content to the Detail screen.
+ *
+ * Detail only renders meaningfully for Movies and Series; Episodes /
+ * Seasons / LiveChannels / Unknown that arrive via deep link fall back
+ * to the common Content fields (title, overview, images) without
+ * showing trailer / collection / favourite chrome.
  *
  * Repo doubles as our items-fetcher for now (the Home rails already
  * route through it); a dedicated ItemsRepository can split out later
@@ -47,13 +52,28 @@ class DetailViewModel(
      * own refresh — that's a separate flow from the local revert path.
      */
     fun toggleFavorite() {
+        // Only Movies / Series / Episodes carry an `isFavorite` flag; the
+        // Detail screen hides the heart button for other variants, so we
+        // should never be invoked outside those cases. Bail early if we
+        // somehow get called on an Unknown / Season / LiveChannel.
         val current = _ui.value.item ?: return
-        val optimistic = current.copy(isFavorite = !current.isFavorite)
+        val optimistic: Content = when (current) {
+            is Content.Movie   -> current.copy(isFavorite = !current.isFavorite)
+            is Content.Series  -> current.copy(isFavorite = !current.isFavorite)
+            is Content.Episode -> current.copy(isFavorite = !current.isFavorite)
+            else               -> return
+        }
         _ui.value = _ui.value.copy(item = optimistic)
         viewModelScope.launch {
             runCatching { repository.toggleItemFavorite(current.id) }
                 .onSuccess { actual ->
-                    _ui.value = _ui.value.copy(item = optimistic.copy(isFavorite = actual))
+                    val applied: Content = when (optimistic) {
+                        is Content.Movie   -> optimistic.copy(isFavorite = actual)
+                        is Content.Series  -> optimistic.copy(isFavorite = actual)
+                        is Content.Episode -> optimistic.copy(isFavorite = actual)
+                        else               -> optimistic
+                    }
+                    _ui.value = _ui.value.copy(item = applied)
                 }
                 .onFailure {
                     _ui.value = _ui.value.copy(item = current) // revert
@@ -75,6 +95,6 @@ class DetailViewModel(
 @androidx.compose.runtime.Immutable
 data class DetailUiState(
     val isLoading: Boolean    = false,
-    val item:      MediaItem? = null,
+    val item:      Content?  = null,
     val error:     String?    = null,
 )

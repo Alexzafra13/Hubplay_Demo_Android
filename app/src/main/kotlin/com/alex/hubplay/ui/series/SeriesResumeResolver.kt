@@ -1,7 +1,6 @@
 package com.alex.hubplay.ui.series
 
-import com.alex.hubplay.data.MediaItem
-import com.alex.hubplay.data.MediaKind
+import com.alex.hubplay.data.Content
 
 /**
  * Picks the "right" episode to play when the user hits Reproducir on a
@@ -34,24 +33,26 @@ object SeriesResumeResolver {
      * Resolve the resume target given the data the SeriesViewModel
      * already collected — no new network calls inside.
      *
-     * @param seriesId         the series the user is viewing.
-     * @param continueWatching the user's CW rail (already filtered by the API to <95%).
-     * @param nextUp           the user's /me/next-up list.
-     * @param firstSeasonId    the first season's id, when known. Episodes of
-     *                          this season are scanned for the cold-start
-     *                          fallback ("play E01 of season 1").
-     * @param firstSeasonEpisodes episodes of [firstSeasonId], in scanner order.
+     * Inputs are sealed [Content] subtypes so callers can't pass us a
+     * malformed list (e.g. movies into the CW filter): the type system
+     * enforces "episodes only" where it matters.
+     *
+     * @param seriesId            the series the user is viewing.
+     * @param continueWatching    the user's CW rail (already filtered by the API to <95%).
+     * @param nextUp              the user's /me/next-up list.
+     * @param firstSeasonEpisodes episodes of the first season in scanner order.
      */
     fun resolve(
-        seriesId: String,
-        continueWatching: List<MediaItem>,
-        nextUp: List<MediaItem>,
-        firstSeasonEpisodes: List<MediaItem>,
+        seriesId:            String,
+        continueWatching:    List<Content.Resumable>,
+        nextUp:              List<Content.Episode>,
+        firstSeasonEpisodes: List<Content>,
     ): SeriesResumeTarget {
-        // 1. Resume — CW already excludes >=95% server-side.
+        // 1. Resume — CW already excludes >=95% server-side. Only Episodes
+        //    carry a seriesId; movies in CW are skipped naturally.
         val inProgress = continueWatching.firstOrNull {
-            it.kind == MediaKind.Episode && it.seriesId == seriesId
-        }
+            it is Content.Episode && it.seriesId == seriesId
+        } as? Content.Episode
         if (inProgress != null) {
             return SeriesResumeTarget(
                 mode      = SeriesResumeMode.RESUME,
@@ -74,7 +75,7 @@ object SeriesResumeResolver {
 
         // 3. Cold start — first episode of the first available season.
         val firstEp = firstSeasonEpisodes
-            .filter { it.kind == MediaKind.Episode }
+            .filterIsInstance<Content.Episode>()
             .minByOrNull { it.episodeNumber ?: Int.MAX_VALUE }
         if (firstEp != null) {
             return SeriesResumeTarget(
@@ -88,7 +89,7 @@ object SeriesResumeResolver {
         return SeriesResumeTarget(SeriesResumeMode.NONE, null, 0L, null)
     }
 
-    private fun epLabel(item: MediaItem): String {
+    private fun epLabel(item: Content.Episode): String {
         val s = item.seasonNumber; val e = item.episodeNumber
         return when {
             s != null && e != null -> "S$s · E$e"

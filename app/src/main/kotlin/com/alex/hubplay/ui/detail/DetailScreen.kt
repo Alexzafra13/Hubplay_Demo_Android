@@ -57,7 +57,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
-import com.alex.hubplay.data.MediaItem
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.ui.components.BackPill
 import com.alex.hubplay.ui.components.HeroCtaButton
 import com.alex.hubplay.ui.components.HeroIconButton
@@ -110,13 +110,23 @@ fun DetailScreen(
 
 @Composable
 private fun HeroFull(
-    item:               MediaItem,
+    item:               Content,
     onPlay:             (String, Long) -> Unit,
     onBack:             () -> Unit,
     onToggleFavorite:   () -> Unit,
     onOpenCollection:   (String) -> Unit,
     trailerResumeSec:   Long = 0L,
 ) {
+    // Pull the variant-specific pair into locals so the rest of the hero
+    // stays variant-agnostic. Only Movies and Series ever carry a trailer
+    // pair on /items/{id}.
+    val trailerKey  = (item as? Content.Movie)?.trailerKey  ?: (item as? Content.Series)?.trailerKey
+    val trailerSite = (item as? Content.Movie)?.trailerSite ?: (item as? Content.Series)?.trailerSite
+    val isFavorite  = (item as? Content.Movie)?.isFavorite
+        ?: (item as? Content.Series)?.isFavorite
+        ?: (item as? Content.Episode)?.isFavorite
+        ?: false
+
     // Backdrop ↔ trailer crossfade. El trailer ya no es local: vive en
     // TrailerHostOverlay (root). Si llegamos desde Home con el trailer
     // sonando para este mismo item, el host detecta misma key y NO recarga
@@ -126,16 +136,16 @@ private fun HeroFull(
     val trailerRevealed = trailerHost.revealed.value &&
         trailerHost.current.value?.itemId == item.id
 
-    DisposableEffect(item.id, item.trailerKey, item.trailerSite, trailerResumeSec) {
+    DisposableEffect(item.id, trailerKey, trailerSite, trailerResumeSec) {
         // trailerResumeSec se pasa como startAtSec al host. Solo se usa si
         // la key es NUEVA (deep link directo a Detail, o item distinto al
         // que sonaba). Si venimos de Home con la misma key, el WebView ni
         // se entera — sigue reproduciendo donde iba.
-        val token = if (item.trailerKey != null && item.trailerSite != null) {
+        val token = if (trailerKey != null && trailerSite != null) {
             trailerHost.activate(
                 itemId     = item.id,
-                videoKey   = item.trailerKey,
-                site       = item.trailerSite,
+                videoKey   = trailerKey,
+                site       = trailerSite,
                 startAtSec = trailerResumeSec,
             )
         } else null
@@ -221,10 +231,10 @@ private fun HeroFull(
             verticalAlignment     = Alignment.CenterVertically,
         ) {
             HeroIconButton(
-                icon               = if (item.isFavorite) Icons.Default.Favorite
-                                     else                 Icons.Default.FavoriteBorder,
-                contentDescription = if (item.isFavorite) stringResource(R.string.cd_remove_favorite)
-                                     else                 stringResource(R.string.cd_add_favorite),
+                icon               = if (isFavorite) Icons.Default.Favorite
+                                     else            Icons.Default.FavoriteBorder,
+                contentDescription = if (isFavorite) stringResource(R.string.cd_remove_favorite)
+                                     else            stringResource(R.string.cd_add_favorite),
                 onClick            = onToggleFavorite,
             )
             HeroIconButton(
@@ -253,10 +263,11 @@ private fun HeroFull(
 }
 
 @Composable
-private fun PosterAndPlayColumn(item: MediaItem, onPlay: (String, Long) -> Unit) {
-    val playLabel = if (item.resumePosSec > 0) {
-        val mins = item.resumePosSec / 60
-        val secs = item.resumePosSec % 60
+private fun PosterAndPlayColumn(item: Content, onPlay: (String, Long) -> Unit) {
+    val resumePosSec = (item as? Content.Resumable)?.resumePosSec ?: 0L
+    val playLabel = if (resumePosSec > 0) {
+        val mins = resumePosSec / 60
+        val secs = resumePosSec % 60
         stringResource(R.string.detail_resume_format, mins, secs)
     } else stringResource(R.string.detail_play)
 
@@ -295,14 +306,14 @@ private fun PosterAndPlayColumn(item: MediaItem, onPlay: (String, Long) -> Unit)
             icon           = Icons.Default.PlayArrow,
             primary        = true,
             focusRequester = playFocus,
-            onClick        = { onPlay(item.id, item.resumePosSec) },
+            onClick        = { onPlay(item.id, resumePosSec) },
             modifier       = Modifier.width(190.dp),
         )
     }
 }
 
 @Composable
-private fun InfoColumn(item: MediaItem, onOpenCollection: (String) -> Unit) {
+private fun InfoColumn(item: Content, onOpenCollection: (String) -> Unit) {
     Column(
         modifier            = Modifier.fillMaxHeight(),
         verticalArrangement = Arrangement.Center,
@@ -329,10 +340,13 @@ private fun InfoColumn(item: MediaItem, onOpenCollection: (String) -> Unit) {
             )
         }
 
-        if (!item.subtitle.isNullOrBlank()) {
+        // Smart cast doesn't apply to interface properties (open getter),
+        // so we read the nullable once into a local and let Kotlin narrow
+        // it inside the let block.
+        item.subtitle?.takeIf { it.isNotBlank() }?.let { sub ->
             Spacer(Modifier.height(10.dp))
             Text(
-                text     = item.subtitle,
+                text     = sub,
                 style    = MaterialTheme.typography.titleMedium,
                 color    = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -343,10 +357,10 @@ private fun InfoColumn(item: MediaItem, onOpenCollection: (String) -> Unit) {
         Spacer(Modifier.height(14.dp))
         MetaRow(item)
 
-        if (!item.overview.isNullOrBlank()) {
+        item.overview?.takeIf { it.isNotBlank() }?.let { ov ->
             Spacer(Modifier.height(14.dp))
             Text(
-                text     = item.overview,
+                text     = ov,
                 style    = MaterialTheme.typography.bodyMedium,
                 color    = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 6,
@@ -358,8 +372,9 @@ private fun InfoColumn(item: MediaItem, onOpenCollection: (String) -> Unit) {
         // detail screen. Only present on movies the scanner matched
         // to a TMDb collection; everything else (series, channels,
         // orphan movies) doesn't render this row at all.
-        val collectionId = item.collectionId
-        val collectionName = item.collectionName
+        val movie = item as? Content.Movie
+        val collectionId = movie?.collectionId
+        val collectionName = movie?.collectionName
         if (collectionId != null && !collectionName.isNullOrBlank()) {
             Spacer(Modifier.height(14.dp))
             PartOfChip(name = collectionName, onClick = { onOpenCollection(collectionId) })
@@ -368,7 +383,8 @@ private fun InfoColumn(item: MediaItem, onOpenCollection: (String) -> Unit) {
 }
 
 @Composable
-private fun MetaRow(item: MediaItem) {
+private fun MetaRow(item: Content) {
+    val durationSec = (item as? Content.Resumable)?.durationSec ?: 0L
     Row(
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -390,11 +406,11 @@ private fun MetaRow(item: MediaItem) {
                 maxLines = 1,
             )
         }
-        if (item.durationSec > 0) {
+        if (durationSec > 0) {
             Text("·", style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                text     = stringResource(R.string.detail_duration_minutes, item.durationSec / 60),
+                text     = stringResource(R.string.detail_duration_minutes, durationSec / 60),
                 style    = MaterialTheme.typography.bodyMedium,
                 color    = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,

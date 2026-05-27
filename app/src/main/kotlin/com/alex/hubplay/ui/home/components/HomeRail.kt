@@ -23,17 +23,17 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.alex.hubplay.data.MediaItem
+import com.alex.hubplay.data.Content
 
 private val RailContentPadding = 24.dp
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun HomeRail(
+fun <T : Content> HomeRail(
     title:                String,
-    items:                List<MediaItem>,
-    onFocused:            (MediaItem) -> Unit,
-    onClick:              (MediaItem) -> Unit,
+    items:                List<T>,
+    onFocused:            (T) -> Unit,
+    onClick:              (T) -> Unit,
     style:                CardStyle = CardStyle.Landscape,
     modifier:             Modifier  = Modifier,
     initialFocusedItemId: String?   = null,
@@ -47,11 +47,15 @@ fun HomeRail(
         initialFocusedItemId = initialFocusedItemId,
         railFocusRequester = railFocusRequester,
     ) { item, onItemFocused, mod ->
+        // MediaCard's lambdas widen to `Content` because the card itself is
+        // not generic — we narrow back through wrapper lambdas so the
+        // caller's `onClick: (T) -> Unit` (e.g. Continue-Watching gets
+        // Content.Resumable) stays type-safe.
         MediaCard(
             item      = item,
             style     = style,
-            onFocused = onItemFocused,
-            onClick   = onClick,
+            onFocused = { onItemFocused(item) },
+            onClick   = { onClick(item) },
             modifier  = mod,
         )
     }
@@ -61,9 +65,9 @@ fun HomeRail(
 @Composable
 fun LiveNowRail(
     title:                String,
-    items:                List<MediaItem>,
-    onFocused:            (MediaItem) -> Unit,
-    onClick:              (MediaItem) -> Unit,
+    items:                List<Content.LiveChannel>,
+    onFocused:            (Content.LiveChannel) -> Unit,
+    onClick:              (Content.LiveChannel) -> Unit,
     modifier:             Modifier = Modifier,
     initialFocusedItemId: String?  = null,
     railFocusRequester:   FocusRequester? = null,
@@ -78,8 +82,8 @@ fun LiveNowRail(
     ) { item, onItemFocused, mod ->
         LiveChannelCard(
             item      = item,
-            onFocused = onItemFocused,
-            onClick   = onClick,
+            onFocused = { onItemFocused(item) },
+            onClick   = { onClick(item) },
             modifier  = mod,
         )
     }
@@ -87,14 +91,14 @@ fun LiveNowRail(
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun BaseRail(
+private fun <T : Content> BaseRail(
     title:                String,
-    items:                List<MediaItem>,
-    onFocused:            (MediaItem) -> Unit,
+    items:                List<T>,
+    onFocused:            (T) -> Unit,
     modifier:             Modifier = Modifier,
     initialFocusedItemId: String?  = null,
     railFocusRequester:   FocusRequester? = null,
-    card: @Composable (item: MediaItem, onItemFocused: (MediaItem) -> Unit, modifier: Modifier) -> Unit,
+    card: @Composable (item: T, onItemFocused: (T) -> Unit, modifier: Modifier) -> Unit,
 ) {
     if (items.isEmpty()) return
 

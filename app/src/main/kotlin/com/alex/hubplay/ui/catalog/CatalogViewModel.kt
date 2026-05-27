@@ -4,8 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRepository
-import com.alex.hubplay.data.MediaItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -103,6 +103,6 @@ data class CatalogUiState(
     val isLoading:     Boolean         = false,
     val isLoadingMore: Boolean         = false,
     val canLoadMore:   Boolean         = false,
-    val items:         List<MediaItem> = emptyList(),
+    val items:         List<Content>   = emptyList(),
     val error:         String?         = null,
 )

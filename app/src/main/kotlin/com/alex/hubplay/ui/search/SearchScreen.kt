@@ -159,7 +159,7 @@ private fun SearchInputBar(
 
 @Composable
 private fun ResultsGrid(
-    items:         List<com.alex.hubplay.data.MediaItem>,
+    items:         List<com.alex.hubplay.data.Content>,
     isLoadingMore: Boolean,
     canLoadMore:   Boolean,
     onLoadMore:    () -> Unit,

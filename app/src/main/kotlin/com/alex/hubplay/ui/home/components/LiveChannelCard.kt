@@ -32,13 +32,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.alex.hubplay.data.MediaItem
+import com.alex.hubplay.data.Content
 
 @Composable
 fun LiveChannelCard(
-    item:      MediaItem,
-    onFocused: (MediaItem) -> Unit,
-    onClick:   (MediaItem) -> Unit,
+    item:      Content.LiveChannel,
+    onFocused: (Content.LiveChannel) -> Unit,
+    onClick:   (Content.LiveChannel) -> Unit,
     modifier:  Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }

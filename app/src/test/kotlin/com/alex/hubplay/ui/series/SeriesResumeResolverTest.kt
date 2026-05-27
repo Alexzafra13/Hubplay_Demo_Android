@@ -1,7 +1,6 @@
 package com.alex.hubplay.ui.series
 
-import com.alex.hubplay.data.MediaItem
-import com.alex.hubplay.data.MediaKind
+import com.alex.hubplay.data.Content
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
@@ -95,16 +94,17 @@ class SeriesResumeResolverTest {
 
     @Test
     fun `START ignores non-episode children (seasons, specials with no number)`() {
+        // The repository sometimes hands a season alongside its episodes
+        // (older API quirk); the resolver should filter those out via
+        // its sealed-type pattern matching instead of relying on a
+        // string-based kind check.
+        val season = Content.Season(id = "season-1", title = "Season 1", seasonNumber = 1)
         val target = SeriesResumeResolver.resolve(
             seriesId = "s-bb",
             continueWatching = emptyList(),
             nextUp = emptyList(),
             firstSeasonEpisodes = listOf(
-                MediaItem(
-                    id = "season-1", kind = MediaKind.Season, title = "Season 1", subtitle = null,
-                    posterUrl = null, backdropUrl = null, logoUrl = null,
-                    overview = null, genres = emptyList(), rating = null, year = null,
-                ),
+                season,
                 episode(id = "ep-s01e01", seriesId = "s-bb", season = 1, episode = 1),
             ),
         )
@@ -133,24 +133,13 @@ class SeriesResumeResolverTest {
         season:    Int,
         episode:   Int,
         resumeSec: Long = 0L,
-    ): MediaItem = MediaItem(
+    ): Content.Episode = Content.Episode(
         id            = id,
-        kind          = MediaKind.Episode,
         title         = "Episodio $episode",
-        subtitle      = null,
-        posterUrl     = null,
-        backdropUrl   = null,
-        logoUrl       = null,
-        overview      = null,
-        genres        = emptyList(),
-        rating        = null,
-        year          = null,
         progressPct   = if (resumeSec > 0) 0.2f else 0f,
         resumePosSec  = resumeSec,
         seriesId      = seriesId,
-        parentId      = null,
         seasonNumber  = season,
         episodeNumber = episode,
-        durationSec   = 0L,
     )
 }
