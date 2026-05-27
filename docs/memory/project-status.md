@@ -1,10 +1,148 @@
 # Estado del proyecto — HubPlay Android
 
-> **Última sesión**: 2026-05-26 — rama `claude/project-review-QU5nR`.
-> **Estado**: Code review + refactor del Home. Error handling en refresh,
-> deduplicación HomeRail, limpieza de imports/FQN, cancelación de
-> refreshes concurrentes, tests de TrailerHost (14 tests nuevos).
+> **Última sesión**: 2026-05-27 — rama `claude/project-review-QU5nR`.
+> **Estado**: Auditoría arquitectónica completa (Principal Engineer level)
+> + Fase 1 robustez + Fase 2 parcial. Fix ANR crítico en interceptors,
+> paginación infinita en catálogo/search, interfaz HomeRepository, 22
+> tests nuevos, quitar Moshi reflection, Result type unificado.
 > **Leer este fichero al inicio de cada sesión** para retomar contexto.
+
+---
+
+## 🏗️ Sesión 2026-05-27 — Auditoría arquitectónica + refactors
+
+Sesión maratón con auditoría nivel Principal Engineer (84 archivos,
+18,170 LOC). Score global: 5.5/10 como app production-grade. Se
+ejecutaron las Fases 1 y 2 parcial del roadmap resultante.
+
+### Auditoría: hallazgos principales
+
+**Críticos resueltos esta sesión:**
+1. `runBlocking` en AuthInterceptor/BaseUrlInterceptor → riesgo ANR
+   eliminado con token holder in-memory (MutableStateFlow en TokenStore)
+2. Zero paginación en catálogo/search → scroll infinito implementado
+3. Zero tests de ViewModels → 22 tests nuevos (TrailerHost + HomeViewModel)
+
+**Críticos pendientes (necesitan Android SDK):**
+- Sealed hierarchy para Content (MediaItem god-class, 27 campos)
+- Modularización (single-module monolito con 84 archivos)
+- Hilt (AppContainer god-object, 20+ nodos DI manual)
+
+**Medianos pendientes:**
+- detekt `ignoreFailures=false` + baseline
+- Room + offline cache
+- Baseline Profile + Macrobenchmark
+- Design system module
+- @Preview functions
+
+### Commits de esta sesión (7)
+
+1. **refactor(home)**: fix error handling en refresh(), dedupe
+   HomeRail/LiveNowRail (BaseRail extraction), clean imports/FQN,
+   cancel concurrent refreshes, 14 TrailerHost tests
+2. **cleanup**: borrar HeroTrailerView.kt (-347 LOC), hideContent dead
+   param, trailerCache → ConcurrentHashMap
+3. **fix(auth)**: eliminar runBlocking de interceptors — TokenStore con
+   MutableStateFlow + snapshotNow()/storeTokensImmediate()/clearImmediate(),
+   AuthInterceptor con synchronized(refreshLock) + double-check pattern,
+   BaseUrlInterceptor sin runBlocking, MeEventsStream sin serverUrlBlocking
+4. **refactor fase 1**: readTimeout separado (30s API vs infinite SSE),
+   interfaz HomeRepository (14 métodos) + HomeRepositoryImpl, 8 tests
+   HomeViewModel (refresh/error/focus gate/snapshot/trailer), quitar
+   KotlinJsonAdapterFactory (Moshi reflection), trailerCurrentTimeSec
+   → MutableStateFlow, HomeViewModel toma Flow<MeEvent> en vez de
+   MeEventsStream (testable con emptyFlow)
+5-6. **fix(test)**: scheduler compartido entre runTest y Dispatchers.Main
+   (UnconfinedTestDispatcher(testScheduler))
+7. **feat**: paginación infinita en catálogo (Movies/Series) y search,
+   ApiResult sealed interface
+
+### Cambios arquitectónicos clave
+
+**TokenStore**: `authStateFlow` ya no es `combine().stateIn()` — ahora
+es un `MutableStateFlow` actualizado por DataStore (async) Y por writes
+síncronos del interceptor. `snapshotNow()` lee sin suspender.
+`storeTokensImmediate()`/`clearImmediate()` actualizan in-memory al
+instante y persisten a disco async. Zero `runBlocking` en OkHttp threads.
+
+**AuthInterceptor**: `synchronized(refreshLock)` con double-check
+pattern reemplaza AtomicBoolean + Thread.sleep(150). Threads que
+esperan verifican si otro ya refrescó. Zero token reads bloqueantes.
+
+**HomeRepository**: ahora es una interfaz (14 métodos). La impl es
+`HomeRepositoryImpl`. Todos los consumers (ViewModels,
+ScreensaverImageSource, CollectionsAvailability) reciben la interfaz.
+`FakeHomeRepository` en tests.
+
+**HomeViewModel**: constructor toma `Flow<MeEvent>` en vez de
+`MeEventsStream`. La factory llama `.events()`. Testable con
+`emptyFlow()`.
+
+**CatalogViewModel**: offset-based pagination. `load()` trae 60 items,
+`loadMore()` appends. `CatalogScreen` detecta near-bottom scroll via
+`derivedStateOf` en `LazyGridState`.
+
+**SearchViewModel**: mismo patrón de pagination. Reset offset al
+cambiar query.
+
+**AppContainer**: `mainOkHttp` con `readTimeout=30s`. Nuevo
+`sseOkHttp` derivado con `readTimeout=0` para SSE. Moshi sin
+`KotlinJsonAdapterFactory`.
+
+### Tests: 22 nuevos (total ~42)
+
+- `TrailerHostTest.kt`: 14 tests — claims, continuidad, debounce,
+  hideNow, embeddability cache
+- `HomeViewModelTest.kt`: 8 tests — refresh success/failure/partial,
+  hero content, focus gate, scroll snapshot, trailer time
+
+### Archivos creados
+
+- `data/ApiResult.kt` — sealed interface + apiRunCatching helper
+- `test/.../TrailerHostTest.kt`
+- `test/.../HomeViewModelTest.kt`
+
+### Archivos eliminados
+
+- `ui/series/HeroTrailerView.kt` (-347 LOC, código muerto)
+
+---
+
+## 📋 Roadmap técnico — lo que queda (TODO necesita Android SDK)
+
+### Prioridad Alta (hacer en Android Studio)
+
+1. **detekt `ignoreFailures=false`** — `./gradlew :app:detektBaseline`,
+   commitear `config/detekt-baseline.xml`, flip flag. 1h.
+2. **Sealed hierarchy para Content** — reemplazar `MediaItem` god-class
+   por `Content.Movie`/`Content.Series`/`Content.Episode`/`Content.LiveChannel`.
+   Toca 30+ archivos. 1 día.
+3. **Hilt** — reemplaza AppContainer (210 LOC) + 10+ factories manuales.
+   `@HiltViewModel` en cada VM. 1-2 días.
+
+### Prioridad Media
+
+4. **Modularización** — `:core:network`, `:core:data`, `:core:ui`,
+   `:feature:home`, `:feature:player`, `:feature:livetv`, `:feature:auth`.
+   2-3 días.
+5. **Room + offline cache** — home rails, continue watching, profiles.
+   3-5 días.
+6. **Baseline Profile + Macrobenchmark** — necesita device real. 1 día.
+
+### Prioridad Baja
+
+7. Design system module (componentes reutilizables)
+8. @Preview en composables públicos
+9. Analytics (Firebase/Amplitude)
+10. Remote crash reporting (Crashlytics/Sentry)
+11. kotlinx.serialization reemplazando Moshi
+12. Feature flags
+
+### Backlog de features
+
+- "Recientemente visto" filtro en sidebar Live TV
+- Vista EPG grid completa (estilo Movistar)
+- Compose UI tests + emulator en CI
 
 ---
 
