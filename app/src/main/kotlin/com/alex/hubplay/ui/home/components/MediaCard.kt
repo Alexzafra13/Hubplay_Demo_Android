@@ -40,7 +40,6 @@ fun MediaCard(
     onClick:      (MediaItem) -> Unit,
     style:        CardStyle = CardStyle.Landscape,
     slotWidth:    Dp        = style.defaultWidth,
-    hideContent:  Boolean   = false,
     modifier:     Modifier  = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }

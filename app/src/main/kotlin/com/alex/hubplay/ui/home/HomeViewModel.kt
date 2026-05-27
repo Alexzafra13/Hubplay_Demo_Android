@@ -62,7 +62,7 @@ class HomeViewModel(
         replay = 0, extraBufferCapacity = 8,
     )
 
-    private val trailerCache = mutableMapOf<String, TrailerInfo?>()
+    private val trailerCache = java.util.concurrent.ConcurrentHashMap<String, TrailerInfo?>()
     private var refreshJob: Job? = null
 
     init {
