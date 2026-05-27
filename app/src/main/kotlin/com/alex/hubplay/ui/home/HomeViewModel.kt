@@ -202,10 +202,18 @@ class HomeViewModel(
                             emptyMap()
                         }
                 }
-                val cw       = async { safeFetch("continueWatching") { repository.fetchContinueWatching() } }
-                val nextUp   = async { safeFetch("nextUp")           { repository.fetchNextUp() } }
-                val trending = async { safeFetch("trending")         { repository.fetchTrending() } }
-                val liveNow  = async { safeFetch("liveNow")          { repository.fetchLiveNow() } }
+                val cw          = async { safeFetch("continueWatching") { repository.fetchContinueWatching() } }
+                val nextUp      = async { safeFetch("nextUp")           { repository.fetchNextUp() } }
+                val trending    = async { safeFetch("trending")         { repository.fetchTrending() } }
+                val recommended = async { safeFetch("recommended")      { repository.fetchRecommended() } }
+                val liveNow     = async { safeFetch("liveNow")          { repository.fetchLiveNow() } }
+                // Latest "globally" for the hero — pulled without library
+                // filter (server returns newest items across libraries) so
+                // the first hero tier can show "Lo último añadido". The
+                // per-library Latest rails below stay independent.
+                val latestAll   = async {
+                    safeFetch("latestAll") { repository.fetchLatest(limit = HERO_POOL_SIZE) }
+                }
 
                 val layout    = layoutDef.await()
                 val libraries = librariesDef.await()
@@ -223,9 +231,16 @@ class HomeViewModel(
                     }
                 val latestByRailId = latestRailFetches.awaitAll().toMap()
 
-                val trendingItems = trending.await()
+                val trendingItems    = trending.await()
+                val recommendedItems = recommended.await()
+                val latestAllItems   = latestAll.await()
+                val heroSlots        = buildHeroSlots(
+                    latest      = latestAllItems,
+                    trending    = trendingItems,
+                    recommended = recommendedItems,
+                )
                 HomeData(
-                    hero             = trendingItems.take(5),
+                    hero             = heroSlots,
                     continueWatching = cw.await(),
                     nextUp           = nextUp.await(),
                     trending         = trendingItems,
@@ -253,6 +268,69 @@ class HomeViewModel(
         "movies" -> "movie"
         "shows"  -> "series"
         else     -> null
+    }
+
+    /**
+     * Build the hero carousel slots by merging the three discovery
+     * sources web/src/components/home/HeroBanner.tsx uses, dedup'd by
+     * id and capped at [HERO_MAX_SLOTS]. Mirror behaviour so Android +
+     * web feel consistent.
+     *
+     * Priority order:
+     *  1. Latest items added (this calendar year if any qualify; else
+     *     the whole `latest` pool) — "Nuevo" tier.
+     *  2. Trending — server-wide 7-day plays aggregate.
+     *  3. Recommended — genre-affinity picks.
+     *
+     * Episodes are excluded from the hero (they don't make good landing
+     * cards: low context, spoils which episode the user resumes on).
+     * Web also filters them out — keeps the surface focused on titles.
+     */
+    private fun buildHeroSlots(
+        latest:      List<Content>,
+        trending:    List<Content>,
+        recommended: List<Content>,
+    ): List<Content> {
+        val currentYear = java.time.Year.now().value
+        val seen        = mutableSetOf<String>()
+        val slots       = mutableListOf<Content>()
+
+        // Tier 1 — "Nuevo": latest items added this year. If nothing
+        // qualifies (cold catalogue), fall back to all latest so the
+        // hero still has content from this source.
+        val thisYearOnly = latest.filter { it.year == currentYear && it !is Content.Episode }
+        val newPool      = if (thisYearOnly.isNotEmpty()) thisYearOnly else latest
+
+        // Tier 2 dedupes against Tier 1, Tier 3 against both. Sequence +
+        // take() avoids the break/continue pattern detekt flags as too
+        // jumpy, and keeps each tier's quota cap honest.
+        appendUniqueHeroItems(newPool, slots, seen)
+        appendUniqueHeroItems(trending, slots, seen)
+        appendUniqueHeroItems(recommended, slots, seen)
+
+        return slots
+    }
+
+    /**
+     * Push items from [pool] into [slots] until the hero cap is reached,
+     * skipping anything already present in [seen], plus Episode and
+     * Unknown variants (too low-context for a hero slide).
+     */
+    private fun appendUniqueHeroItems(
+        pool:  List<Content>,
+        slots: MutableList<Content>,
+        seen:  MutableSet<String>,
+    ) {
+        val remaining = HERO_MAX_SLOTS - slots.size
+        if (remaining <= 0) return
+        pool.asSequence()
+            .filter { it !is Content.Episode && it !is Content.Unknown }
+            .filter { it.id !in seen }
+            .take(remaining)
+            .forEach { item ->
+                seen.add(item.id)
+                slots.add(item)
+            }
     }
 
     private inline fun <T : Content> safeFetch(label: String, block: () -> List<T>): List<T> {
@@ -319,6 +397,20 @@ class HomeViewModel(
         // varias veces por segundo durante playback en otra superficie;
         // recargar todo el Home cada 1.5s era caro.
         private const val SSE_REFRESH_DEBOUNCE_MS = 5_000L
+
+        /**
+         * Cap del hero carousel. Coincide con MAX_SLOTS del web client
+         * (HeroBanner.tsx) — 5 slots es el equilibrio entre variedad y
+         * que la auto-rotación cubra un ciclo en ~40s.
+         */
+        private const val HERO_MAX_SLOTS = 5
+
+        /**
+         * Cuántos items "latest" pedir al servidor para alimentar la
+         * primera tier del hero. Más que HERO_MAX_SLOTS para tener
+         * margen tras el filtro de "year == currentYear".
+         */
+        private const val HERO_POOL_SIZE = 12
         private const val TRAILER_FETCH_DELAY_MS = 600L
 
         fun factory(repository: HomeRepository, meEventsStream: MeEventsStream) =

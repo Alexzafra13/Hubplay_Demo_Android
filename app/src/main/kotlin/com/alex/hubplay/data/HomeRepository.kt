@@ -6,6 +6,7 @@ import com.alex.hubplay.data.api.dto.ContinueWatchingEntryDto
 import com.alex.hubplay.data.api.dto.ItemSummaryDto
 import com.alex.hubplay.data.api.dto.LiveNowChannelDto
 import com.alex.hubplay.data.api.dto.NextUpItemDto
+import com.alex.hubplay.data.api.dto.RecommendedItemDto
 import com.alex.hubplay.data.api.dto.TrendingItemDto
 
 /**
@@ -16,6 +17,7 @@ import com.alex.hubplay.data.api.dto.TrendingItemDto
 interface HomeRepository {
     suspend fun fetchContinueWatching(): List<Content.Resumable>
     suspend fun fetchTrending(limit: Int = 12): List<Content>
+    suspend fun fetchRecommended(limit: Int = 5): List<Content>
     suspend fun fetchLatest(libraryId: String? = null, type: String? = null, limit: Int = 20): List<Content>
     suspend fun fetchLibraries(): Map<String, String>
     suspend fun fetchLiveNow(limit: Int = 10): List<Content.LiveChannel>
@@ -47,6 +49,11 @@ class HomeRepositoryImpl(
     override suspend fun fetchTrending(limit: Int): List<Content> {
         val server = serverUrl()
         return api.getTrending(limit).data?.items.orEmpty().map { it.toContent(server) }
+    }
+
+    override suspend fun fetchRecommended(limit: Int): List<Content> {
+        val server = serverUrl()
+        return api.getRecommended(limit).data?.items.orEmpty().map { it.toContent(server) }
     }
 
     /**
@@ -537,6 +544,57 @@ class HomeRepositoryImpl(
      * navigation safely falls back.
      */
     private fun TrendingItemDto.toContent(server: String): Content {
+        val poster = absolutize(posterUrl, server)
+        val backdrop = absolutize(backdropUrl, server)
+        val logo = absolutize(logoUrl, server)
+        return when (MediaKind.from(type)) {
+            MediaKind.Movie -> Content.Movie(
+                id          = id,
+                title       = title.orEmpty(),
+                subtitle    = year?.toString(),
+                posterUrl   = poster,
+                backdropUrl = backdrop,
+                logoUrl     = logo,
+                overview    = overview,
+                genres      = genres,
+                rating      = communityRating,
+                year        = year,
+            )
+            MediaKind.Series -> Content.Series(
+                id          = id,
+                title       = title.orEmpty(),
+                subtitle    = year?.toString(),
+                posterUrl   = poster,
+                backdropUrl = backdrop,
+                logoUrl     = logo,
+                overview    = overview,
+                genres      = genres,
+                rating      = communityRating,
+                year        = year,
+            )
+            else -> Content.Unknown(
+                id          = id,
+                title       = title.orEmpty(),
+                subtitle    = year?.toString(),
+                posterUrl   = poster,
+                backdropUrl = backdrop,
+                logoUrl     = logo,
+                overview    = overview,
+                genres      = genres,
+                rating      = communityRating,
+                year        = year,
+            )
+        }
+    }
+
+    /**
+     * Recommended items share the Trending wire shape but add a
+     * `recommended_because.genres` block. We don't surface that on
+     * Content yet (the hero chip just says "Recomendado" without the
+     * "Porque te gusta X" reason line — that's a phase-3 polish), so
+     * the mapping is the same Movie/Series fork as Trending.
+     */
+    private fun RecommendedItemDto.toContent(server: String): Content {
         val poster = absolutize(posterUrl, server)
         val backdrop = absolutize(backdropUrl, server)
         val logo = absolutize(logoUrl, server)

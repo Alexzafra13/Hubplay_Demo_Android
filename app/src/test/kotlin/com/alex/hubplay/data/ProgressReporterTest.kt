@@ -26,6 +26,7 @@ import com.alex.hubplay.data.api.dto.SwitchProfileRequest
 import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.StatusResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
+import com.alex.hubplay.data.api.dto.RecommendedResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
 import com.alex.hubplay.data.api.dto.UpdateProgressRequest
 import com.alex.hubplay.data.api.dto.WatchBeaconResponse
@@ -214,6 +215,7 @@ class ProgressReporterTest {
         override suspend fun getContinueWatching(): ContinueWatchingResponse = TODO()
         override suspend fun getHomeLayout(): HomeLayoutResponse              = TODO()
         override suspend fun getTrending(limit: Int): TrendingResponse        = TODO()
+        override suspend fun getRecommended(limit: Int): RecommendedResponse = TODO()
         override suspend fun getLatest(limit: Int, libraryId: String?, type: String?): LatestResponse = TODO()
         override suspend fun listItems(type: String?, limit: Int, offset: Int, sortBy: String?, sortOrder: String?): LatestResponse = TODO()
         override suspend fun getLibraries(): LibrariesResponse                = TODO()

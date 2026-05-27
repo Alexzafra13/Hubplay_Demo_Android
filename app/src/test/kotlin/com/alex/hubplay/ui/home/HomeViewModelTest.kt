@@ -166,6 +166,10 @@ class HomeViewModelTest {
             if (throwOnAll) throw RuntimeException("network")
             return trending
         }
+        override suspend fun fetchRecommended(limit: Int): List<Content> {
+            if (throwOnAll) throw RuntimeException("network")
+            return emptyList()
+        }
         override suspend fun fetchContinueWatching(): List<Content.Resumable> {
             if (throwOnAll || throwOnContinueWatching) throw RuntimeException("network")
             return continueWatching

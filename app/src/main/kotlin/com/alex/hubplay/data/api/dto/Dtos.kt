@@ -241,6 +241,48 @@ data class TrendingResponse(
 )
 
 /**
+ * /me/home/recommended response — genre-affinity picks seeded from the
+ * user's watch history. Same fields as TrendingItemDto plus the
+ * `recommended_because` block carrying the matched genres (e.g. ["Acción",
+ * "Drama"]) so the hero chip can show "Porque te gusta Acción y Drama"
+ * instead of a generic "Recomendado".
+ *
+ * Verified against me_home.go::Recommended().
+ */
+@JsonClass(generateAdapter = true)
+data class RecommendedBecauseDto(
+    val genres: List<String> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class RecommendedItemDto(
+    val id:    String,
+    val type:  String?  = null,
+    val title: String?  = null,
+    val year:  Int?     = null,
+    @Json(name = "community_rating")    val communityRating:    Float? = null,
+    @Json(name = "library_id")          val libraryId:          String? = null,
+    @Json(name = "poster_url")          val posterUrl:          String? = null,
+    @Json(name = "backdrop_url")        val backdropUrl:        String? = null,
+    @Json(name = "logo_url")            val logoUrl:            String? = null,
+    @Json(name = "poster_blurhash")     val posterBlurhash:     String? = null,
+    @Json(name = "recommended_because") val recommendedBecause: RecommendedBecauseDto? = null,
+    val overview: String? = null,
+    val genres:   List<String> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class RecommendedPayload(
+    val items: List<RecommendedItemDto> = emptyList(),
+    val total: Int = 0,
+)
+
+@JsonClass(generateAdapter = true)
+data class RecommendedResponse(
+    val data: RecommendedPayload? = null,
+)
+
+/**
  * Verified against the live HubPlay handler at me_home.go::LiveNow().
  * Field names are NOT what the spec says — the backend ships its
  * actual response shape and the openapi.yaml in the repo has drifted.

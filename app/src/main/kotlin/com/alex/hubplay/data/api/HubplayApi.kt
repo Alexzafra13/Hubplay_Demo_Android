@@ -20,6 +20,7 @@ import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.NextUpResponse
 import com.alex.hubplay.data.api.dto.ProfilesResponse
+import com.alex.hubplay.data.api.dto.RecommendedResponse
 import com.alex.hubplay.data.api.dto.SearchResponse
 import com.alex.hubplay.data.api.dto.SwitchProfileRequest
 import com.alex.hubplay.data.api.dto.SwitchProfileResponse
@@ -61,6 +62,15 @@ interface HubplayApi {
     /** GET /api/v1/me/home/trending — enriched with backdrop / logo / overview. */
     @GET("me/home/trending")
     suspend fun getTrending(@Query("limit") limit: Int = 12): TrendingResponse
+
+    /**
+     * GET /api/v1/me/home/recommended — genre-affinity picks seeded from
+     * the user's watch history. Powers the third tier of the home hero
+     * carousel ("Porque te gusta {{genre}}"). Server default limit is 5,
+     * max 20.
+     */
+    @GET("me/home/recommended")
+    suspend fun getRecommended(@Query("limit") limit: Int = 5): RecommendedResponse
 
     /**
      * GET /api/v1/items/latest — newest items in a library.
