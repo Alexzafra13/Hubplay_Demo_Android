@@ -5,43 +5,42 @@ import com.alex.hubplay.data.api.dto.RefreshRequest
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Bearer-token interceptor with automatic refresh on 401.
  *
- * Flow:
- *   1. Inject Authorization: Bearer <accessToken> on every request.
- *   2. If the response is 401, lock and try a refresh exactly once.
- *   3. On refresh success: store the new tokens, retry the original
- *      request once with the fresh access token.
- *   4. On refresh failure: wipe tokens. The reactive AuthState flow
- *      will pop the UI back to Login automatically.
+ * Token reads use [TokenStore.snapshotNow] — a non-blocking in-memory
+ * read from the hot [MutableStateFlow]. Token writes after a successful
+ * refresh use [TokenStore.storeTokensImmediate] which updates the
+ * in-memory state synchronously and persists to disk asynchronously, so
+ * the retry reads the fresh token without waiting for DataStore I/O.
  *
- * The AtomicBoolean serializes refreshes across concurrent failed
- * requests — without it 5 parallel 401s would each kick off their own
- * refresh and race. The first one that wins drains the queue.
+ * Refresh coordination: `synchronized(refreshLock)` ensures exactly one
+ * thread refreshes; others block on the monitor, then double-check
+ * whether the token was already updated before attempting their own
+ * refresh. This eliminates the `Thread.sleep(150)` race from the
+ * previous `AtomicBoolean` approach.
  *
- * NOTE: AuthApi here is a *different* Retrofit instance than the main
- * api (no interceptor) so we can't recurse infinitely. Constructed in
- * AppContainer.
+ * The only remaining `runBlocking` wraps the Retrofit suspend call to
+ * the refresh endpoint — that's a plain HTTP call on OkHttp's thread
+ * pool, which is exactly what those threads are designed for. The
+ * refresh client is a separate [OkHttpClient] without this interceptor,
+ * so recursion is impossible.
  */
 class AuthInterceptor(
     private val tokenStore: TokenStore,
     private val refreshApi: AuthApi,
 ) : Interceptor {
 
-    private val isRefreshing = AtomicBoolean(false)
+    private val refreshLock = Any()
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        val state    = runBlocking { tokenStore.snapshot() }
+        val accessToken = tokenStore.snapshotNow().accessToken
         val original = chain.request()
-        val accessToken = state.accessToken
 
-        // Auth endpoints don't need (and would loop on) bearer auth.
         val skipAuth = original.url.encodedPath.let {
-            it.endsWith("/auth/login")    ||
-            it.endsWith("/auth/refresh")  ||
+            it.endsWith("/auth/login") ||
+            it.endsWith("/auth/refresh") ||
             it.endsWith("/auth/device/start") ||
             it.endsWith("/auth/device/poll")
         }
@@ -57,43 +56,45 @@ class AuthInterceptor(
         val response = chain.proceed(request)
         if (response.code != 401 || skipAuth) return response
 
-        // Try a single refresh + retry. Whoever sets isRefreshing wins;
-        // the others read the freshly stored token and retry too.
-        val refreshToken = state.refreshToken ?: return response.alsoWipe()
-        if (isRefreshing.compareAndSet(false, true)) {
-            try {
-                val refreshed = runCatching {
-                    runBlocking { refreshApi.refresh(RefreshRequest(refreshToken = refreshToken)) }
-                }.getOrNull() ?: return response.alsoWipe()
-
-                runBlocking {
-                    val token = refreshed.data ?: return@runBlocking
-                    tokenStore.storeTokens(
-                        access  = token.accessToken  ?: return@runBlocking,
-                        refresh = token.refreshToken ?: return@runBlocking,
-                    )
-                }
-            } finally {
-                isRefreshing.set(false)
+        synchronized(refreshLock) {
+            val current = tokenStore.snapshotNow()
+            if (current.accessToken != null && current.accessToken != accessToken) {
+                response.close()
+                return chain.proceed(
+                    original.newBuilder()
+                        .header("Authorization", "Bearer ${current.accessToken}")
+                        .build(),
+                )
             }
-        } else {
-            // Another thread is refreshing — give it a beat. The retry
-            // below picks up whichever access token is now stored.
-            Thread.sleep(150)
+
+            val refreshToken = current.refreshToken
+            if (refreshToken.isNullOrBlank()) {
+                tokenStore.clearImmediate()
+                return response
+            }
+
+            val refreshed = runCatching {
+                runBlocking { refreshApi.refresh(RefreshRequest(refreshToken = refreshToken)) }
+            }.getOrNull()
+
+            val newAccess = refreshed?.data?.accessToken
+            val newRefresh = refreshed?.data?.refreshToken
+
+            if (newAccess != null && newRefresh != null) {
+                tokenStore.storeTokensImmediate(newAccess, newRefresh)
+            } else {
+                tokenStore.clearImmediate()
+                return response
+            }
         }
 
-        // Retry once with the fresh token.
         response.close()
-        val newAccess = runBlocking { tokenStore.snapshot().accessToken }
+        val freshToken = tokenStore.snapshotNow().accessToken
             ?: return chain.proceed(request)
-        val retried = original.newBuilder()
-            .header("Authorization", "Bearer $newAccess")
-            .build()
-        return chain.proceed(retried)
-    }
-
-    private fun Response.alsoWipe(): Response {
-        runBlocking { tokenStore.clear() }
-        return this
+        return chain.proceed(
+            original.newBuilder()
+                .header("Authorization", "Bearer $freshToken")
+                .build(),
+        )
     }
 }

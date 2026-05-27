@@ -8,10 +8,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.SupervisorJob
 
@@ -49,15 +53,63 @@ class TokenStore(private val context: Context) {
     val activeProfileIdFlow: Flow<String?>   = context.dataStore.data.map { it[keyActiveProfileId] }
     val activeProfileNameFlow: Flow<String?> = context.dataStore.data.map { it[keyActiveProfileName] }
 
+    private val persistScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val _authState = MutableStateFlow(AuthState(false, null, null, null, null, null))
+
     /**
      * Hot derived state: any consumer composable can collectAsState() on
-     * this and React to login / logout without a manual subscription.
+     * this and react to login / logout without a manual subscription.
+     *
+     * Backed by a [MutableStateFlow] that mirrors DataStore emissions AND
+     * accepts synchronous writes from the interceptor path (see
+     * [storeTokensImmediate], [clearImmediate]). This eliminates
+     * `runBlocking` in the OkHttp thread pool.
      */
-    val authStateFlow = combine().stateIn(
-        scope        = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-        started      = SharingStarted.Eagerly,
-        initialValue = AuthState(false, null, null, null, null, null),
-    )
+    val authStateFlow: StateFlow<AuthState> = _authState.asStateFlow()
+
+    init {
+        combine()
+            .onEach { _authState.value = it }
+            .launchIn(persistScope)
+    }
+
+    /** Non-blocking read for interceptors — always returns immediately. */
+    fun snapshotNow(): AuthState = _authState.value
+
+    /**
+     * Update tokens synchronously in memory, then persist to disk async.
+     * The interceptor can call [snapshotNow] right after and see the new
+     * tokens without waiting for DataStore I/O.
+     */
+    fun storeTokensImmediate(access: String, refresh: String) {
+        _authState.update { current ->
+            current.copy(
+                accessToken = access,
+                refreshToken = refresh,
+                isAuthenticated = access.isNotBlank() && !current.serverUrl.isNullOrBlank(),
+            )
+        }
+        persistScope.launch { storeTokens(access, refresh) }
+    }
+
+    /**
+     * Clear tokens synchronously in memory, then persist to disk async.
+     * Used by [AuthInterceptor] when refresh fails — the reactive
+     * [authStateFlow] pops the UI back to Login.
+     */
+    fun clearImmediate() {
+        _authState.update {
+            it.copy(
+                accessToken = null,
+                refreshToken = null,
+                isAuthenticated = false,
+                activeProfileId = null,
+                activeProfileName = null,
+            )
+        }
+        persistScope.launch { clear() }
+    }
 
     private fun combine(): Flow<AuthState> {
         return kotlinx.coroutines.flow.combine(
@@ -176,14 +228,8 @@ class TokenStore(private val context: Context) {
      */
     suspend fun snapshot(): AuthState = authStateFlow.first()
 
-    /**
-     * Synchronous read of the persisted server URL. Used by the SSE
-     * stream's reconnect loop, where suspending across the EventSource
-     * factory call would complicate the cancellation story. Acceptable
-     * because DataStore reads are cheap and the call happens at
-     * connect-time, not per-event.
-     */
-    fun serverUrlBlocking(): String? = runBlocking { serverUrlFlow.first() }
+    /** @see snapshotNow — prefer that for new code. */
+    fun serverUrlBlocking(): String? = snapshotNow().serverUrl
 }
 
 data class AuthState(
