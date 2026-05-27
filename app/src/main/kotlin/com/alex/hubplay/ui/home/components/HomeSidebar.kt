@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -115,18 +114,18 @@ fun HomeSidebar(
         label         = "sidebar-width",
     )
 
+    // El sidebar se ancla a la izquierda del Box padre (HomeScreen lo
+    // posiciona con `align(CenterStart)` + `zIndex`). El Column toma su
+    // `animatedWidth` natural, sin pelearse con un slot fijo del Row —
+    // así la expansión a 220dp se ve completa sin clip alguno.
     Box(
         modifier = modifier
-            .width(SIDEBAR_WIDTH)
+            .width(animatedWidth)
             .fillMaxHeight(),
     ) {
         Column(
             modifier = Modifier
-                // requiredWidth deja al Column salirse de los 52dp que el
-                // Row padre nos asigna — la geometría del Row no cambia,
-                // pero visualmente la sidebar cubre más espacio al
-                // expandirse, montando encima del rail vecino.
-                .requiredWidth(animatedWidth)
+                .width(animatedWidth)
                 .fillMaxHeight()
                 .background(
                     Brush.horizontalGradient(

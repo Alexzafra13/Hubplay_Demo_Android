@@ -12,7 +12,6 @@ import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -66,6 +65,7 @@ import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.HeroInfo
 import com.alex.hubplay.ui.home.components.HomeSidebar
+import com.alex.hubplay.ui.home.components.SIDEBAR_WIDTH
 import com.alex.hubplay.ui.livetv.ChannelPreviewPlayer
 import com.alex.hubplay.ui.home.components.HomeRail
 import com.alex.hubplay.ui.home.components.LiveNowRail
@@ -364,27 +364,18 @@ fun HomeScreen(
                     )
 
                     // ── Layer 2: Content ────────────────────────────────
-                    Row(modifier = Modifier.fillMaxSize()) {
+                    // Sidebar overlay: el sidebar se ancla a CenterStart
+                    // por encima del contenido. El contenido reserva
+                    // SIDEBAR_WIDTH dp con padding-start para no quedar
+                    // tapado en estado colapsado; al expandirse, el
+                    // sidebar monta sobre el contenido (no lo desplaza).
+                    val visibleTabs = LocalVisibleTabs.current
 
-                        val visibleTabs = LocalVisibleTabs.current
-                        HomeSidebar(
-                            onNavigateToTab = onNavigateToTab,
-                            onOpenSearch = { onNavigateToTab(Tab.Search) },
-                            onOpenSettings = onOpenSettings,
-                            visibleTabs = visibleTabs,
-                            // zIndex alto para que cuando el sidebar se
-                            // expande (foco entrando), el overflow visual
-                            // se dibuje POR ENCIMA del rail vecino — sin
-                            // tocar la geometría del Row (que sigue
-                            // viendo el sidebar a SIDEBAR_WIDTH).
-                            modifier = Modifier.zIndex(SidebarZIndex),
-                        )
-
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                        ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(start = SIDEBAR_WIDTH),
+                    ) {
                             // ── Hero info — fixed, top half ───────────
                             HeroInfo(
                                 item = heroItem,
@@ -464,7 +455,22 @@ fun HomeScreen(
                                 }
                             }
                         }
-                    }
+
+                    // ── Sidebar overlay — encima del contenido ──────────
+                    // Anclado a CenterStart con zIndex alto. En estado
+                    // colapsado ocupa SIDEBAR_WIDTH (que el Column de arriba
+                    // reservó con padding-start). Al recibir foco se
+                    // expande a SidebarExpandedWidth y monta por encima
+                    // del rail vecino sin desplazar nada.
+                    HomeSidebar(
+                        onNavigateToTab = onNavigateToTab,
+                        onOpenSearch    = { onNavigateToTab(Tab.Search) },
+                        onOpenSettings  = onOpenSettings,
+                        visibleTabs     = visibleTabs,
+                        modifier        = Modifier
+                            .align(Alignment.CenterStart)
+                            .zIndex(SidebarZIndex),
+                    )
                 }
             }
         }
