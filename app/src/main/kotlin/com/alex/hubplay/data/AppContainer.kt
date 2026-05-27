@@ -5,7 +5,6 @@ import com.alex.hubplay.BuildConfig
 import com.alex.hubplay.data.api.AuthApi
 import com.alex.hubplay.data.api.HubplayApi
 import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,7 +37,6 @@ class AppContainer(context: Context) {
     val authStateFlow = tokenStore.authStateFlow
 
     private val moshi: Moshi = Moshi.Builder()
-        .add(KotlinJsonAdapterFactory())
         .build()
 
     /**
@@ -101,8 +99,17 @@ class AppContainer(context: Context) {
         .sslSocketFactory(pinnedSslSocketFactory, pinnedTrustManager)
         .hostnameVerifier(pinnedHostnameVerifier)
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(0, TimeUnit.SECONDS)   // 0 = no timeout — required for SSE
+        .readTimeout(30, TimeUnit.SECONDS)
         .also { if (BuildConfig.DEBUG) it.addInterceptor(loggingInterceptor()) }
+        .build()
+
+    /**
+     * Derived client for SSE (/me/events) and HLS streaming — infinite
+     * read timeout so long-lived connections don't get killed. Shares the
+     * connection pool, auth interceptor, and TLS config with [mainOkHttp].
+     */
+    val sseOkHttp: OkHttpClient = mainOkHttp.newBuilder()
+        .readTimeout(0, TimeUnit.SECONDS)
         .build()
 
     val retrofit: Retrofit = Retrofit.Builder()
@@ -127,7 +134,7 @@ class AppContainer(context: Context) {
      */
     val hubplayApi: HubplayApi = retrofit.create(HubplayApi::class.java)
 
-    val homeRepository: HomeRepository = HomeRepository(hubplayApi, tokenStore)
+    val homeRepository: HomeRepository = HomeRepositoryImpl(hubplayApi, tokenStore)
 
     /**
      * Per-library channel order + hidden-set persistence. Used by the
@@ -151,7 +158,7 @@ class AppContainer(context: Context) {
      * Server-Sent Events stream over `/me/events` — drives cross-device
      * sync of Continue Watching, played/unplayed and favourites.
      */
-    val meEventsStream: MeEventsStream = MeEventsStream(mainOkHttp, tokenStore, moshi)
+    val meEventsStream: MeEventsStream = MeEventsStream(sseOkHttp, tokenStore, moshi)
 
     /**
      * Drives the visibility of the "Colecciones" tab in TopNav — we

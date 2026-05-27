@@ -9,21 +9,42 @@ import com.alex.hubplay.data.api.dto.NextUpItemDto
 import com.alex.hubplay.data.api.dto.TrendingItemDto
 
 /**
- * Owns reads against the home / catalogue surface and maps them into
- * UI-shaped [MediaItem] / [HomeData] objects so screens never see wire
- * DTOs.
+ * Contract for the home / catalogue data surface. Screens and ViewModels
+ * depend on this interface; the concrete [HomeRepositoryImpl] wires up
+ * Retrofit + TokenStore. Tests swap in a [FakeHomeRepository].
  */
-class HomeRepository(
+interface HomeRepository {
+    suspend fun fetchContinueWatching(): List<MediaItem>
+    suspend fun fetchTrending(limit: Int = 12): List<MediaItem>
+    suspend fun fetchLatest(libraryId: String? = null, type: String? = null, limit: Int = 20): List<MediaItem>
+    suspend fun fetchLibraries(): Map<String, String>
+    suspend fun fetchLiveNow(limit: Int = 10): List<MediaItem>
+    suspend fun fetchHomeLayout(): List<HomeRailConfig>
+    suspend fun fetchChildren(parentId: String): List<MediaItem>
+    suspend fun fetchNextUp(): List<MediaItem>
+    suspend fun fetchCatalogue(type: String, limit: Int = 60, offset: Int = 0, sortBy: String = "added_at", sortOrder: String = "desc"): List<MediaItem>
+    suspend fun fetchCollections(): List<CollectionSummary>
+    suspend fun fetchCollectionDetail(id: String): CollectionDetail
+    suspend fun fetchItemDetail(itemId: String): MediaItem
+    suspend fun toggleItemFavorite(itemId: String): Boolean
+    suspend fun searchItems(query: String, limit: Int = 60): List<MediaItem>
+}
+
+/**
+ * Production implementation. Maps wire DTOs into UI-shaped domain types
+ * so screens never see the API surface directly.
+ */
+class HomeRepositoryImpl(
     private val api:        HubplayApi,
     private val tokenStore: TokenStore,
-) {
+) : HomeRepository {
 
-    suspend fun fetchContinueWatching(): List<MediaItem> {
+    override suspend fun fetchContinueWatching(): List<MediaItem> {
         val server = serverUrl()
         return api.getContinueWatching().data.orEmpty().map { it.toMedia(server) }
     }
 
-    suspend fun fetchTrending(limit: Int = 12): List<MediaItem> {
+    override suspend fun fetchTrending(limit: Int): List<MediaItem> {
         val server = serverUrl()
         return api.getTrending(limit).data?.items.orEmpty().map { it.toMedia(server) }
     }
@@ -39,10 +60,10 @@ class HomeRepository(
      * set. Same idea for movie libraries: `type=movie` strips out
      * orphan episodes that might exist in a mixed library.
      */
-    suspend fun fetchLatest(
-        libraryId: String? = null,
-        type:      String? = null,
-        limit:     Int     = 20,
+    override suspend fun fetchLatest(
+        libraryId: String?,
+        type:      String?,
+        limit:     Int,
     ): List<MediaItem> {
         val server = serverUrl()
         return api.getLatest(limit, libraryId, type)
@@ -55,13 +76,13 @@ class HomeRepository(
      * The home layout rails reference libraries by id; we need the type
      * to pick the right `type=` filter for `/items/latest`.
      */
-    suspend fun fetchLibraries(): Map<String, String> {
+    override suspend fun fetchLibraries(): Map<String, String> {
         return api.getLibraries().data.orEmpty().associate { lib ->
             lib.id to (lib.contentType ?: "mixed")
         }
     }
 
-    suspend fun fetchLiveNow(limit: Int = 10): List<MediaItem> {
+    override suspend fun fetchLiveNow(limit: Int): List<MediaItem> {
         val server = serverUrl()
         return api.getLiveNow(limit).data?.items.orEmpty().map { it.toMedia(server) }
     }
@@ -72,7 +93,7 @@ class HomeRepository(
      * layout is stored the server synthesises a sensible default;
      * either way we get a list of [HomeRailConfig] in display order.
      */
-    suspend fun fetchHomeLayout(): List<HomeRailConfig> {
+    override suspend fun fetchHomeLayout(): List<HomeRailConfig> {
         val data = api.getHomeLayout().data ?: return defaultHomeLayout()
         return data.sections
             .filter { it.visible }
@@ -112,13 +133,13 @@ class HomeRepository(
      * The list comes back in scanner order; SeriesScreen filters by type
      * and sorts by season_number / episode_number itself.
      */
-    suspend fun fetchChildren(parentId: String): List<MediaItem> {
+    override suspend fun fetchChildren(parentId: String): List<MediaItem> {
         val server = serverUrl()
         return api.getChildren(parentId).data.orEmpty().map { it.toMedia(server) }
     }
 
     /** /me/next-up — queued episodes across every series. */
-    suspend fun fetchNextUp(): List<MediaItem> {
+    override suspend fun fetchNextUp(): List<MediaItem> {
         return api.getNextUp().data.orEmpty().map { it.toMedia() }
     }
 
@@ -128,12 +149,12 @@ class HomeRepository(
      * ordered by added_at desc (newest first), which matches the
      * default the web client uses on /movies and /series.
      */
-    suspend fun fetchCatalogue(
+    override suspend fun fetchCatalogue(
         type:      String,
-        limit:     Int     = 60,
-        offset:    Int     = 0,
-        sortBy:    String  = "added_at",
-        sortOrder: String  = "desc",
+        limit:     Int,
+        offset:    Int,
+        sortBy:    String,
+        sortOrder: String,
     ): List<MediaItem> {
         val server = serverUrl()
         return api.listItems(
@@ -155,7 +176,7 @@ class HomeRepository(
      * a fresh deployment); failure throws. Caller distinguishes both
      * via runCatching.
      */
-    suspend fun fetchCollections(): List<CollectionSummary> {
+    override suspend fun fetchCollections(): List<CollectionSummary> {
         val server = serverUrl()
         return api.listCollections().data?.collections.orEmpty().map { it.toDomain(server) }
     }
@@ -164,7 +185,7 @@ class HomeRepository(
      * GET /collections/{id} — saga hero + member movies in release
      * order. Wraps both in [CollectionDetail] for the screen.
      */
-    suspend fun fetchCollectionDetail(id: String): CollectionDetail {
+    override suspend fun fetchCollectionDetail(id: String): CollectionDetail {
         val server = serverUrl()
         val data = api.getCollection(id).data
             ?: error("collections/$id returned no data envelope")
@@ -187,7 +208,7 @@ class HomeRepository(
         backdropUrl = absolutize(backdropUrl, server),
     )
 
-    suspend fun fetchItemDetail(itemId: String): MediaItem {
+    override suspend fun fetchItemDetail(itemId: String): MediaItem {
         val server = serverUrl()
         val data = api.getItem(itemId).data
             ?: error("items/$itemId returned no data envelope")
@@ -231,7 +252,7 @@ class HomeRepository(
      * a stale optimistic update gets corrected on the next /me/events
      * tick.
      */
-    suspend fun toggleItemFavorite(itemId: String): Boolean {
+    override suspend fun toggleItemFavorite(itemId: String): Boolean {
         val resp = api.toggleItemFavorite(itemId)
         return resp.data?.isFavorite == true
     }
@@ -242,7 +263,7 @@ class HomeRepository(
      * navigate to Detail/Series with the existing rules. Empty query
      * short-circuits without hitting the network.
      */
-    suspend fun searchItems(query: String, limit: Int = 60): List<MediaItem> {
+    override suspend fun searchItems(query: String, limit: Int): List<MediaItem> {
         val q = query.trim()
         if (q.isEmpty()) return emptyList()
         val server = serverUrl()

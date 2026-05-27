@@ -14,6 +14,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,8 +28,8 @@ import kotlinx.coroutines.supervisorScope
 
 @OptIn(FlowPreview::class)
 class HomeViewModel(
-    private val repository:     HomeRepository,
-    private val meEventsStream: MeEventsStream,
+    private val repository:  HomeRepository,
+    private val eventsFlow:  Flow<MeEvent>,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(HomeUiState(isLoading = true))
@@ -86,7 +87,7 @@ class HomeViewModel(
             .onEach { item -> fetchTrailerInfo(item) }
             .launchIn(viewModelScope)
 
-        meEventsStream.events()
+        eventsFlow
             .onEach { event ->
                 when (event) {
                     is MeEvent.ProgressUpdated, is MeEvent.PlayedToggled -> rebuildDebouncer.tryEmit(Unit)
@@ -215,11 +216,10 @@ class HomeViewModel(
         }
     }
 
-    @Volatile
-    var trailerCurrentTimeSec: Long = 0L
-        private set
+    private val _trailerCurrentTimeSec = MutableStateFlow(0L)
+    val trailerCurrentTimeSec: StateFlow<Long> = _trailerCurrentTimeSec.asStateFlow()
 
-    fun onTrailerTimeUpdate(sec: Long) { trailerCurrentTimeSec = sec }
+    fun onTrailerTimeUpdate(sec: Long) { _trailerCurrentTimeSec.value = sec }
 
     private var firstFocusConsumed: Boolean = false
 
@@ -279,7 +279,7 @@ class HomeViewModel(
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return HomeViewModel(repository, meEventsStream) as T
+                    return HomeViewModel(repository, meEventsStream.events()) as T
                 }
             }
     }
