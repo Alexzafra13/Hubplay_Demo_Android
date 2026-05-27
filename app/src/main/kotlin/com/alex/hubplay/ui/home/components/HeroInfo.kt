@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -35,11 +37,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +71,14 @@ fun HeroInfo(
      *  un foco previo guardado en otro sitio (p.ej. un rail tras back-nav)
      *  que debe ganar la carrera. */
     requestInitialFocus: Boolean = true,
+    /** Total de slots del carousel (5 trending). 0 = no mostrar dots. */
+    carouselSize:        Int      = 0,
+    /** Índice del slot que rinde actualmente. Solo se muestran dots si
+     *  el carousel realmente está activo (focusedItem null upstream).
+     *  Driven por HomeViewModel.heroSlideIndex. */
+    carouselIndex:       Int      = 0,
+    /** Callback al pulsar ←/→ con foco en el botón Play. ±1 normalmente. */
+    onShiftSlide:        (Int) -> Unit = {},
     modifier:            Modifier = Modifier,
 ) {
     if (item == null) return
@@ -117,18 +133,10 @@ fun HeroInfo(
                 // Meta row: genre · duration · year · rating
                 HeroMetaRow(displayItem)
 
-                // Overview
-                displayItem.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = overview,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFCCCFD6),
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 22.sp,
-                    )
-                }
+                // El Home hero es minimalista — solo logo + meta + CTAs.
+                // La descripción larga vive en Detail screen (donde el
+                // usuario explícitamente pide "más info"). Esto reduce
+                // ruido visual y deja respirar el backdrop / trailer.
 
                 // CTA buttons
                 if (showControls) {
@@ -157,6 +165,29 @@ fun HeroInfo(
                                 .focusRequester(playFocusRequester)
                                 .onFocusChanged { playFocused = it.isFocused }
                                 .scale(playScale)
+                                // Capturamos ←/→ ANTES de que llegue al focus
+                                // engine para que el carousel del hero rote
+                                // sin mover el foco lateralmente (a ningún
+                                // sitio, porque el Play es el primer botón).
+                                // El usuario percibe: foco en Play, ←→ cambia
+                                // de slide y los datos del hero se refrescan.
+                                .onPreviewKeyEvent { ev ->
+                                    if (ev.type != KeyEventType.KeyDown || carouselSize <= 1) {
+                                        false
+                                    } else {
+                                        when (ev.key) {
+                                            Key.DirectionLeft -> {
+                                                onShiftSlide(-1)
+                                                true
+                                            }
+                                            Key.DirectionRight -> {
+                                                onShiftSlide(+1)
+                                                true
+                                            }
+                                            else -> false
+                                        }
+                                    }
+                                }
                                 .then(
                                     if (playFocused)
                                         Modifier.border(2.dp, Accent, RoundedCornerShape(10.dp))
@@ -183,6 +214,18 @@ fun HeroInfo(
                             Spacer(Modifier.width(6.dp))
                             Text(stringResource(R.string.home_view_details))
                         }
+                    }
+
+                    // Dots indicator del carousel (solo se rinde si el hero
+                    // está realmente en modo carousel — i.e. carouselSize >0).
+                    // Inspirado en Prime Video: pequeños círculos discretos
+                    // que indican posición sin robar atención al backdrop.
+                    if (carouselSize > 1) {
+                        Spacer(Modifier.height(12.dp))
+                        HeroDots(
+                            count = carouselSize,
+                            activeIndex = carouselIndex.coerceIn(0, carouselSize - 1),
+                        )
                     }
                 }
             }
@@ -253,6 +296,34 @@ private fun HeroMetaRow(item: Content) {
                 )
             }
             composable()
+        }
+    }
+}
+
+/**
+ * Discrete row of dots showing carousel position. Active dot is wider
+ * + brand colour; inactive dots are subtle white-alpha circles.
+ * Non-focusable — the active slide changes via ← / → on the Play
+ * button, not via clicking the dots themselves.
+ */
+@Composable
+private fun HeroDots(count: Int, activeIndex: Int) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        repeat(count) { idx ->
+            val active     = idx == activeIndex
+            val dotShape   = if (active) RoundedCornerShape(3.dp) else CircleShape
+            val dotWidth   = if (active) 18.dp else 6.dp
+            val dotColor   = if (active) Accent else Color.White.copy(alpha = 0.35f)
+            Box(
+                modifier = Modifier
+                    .height(6.dp)
+                    .width(dotWidth)
+                    .clip(dotShape)
+                    .background(dotColor),
+            )
         }
     }
 }

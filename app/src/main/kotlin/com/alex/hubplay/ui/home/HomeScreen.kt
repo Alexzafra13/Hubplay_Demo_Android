@@ -73,6 +73,13 @@ import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.data.LocalTrailerHost
 import com.alex.hubplay.ui.theme.BgBase
 
+/**
+ * Intervalo de auto-rotación del carousel del hero. Coincide con el
+ * cliente web (HeroBanner.tsx, HERO_INTERVAL=8000). Se pausa cuando
+ * cualquier card de rail tiene foco.
+ */
+private const val HERO_AUTOROTATE_MS = 8000L
+
 @OptIn(ExperimentalFoundationApi::class)
 private val SuppressVerticalBringIntoView = object : BringIntoViewSpec {
     override fun calculateScrollDistance(
@@ -102,14 +109,30 @@ fun HomeScreen(
     // que activa el trailer fetch, evitando spam durante navegación rápida.
     val focusedItem by viewModel.focusedItemForUi.collectAsState()
     val trailerInfo by viewModel.trailerInfo.collectAsState()
+    val heroSlideIndex by viewModel.heroSlideIndex.collectAsState()
 
     val isLanding by remember {
         derivedStateOf { focusedItem == null }
     }
 
+    // El hero rinde un item del carousel propio (data.hero, los 5 trending)
+    // SALVO que el usuario haya movido el foco a un rail de abajo — en ese
+    // caso preserva el comportamiento anterior y muestra el focused card.
     val heroItem by remember {
         derivedStateOf {
-            focusedItem ?: ui.data.hero.firstOrNull()
+            focusedItem ?: ui.data.hero.getOrNull(heroSlideIndex) ?: ui.data.hero.firstOrNull()
+        }
+    }
+
+    // Auto-rotación del carousel cada 8s mientras el usuario NO esté
+    // interactuando con el hero ni focused en un rail (cold-start). Cuando
+    // hay foco en cards de abajo o el hero está activo se pausa.
+    LaunchedEffect(ui.data.hero.size, focusedItem == null) {
+        val size = ui.data.hero.size
+        if (size <= 1 || focusedItem != null) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(HERO_AUTOROTATE_MS)
+            viewModel.shiftHeroSlide(1)
         }
     }
 
@@ -362,6 +385,14 @@ fun HomeScreen(
                                 // carrera del foco inicial; si no, HeroInfo
                                 // pide foco al Play como antes.
                                 requestInitialFocus = scrollSnapshot.focusedItemIdByRail.isEmpty(),
+                                // Dots + ←/→ navigation solo cuando el hero
+                                // está en modo carousel propio (no estamos
+                                // viendo el card focused de un rail). Si el
+                                // usuario está en un rail de abajo, hero
+                                // muestra ese card y los dots ocultos.
+                                carouselSize  = if (focusedItem == null) ui.data.hero.size else 0,
+                                carouselIndex = heroSlideIndex,
+                                onShiftSlide  = { delta -> viewModel.shiftHeroSlide(delta) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(0.50f),

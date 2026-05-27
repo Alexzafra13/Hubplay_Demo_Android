@@ -55,6 +55,37 @@ class HomeViewModel(
     private val _trailerInfo = MutableStateFlow<TrailerInfo?>(null)
     val trailerInfo: StateFlow<TrailerInfo?> = _trailerInfo.asStateFlow()
 
+    /**
+     * Hero carousel slide index — selects which trending item the hero
+     * region renders when focus is NOT on a rail card. ←/→ on the hero
+     * Play button shifts the index; an idle timer auto-rotates every
+     * 8s when the hero loses focus (matches web client behaviour, see
+     * web/src/components/home/HeroBanner.tsx).
+     */
+    private val _heroSlideIndex = MutableStateFlow(0)
+    val heroSlideIndex: StateFlow<Int> = _heroSlideIndex.asStateFlow()
+
+    /**
+     * Shift the hero slide by `delta` (typically ±1). Clamps the index
+     * to the current hero size; no-ops if the hero is empty.
+     */
+    fun shiftHeroSlide(delta: Int) {
+        val size = _ui.value.data.hero.size
+        if (size <= 0) return
+        val current = _heroSlideIndex.value
+        // Wrap-around so ← on slot 0 jumps to the last, → on the last
+        // jumps back to 0. Mirrors web's dot navigation.
+        val next = ((current + delta) % size + size) % size
+        _heroSlideIndex.value = next
+    }
+
+    /** Direct setter for auto-rotation; bypasses the wrap math. */
+    fun setHeroSlideIndex(idx: Int) {
+        val size = _ui.value.data.hero.size
+        if (size <= 0) return
+        _heroSlideIndex.value = idx.coerceIn(0, size - 1)
+    }
+
     private val focusBus = MutableSharedFlow<Content?>(
         replay = 0, extraBufferCapacity = 16,
     )
