@@ -163,7 +163,7 @@ fun HubplayNavGraph(
                     if (kind == MediaKind.Series) {
                         navController.navigate(Route.Series.route(itemId))
                     } else {
-                        val resume = viewModel.trailerCurrentTimeSec
+                        val resume = viewModel.trailerCurrentTimeSec.value
                         navController.navigate(Route.Detail.route(itemId, resume))
                     }
                 },
