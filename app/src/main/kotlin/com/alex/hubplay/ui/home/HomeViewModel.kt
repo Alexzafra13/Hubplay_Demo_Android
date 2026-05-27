@@ -11,6 +11,7 @@ import com.alex.hubplay.data.MeEvent
 import com.alex.hubplay.data.MeEventsStream
 import com.alex.hubplay.data.MediaItem
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -44,7 +45,6 @@ class HomeViewModel(
     val focusedItemForUi: StateFlow<MediaItem?> = _focusedItemForUi.asStateFlow()
 
     private val _focusedItem = MutableStateFlow<MediaItem?>(null)
-    val focusedItem: StateFlow<MediaItem?> = _focusedItem.asStateFlow()
 
     /**
      * Trailer info for the currently focused item. Fetched lazily when
@@ -63,6 +63,7 @@ class HomeViewModel(
     )
 
     private val trailerCache = mutableMapOf<String, TrailerInfo?>()
+    private var refreshJob: Job? = null
 
     init {
         refresh()
@@ -136,8 +137,9 @@ class HomeViewModel(
     }
 
     fun refresh() {
+        refreshJob?.cancel()
         _ui.value = _ui.value.copy(isLoading = true, error = null)
-        viewModelScope.launch {
+        refreshJob = viewModelScope.launch {
             val data = supervisorScope {
                 val layoutDef = async {
                     runCatching { repository.fetchHomeLayout() }
@@ -174,17 +176,29 @@ class HomeViewModel(
                     }
                 val latestByRailId = latestRailFetches.awaitAll().toMap()
 
+                val trendingItems = trending.await()
                 HomeData(
-                    hero             = trending.await().take(5),
+                    hero             = trendingItems.take(5),
                     continueWatching = cw.await(),
                     nextUp           = nextUp.await(),
-                    trending         = trending.await(),
+                    trending         = trendingItems,
                     liveNow          = liveNow.await(),
                     rails            = layout,
                     latestByRailId   = latestByRailId,
                 )
             }
-            _ui.value = HomeUiState(isLoading = false, data = data)
+            val hasContent = data.trending.isNotEmpty() || data.continueWatching.isNotEmpty()
+                || data.nextUp.isNotEmpty() || data.liveNow.isNotEmpty()
+                || data.latestByRailId.values.any { it.isNotEmpty() }
+            _ui.value = if (hasContent) {
+                HomeUiState(isLoading = false, data = data)
+            } else {
+                HomeUiState(
+                    isLoading = false,
+                    data = data,
+                    error = "No se pudo cargar el contenido. Comprueba tu conexión e inténtalo de nuevo.",
+                )
+            }
         }
     }
 
