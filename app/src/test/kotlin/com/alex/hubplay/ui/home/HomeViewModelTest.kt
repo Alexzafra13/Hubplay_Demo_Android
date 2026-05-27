@@ -11,31 +11,26 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
-import org.junit.Before
 import org.junit.Test
 
 /**
  * Unit tests for [HomeViewModel]. Uses a [FakeHomeRepository] so we can
  * control what each fetch returns (or throws) without hitting the network.
  *
- * Dispatcher: we swap `Dispatchers.Main` to a [StandardTestDispatcher] so
- * `viewModelScope` coroutines execute in virtual time under our control.
+ * Dispatcher: [Dispatchers.Main] is swapped to an [UnconfinedTestDispatcher]
+ * that **shares the scheduler** with [runTest]'s TestScope. This means
+ * `advanceUntilIdle()` advances the same virtual clock that drives
+ * `viewModelScope` — debounce, delay, and other time-based operators
+ * work correctly without separate time sources fighting each other.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
-
-    private val testDispatcher = StandardTestDispatcher()
-
-    @Before
-    fun setup() {
-        Dispatchers.setMain(testDispatcher)
-    }
 
     @After
     fun tearDown() {
@@ -44,11 +39,11 @@ class HomeViewModelTest {
 
     @Test
     fun `refresh populates ui with data from repository`() = runTest {
-        val repo = FakeHomeRepository(
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val vm = viewModel(FakeHomeRepository(
             trending = listOf(item("t1"), item("t2")),
             continueWatching = listOf(item("cw1")),
-        )
-        val vm = viewModel(repo)
+        ))
         advanceUntilIdle()
 
         val ui = vm.ui.value
@@ -60,8 +55,8 @@ class HomeViewModelTest {
 
     @Test
     fun `refresh shows error when all fetches fail`() = runTest {
-        val repo = FakeHomeRepository(throwOnAll = true)
-        val vm = viewModel(repo)
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val vm = viewModel(FakeHomeRepository(throwOnAll = true))
         advanceUntilIdle()
 
         val ui = vm.ui.value
@@ -72,11 +67,11 @@ class HomeViewModelTest {
 
     @Test
     fun `refresh shows partial data when some fetches fail`() = runTest {
-        val repo = FakeHomeRepository(
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val vm = viewModel(FakeHomeRepository(
             trending = listOf(item("t1")),
             throwOnContinueWatching = true,
-        )
-        val vm = viewModel(repo)
+        ))
         advanceUntilIdle()
 
         val ui = vm.ui.value
@@ -88,6 +83,7 @@ class HomeViewModelTest {
 
     @Test
     fun `hero is first 5 trending items`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val trending = (1..8).map { item("t$it") }
         val vm = viewModel(FakeHomeRepository(trending = trending))
         advanceUntilIdle()
@@ -99,6 +95,7 @@ class HomeViewModelTest {
 
     @Test
     fun `first onCardFocused is consumed by the gate`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val vm = viewModel(FakeHomeRepository(trending = listOf(item("t1"))))
         advanceUntilIdle()
 
@@ -110,6 +107,7 @@ class HomeViewModelTest {
 
     @Test
     fun `second onCardFocused emits to focusedItemForUi`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val vm = viewModel(FakeHomeRepository(trending = listOf(item("t1"))))
         advanceUntilIdle()
 
@@ -124,13 +122,14 @@ class HomeViewModelTest {
 
     @Test
     fun `resetFirstFocusGate re-arms the gate`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val vm = viewModel(FakeHomeRepository(trending = listOf(item("t1"))))
         advanceUntilIdle()
 
-        vm.onCardFocused(item("gate"))  // consumed by gate
+        vm.onCardFocused(item("gate"))
         advanceUntilIdle()
-        vm.resetFirstFocusGate()       // re-arm
-        vm.onCardFocused(item("after-reset"))  // consumed again
+        vm.resetFirstFocusGate()
+        vm.onCardFocused(item("after-reset"))
         advanceUntilIdle()
 
         assertThat(vm.focusedItemForUi.value).isNull()
@@ -138,6 +137,7 @@ class HomeViewModelTest {
 
     @Test
     fun `saveScrollSnapshot persists and exposes snapshot`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val vm = viewModel(FakeHomeRepository())
         advanceUntilIdle()
 
@@ -151,6 +151,7 @@ class HomeViewModelTest {
 
     @Test
     fun `onTrailerTimeUpdate updates trailerCurrentTimeSec`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val vm = viewModel(FakeHomeRepository())
         advanceUntilIdle()
 
@@ -170,11 +171,6 @@ class HomeViewModelTest {
         rating = null, year = null,
     )
 
-    /**
-     * Fake repository that returns canned data. Methods not under test
-     * return empty collections. Set [throwOnAll] to simulate total
-     * network failure, or individual flags for partial failures.
-     */
     private class FakeHomeRepository(
         private val trending: List<MediaItem> = emptyList(),
         private val continueWatching: List<MediaItem> = emptyList(),
@@ -216,7 +212,8 @@ class HomeViewModelTest {
         }
         override suspend fun fetchItemDetail(itemId: String): MediaItem {
             if (throwOnAll) throw RuntimeException("network")
-            return trending.firstOrNull { it.id == itemId } ?: throw RuntimeException("not found")
+            return trending.firstOrNull { it.id == itemId }
+                ?: throw RuntimeException("not found")
         }
         override suspend fun fetchChildren(parentId: String) = emptyList<MediaItem>()
         override suspend fun fetchCatalogue(type: String, limit: Int, offset: Int, sortBy: String, sortOrder: String) = emptyList<MediaItem>()
