@@ -93,10 +93,12 @@ private const val HERO_AUTOROTATE_MS = 8000L
 private const val SidebarZIndex = 5f
 
 /** Fracción que ocupa el hero del alto disponible en modo landing
- *  (no hay foco sobre ningún rail card). Casi 1 — un poco menos que
- *  1.0 para evitar `weight(0f)` en el LazyColumn vecino (Compose no
- *  acepta weights de 0). El usuario percibe "hero pantalla completa". */
-private const val HERO_WEIGHT_LANDING = 0.99f
+ *  (no hay foco sobre ningún rail card). 0.80 deja el 20% inferior
+ *  para que el primer rail asome como peek — el usuario siempre ve
+ *  que hay más contenido sin necesidad de adivinar. Antes era 0.99
+ *  pero los rails con weight ≈ 0.01 no layouteaban cards focusables,
+ *  el focus engine no encontraba target abajo y ↓ no hacía nada. */
+private const val HERO_WEIGHT_LANDING = 0.80f
 
 /** Fracción del hero cuando el usuario baja a los rails. El restante
  *  (~0.45) lo consume la LazyColumn de rails, donde caben 1 rail
