@@ -59,6 +59,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import com.alex.hubplay.R
 import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.data.HomeData
@@ -542,6 +544,22 @@ fun HomeScreen(
                                 }
                             }
                         }
+
+                    // ── Brand wordmark — overlay top-left ───────────────
+                    // Anclado a la esquina arriba-izquierda como header
+                    // discreto. zIndex justo debajo del sidebar (que se
+                    // expande sobre todo). Lo dejamos a la derecha del
+                    // sidebar colapsado para que no compitan visualmente
+                    // por el mismo área de 52dp.
+                    Image(
+                        painter            = painterResource(R.drawable.brand_wordmark),
+                        contentDescription = stringResource(R.string.brand_hubplay),
+                        modifier           = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = SIDEBAR_WIDTH + 20.dp, top = 18.dp)
+                            .height(24.dp)
+                            .zIndex(SidebarZIndex - 1f),
+                    )
 
                     // ── Sidebar overlay — encima del contenido ──────────
                     // Anclado a CenterStart con zIndex alto. En estado
