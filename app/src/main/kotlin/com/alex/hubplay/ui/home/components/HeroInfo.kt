@@ -83,15 +83,22 @@ fun HeroInfo(
      *  — usado por HomeScreen para decidir si el hero ocupa toda la
      *  pantalla (true) o se reduce dejando ver los rails (false). */
     onHeroFocusedChange: (Boolean) -> Unit = {},
+    /** FocusRequester del botón Play, hoisted al caller (HomeScreen)
+     *  para que el primer rail pueda apuntarlo en `focusProperties.up`
+     *  y la navegación ↑ desde un card vuelva al hero. Si es null
+     *  HeroInfo crea uno interno y la navegación ↑ depende del focus
+     *  engine por defecto. */
+    playFocusRequester:  FocusRequester? = null,
     modifier:            Modifier = Modifier,
 ) {
     if (item == null) return
 
-    val playFocusRequester = remember { FocusRequester() }
+    val internalPlayRequester = remember { FocusRequester() }
+    val playRequester = playFocusRequester ?: internalPlayRequester
 
     LaunchedEffect(showControls, requestInitialFocus) {
         if (showControls && requestInitialFocus) {
-            runCatching { playFocusRequester.requestFocus() }
+            runCatching { playRequester.requestFocus() }
         }
     }
 
@@ -166,7 +173,7 @@ fun HeroInfo(
                                 contentColor = OnAccent,
                             ),
                             modifier = Modifier
-                                .focusRequester(playFocusRequester)
+                                .focusRequester(playRequester)
                                 .onFocusChanged {
                                     playFocused = it.isFocused
                                     if (it.isFocused) {

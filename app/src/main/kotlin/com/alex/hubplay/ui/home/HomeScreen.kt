@@ -2,6 +2,7 @@ package com.alex.hubplay.ui.home
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
@@ -14,6 +15,7 @@ import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -92,24 +94,21 @@ private const val HERO_AUTOROTATE_MS = 8000L
  */
 private const val SidebarZIndex = 5f
 
-/** Fracción que ocupa el hero del alto disponible en modo landing
- *  (no hay foco sobre ningún rail card). 0.80 deja el 20% inferior
- *  para que el primer rail asome como peek — el usuario siempre ve
- *  que hay más contenido sin necesidad de adivinar. Antes era 0.99
- *  pero los rails con weight ≈ 0.01 no layouteaban cards focusables,
- *  el focus engine no encontraba target abajo y ↓ no hacía nada. */
-private const val HERO_WEIGHT_LANDING = 0.80f
+/** Altura FIJA de cada rail (título + tira de cards + padding inferior).
+ *  Calculado para landscape cards (240×135dp) + título ~24dp + paddings:
+ *  46 (header) + 135 (card) + 9 (gap) ≈ 190dp. Una constante fija evita
+ *  los "cards aplastados" que producía `fillParentMaxHeight(0.70)`
+ *  durante la animación del peso del padre.
+ *
+ *  Nota: rails con cards Portrait (poster 150×225) overflowan
+ *  verticalmente sobre el siguiente rail. Lo aceptamos para no inflar
+ *  todos los rails. Si se vuelve molesto, ramificar por CardStyle. */
+private val RailHeight = 190.dp
 
-/** Fracción del hero cuando el usuario baja a los rails. El restante
- *  (~0.45) lo consume la LazyColumn de rails, donde caben 1 rail
- *  completo + peek del siguiente — patrón Netflix / Prime Video. */
-private const val HERO_WEIGHT_REDUCED = 0.55f
-
-/** Altura por rail dentro de la LazyColumn, relativa al alto del
- *  propio LazyColumn (que es ~45% del alto de pantalla cuando el hero
- *  está reducido). 0.70 deja un ~30% del rail siguiente asomando
- *  debajo, lo justo para que el usuario sepa que hay más contenido. */
-private const val RAIL_HEIGHT_FRACTION = 0.70f
+/** Fracción del alto de pantalla que ocupa el hero cuando el foco está
+ *  en los rails — Netflix / Prime: ~50% hero, ~50% rails para que
+ *  caben 2 rails y peek del 3º. */
+private const val HERO_REDUCED_FRACTION = 0.50f
 
 @OptIn(ExperimentalFoundationApi::class)
 private val SuppressVerticalBringIntoView = object : BringIntoViewSpec {
@@ -152,18 +151,12 @@ fun HomeScreen(
         derivedStateOf { focusedItem == null || heroButtonsFocused }
     }
 
-    // Hero ocupa toda la pantalla en landing (1.0) y se reduce a 0.55
-    // dejando espacio a los rails cuando el usuario baja a un card.
-    // Spring snappy NoBouncy — la transición se siente parte del propio
-    // movimiento de foco (no una animación añadida).
-    val heroWeight by animateFloatAsState(
-        targetValue = if (isLanding) HERO_WEIGHT_LANDING else HERO_WEIGHT_REDUCED,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness    = Spring.StiffnessMediumLow,
-        ),
-        label = "hero-weight",
-    )
+    // Hoist del playFocusRequester desde HeroInfo. Lo necesitamos en
+    // HomeScreen para hacer `focusProperties.up = { playFocusRequester }`
+    // sobre el primer rail — así pulsar ↑ desde la primera card vuelve
+    // al botón Reproducir en lugar de quedarse atascado (focus engine
+    // por defecto no encuentra el camino cuando el hero está reducido).
+    val playFocusRequester = remember { FocusRequester() }
 
     // El hero rinde un item del carousel propio (data.hero, los 5 trending)
     // SALVO que el usuario haya movido el foco a un rail de abajo — en ese
@@ -430,12 +423,31 @@ fun HomeScreen(
                     // sidebar monta sobre el contenido (no lo desplaza).
                     val visibleTabs = LocalVisibleTabs.current
 
-                    Column(
+                    BoxWithConstraints(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(start = SIDEBAR_WIDTH),
                     ) {
-                            // ── Hero info — fixed, top half ───────────
+                        // Altura disponible para el Column hijo. Usamos
+                        // BoxWithConstraints porque necesitamos saber el
+                        // alto en Dp para calcular el target del hero
+                        // (alto total menos un rail = un rail asoma siempre
+                        // como peek), y rails con altura fija evita
+                        // cards aplastados durante la animación.
+                        val available        = maxHeight
+                        val heroFullHeight    = available - RailHeight
+                        val heroReducedHeight = available * HERO_REDUCED_FRACTION
+                        val heroHeight by animateDpAsState(
+                            targetValue = if (isLanding) heroFullHeight else heroReducedHeight,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness    = Spring.StiffnessMediumLow,
+                            ),
+                            label = "hero-height",
+                        )
+
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // ── Hero info — altura animada ────────────
                             HeroInfo(
                                 item = heroItem,
                                 onPlay = { it?.let { item ->
@@ -458,12 +470,18 @@ fun HomeScreen(
                                 carouselIndex = heroSlideIndex,
                                 onShiftSlide  = { delta -> viewModel.shiftHeroSlide(delta) },
                                 onHeroFocusedChange = { f -> heroButtonsFocused = f },
+                                playFocusRequester = playFocusRequester,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(heroWeight),
+                                    .height(heroHeight),
                             )
 
-                            // ── Rails — LazyColumn, peso restante ─────
+                            // ── Rails — LazyColumn ocupa lo restante,
+                            // pero cada item del LazyColumn tiene altura
+                            // FIJA (RailHeight). No usamos fraction del
+                            // padre porque durante la animación del hero
+                            // los items se redimensionaban y se veían
+                            // aplastados / con cards cortadas.
                             @OptIn(ExperimentalFoundationApi::class)
                             CompositionLocalProvider(
                                 LocalBringIntoViewSpec provides SuppressVerticalBringIntoView,
@@ -472,12 +490,7 @@ fun HomeScreen(
                                     state = listState,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        // El peso "restante" se anima
-                                        // inversamente al del hero —
-                                        // landing: ~0.01 (rails casi
-                                        // invisibles), reduced: ~0.45
-                                        // (rails con peek del siguiente).
-                                        .weight(1f - heroWeight),
+                                        .weight(1f),
                                 ) {
                                     itemsIndexed(
                                         items = rails,
@@ -487,7 +500,7 @@ fun HomeScreen(
                                             .getOrPut(config.id) { FocusRequester() }
                                         Box(
                                             modifier = Modifier
-                                                .fillParentMaxHeight(RAIL_HEIGHT_FRACTION)
+                                                .height(RailHeight)
                                                 .fillMaxWidth()
                                                 .focusGroup()
                                                 // Quitamos `focusRestorer()` exterior: tener dos
@@ -498,7 +511,16 @@ fun HomeScreen(
                                                 // Usamos `focusProperties.enter` para rutear el
                                                 // foco entrante al railRequester de forma
                                                 // declarativa (síncrono al layout, sin race).
-                                                .focusProperties { enter = { railRequester } },
+                                                .focusProperties {
+                                                    enter = { railRequester }
+                                                    // Sólo el PRIMER rail rutea ↑ al
+                                                    // botón Play del hero. Los demás
+                                                    // dejan que el focus engine baje al
+                                                    // rail anterior naturalmente.
+                                                    if (index == 0) {
+                                                        up = playFocusRequester
+                                                    }
+                                                },
                                             contentAlignment = Alignment.TopStart,
                                         ) {
                                             RenderRail(
@@ -538,6 +560,7 @@ fun HomeScreen(
                     )
                 }
             }
+        }
         }
     }
 }
