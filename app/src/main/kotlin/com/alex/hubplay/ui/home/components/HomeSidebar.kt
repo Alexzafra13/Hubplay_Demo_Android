@@ -73,13 +73,21 @@ val SIDEBAR_WIDTH = 52.dp
  *  LG Prime Video TV — el label "Configuración" cabe holgado a 220dp. */
 private val SidebarExpandedWidth = 220.dp
 
-/** Altura de cada fila (icono + posible label). */
-private val SidebarRowHeight = 44.dp
+/** Altura de cada fila (icono + posible label). Compacta para que 7
+ *  filas no ocupen toda la altura visible en pantallas 540dp como
+ *  Mi Box S (1080p × 2.0 density) — antes a 44dp + padding ocupaban
+ *  336dp = 62% pantalla y se veían "esparcidas". */
+private val SidebarRowHeight = 38.dp
 
 /** Tamaño del "pill" blanco que rodea al icono cuando la fila está
- *  enfocada — estilo Prime Video TV. El icono mismo (20dp) queda
+ *  enfocada — estilo Prime Video TV. El icono mismo (18dp) queda
  *  centrado con margen. */
-private val SidebarIconPillSize = 36.dp
+private val SidebarIconPillSize = 30.dp
+
+/** Padding superior antes del primer icono — deja aire para el brand
+ *  wordmark de HomeScreen (que se renderiza a y=18..42dp) y alinea
+ *  el cluster de iconos en el tercio superior estilo Prime Video. */
+private val SidebarContentTopPadding = 72.dp
 
 /** Duraciones de las animaciones de fade del label (in/out). */
 private const val LABEL_FADE_IN_MS  = 180
@@ -163,8 +171,9 @@ fun HomeSidebar(
                 .width(animatedWidth)
                 .fillMaxHeight()
                 .background(sidebarBrush)
+                .padding(top = SidebarContentTopPadding)
                 .focusGroup(),
-            verticalArrangement = Arrangement.Center,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             // Construimos la lista de entradas en runtime para asignar
             // un índice estable a cada SidebarRow (clave del map de
