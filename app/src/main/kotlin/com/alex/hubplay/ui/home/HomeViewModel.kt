@@ -430,6 +430,7 @@ class HomeViewModel(
         private const val UI_FOCUS_DEBOUNCE_MS = 150L
         // Trailer: 500ms para evitar spam de loads en barrido rápido.
         private const val FOCUS_DEBOUNCE_MS = 500L
+
         // Debounce del refresh por SSE. El camino normal ahora es selectivo
         // (solo Continuar viendo + A continuación), que es barato, así que
         // bajamos de 5s a 2s para que el sync cross-device se sienta más vivo
