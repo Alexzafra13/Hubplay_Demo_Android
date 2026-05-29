@@ -95,6 +95,7 @@ class HomeViewModel(
     private val trailerCache       = java.util.concurrent.ConcurrentHashMap<String, TrailerInfo>()
     private val noTrailerItems     = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private var refreshJob: Job? = null
+    private var continueRefreshJob: Job? = null
 
     init {
         refresh()
@@ -129,10 +130,50 @@ class HomeViewModel(
                 }
             }
             .launchIn(viewModelScope)
+        // ProgressUpdated / PlayedToggled solo afectan a "Continuar viendo"
+        // y "A continuación" — refrescamos ESOS dos rails en vez de recargar
+        // layout + libraries + los 6-8 endpoints enteros. Si el Home está en
+        // error (p.ej. arrancamos sin red), el evento SSE prueba que el
+        // servidor ya responde, así que aprovechamos para un refresh completo
+        // de recuperación.
         rebuildDebouncer
             .debounce(SSE_REFRESH_DEBOUNCE_MS)
-            .onEach { refresh() }
+            .onEach {
+                if (_ui.value.error != null) refresh() else refreshContinueRails()
+            }
             .launchIn(viewModelScope)
+    }
+
+    /**
+     * Refresco selectivo disparado por SSE: solo re-fetcha "Continuar viendo"
+     * + "A continuación" y los fusiona en el estado actual, dejando intactos
+     * trending / latest / liveNow / layout. En fallo transitorio NO toca el
+     * estado (no vacía los rails por un blip de red); el siguiente evento o
+     * un refresh completo lo corrige.
+     */
+    private fun refreshContinueRails() {
+        continueRefreshJob?.cancel()
+        continueRefreshJob = viewModelScope.launch {
+            runCatching {
+                supervisorScope {
+                    val cw     = async { repository.fetchContinueWatching() }
+                    val nextUp = async { repository.fetchNextUp() }
+                    cw.await() to nextUp.await()
+                }
+            }.onSuccess { (cw, nextUp) ->
+                val current = _ui.value
+                if (!current.isLoading && current.error == null) {
+                    _ui.value = current.copy(
+                        data = current.data.copy(
+                            continueWatching = cw,
+                            nextUp           = nextUp,
+                        ),
+                    )
+                }
+            }.onFailure { err ->
+                Log.w("HomeViewModel", "continue rails refresh failed: ${err.message}")
+            }
+        }
     }
 
     private fun fetchTrailerInfo(item: Content?) {
@@ -389,10 +430,11 @@ class HomeViewModel(
         private const val UI_FOCUS_DEBOUNCE_MS = 150L
         // Trailer: 500ms para evitar spam de loads en barrido rápido.
         private const val FOCUS_DEBOUNCE_MS = 500L
-        // Refresh por SSE: subido de 1.5s → 5s. ProgressUpdated llega
-        // varias veces por segundo durante playback en otra superficie;
-        // recargar todo el Home cada 1.5s era caro.
-        private const val SSE_REFRESH_DEBOUNCE_MS = 5_000L
+        // Debounce del refresh por SSE. El camino normal ahora es selectivo
+        // (solo Continuar viendo + A continuación), que es barato, así que
+        // bajamos de 5s a 2s para que el sync cross-device se sienta más vivo
+        // sin recargar todo el Home.
+        private const val SSE_REFRESH_DEBOUNCE_MS = 2_000L
 
         /**
          * Cap del hero carousel. Coincide con MAX_SLOTS del web client
