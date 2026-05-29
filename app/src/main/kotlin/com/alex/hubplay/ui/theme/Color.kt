@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.Color
  * CSS variable names to make grepping across the two repos trivial.
  *
  * Theme: HubPlay "Dark editorial" — cool blue-black surfaces with a
- * vivid teal accent.
+ * luminous azure (sky-blue) accent.
  */
 
 // ─── Surfaces ────────────────────────────────────────────────────────────────
@@ -32,13 +32,15 @@ internal val TextPrimary   = Color(0xFFE8EAF0)
 internal val TextSecondary = Color(0xFF8B92A5)
 internal val TextMuted     = Color(0xFF5A6072)
 
-// ─── Accent (Teal) ───────────────────────────────────────────────────────────
-internal val Accent      = Color(0xFF14B8A6)
-internal val AccentHover = Color(0xFF0E9985)
-internal val AccentLight = Color(0xFF2EE3C5)
-internal val AccentSoft  = Color(0x1F14B8A6) // rgba(20,184,166,0.12)
-internal val AccentGlow  = Color(0x5914B8A6) // rgba(20,184,166,0.35)
-internal val OnAccent    = Color(0xFF062B26) // dark teal for max contrast on the accent
+// ─── Accent (Azure — azul cielo) ─────────────────────────────────────────────
+// Azul puro y luminoso, distinto del cian verdoso de Prime Video. Elegido
+// sobre el fondo azul-negro frío para que el realce "respire" sin gritar.
+internal val Accent      = Color(0xFF2A9CF0)
+internal val AccentHover = Color(0xFF1B86D8)
+internal val AccentLight = Color(0xFF7DC6F8)
+internal val AccentSoft  = Color(0x1F2A9CF0) // rgba(42,156,240,0.12)
+internal val AccentGlow  = Color(0x592A9CF0) // rgba(42,156,240,0.35)
+internal val OnAccent    = Color(0xFF04233D) // dark navy for max contrast on the accent
 
 // ─── Semantic ────────────────────────────────────────────────────────────────
 internal val Success     = Color(0xFF22C55E)
