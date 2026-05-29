@@ -272,7 +272,17 @@ fun HomeScreen(
                 val railFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
 
                 DisposableEffect(Unit) {
-                    viewModel.resetFirstFocusGate()
+                    // La "puerta del primer foco" solo debe tragarse el
+                    // auto-focus que el sistema asigna en un aterrizaje
+                    // fresco (para no pisar el carousel del hero). Cuando
+                    // volvemos de Detail con un foco guardado, ese foco
+                    // restaurado es intencional y DEBE conducir el
+                    // backdrop/hero — así que NO armamos la puerta, o el
+                    // backdrop no reflejaría la card restaurada hasta que el
+                    // usuario moviera el D-pad una vez.
+                    if (scrollSnapshot.focusedItemIdByRail.isEmpty()) {
+                        viewModel.resetFirstFocusGate()
+                    }
                     perRailFocused.putAll(scrollSnapshot.focusedItemIdByRail)
                     onDispose {
                         // Usamos `activeRailIndex` (que se setea síncronamente

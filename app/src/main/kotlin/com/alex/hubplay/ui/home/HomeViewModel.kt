@@ -79,13 +79,6 @@ class HomeViewModel(
         _heroSlideIndex.value = next
     }
 
-    /** Direct setter for auto-rotation; bypasses the wrap math. */
-    fun setHeroSlideIndex(idx: Int) {
-        val size = _ui.value.data.hero.size
-        if (size <= 0) return
-        _heroSlideIndex.value = idx.coerceIn(0, size - 1)
-    }
-
     private val focusBus = MutableSharedFlow<Content?>(
         replay = 0, extraBufferCapacity = 16,
     )
@@ -117,9 +110,12 @@ class HomeViewModel(
             .onEach { _focusedItem.value = it }
             .launchIn(viewModelScope)
 
-        // When the focused item settles, fetch trailer info.
+        // `_focusedItem` ya viene estabilizado (debounce FOCUS_DEBOUNCE_MS
+        // sobre `focusBus`), así que disparamos el fetch en cuanto cambia el
+        // id. Un segundo debounce aquí solo sumaba ~600ms de latencia sin
+        // ahorrar llamadas — `focusBus` ya está quieto cuando esto emite, y
+        // la caché por id evita refetches sobre la misma card.
         _focusedItem
-            .debounce(TRAILER_FETCH_DELAY_MS)
             .distinctUntilChangedBy { it?.id }
             .onEach { item -> fetchTrailerInfo(item) }
             .launchIn(viewModelScope)
@@ -411,7 +407,6 @@ class HomeViewModel(
          * margen tras el filtro de "year == currentYear".
          */
         private const val HERO_POOL_SIZE = 12
-        private const val TRAILER_FETCH_DELAY_MS = 600L
 
         fun factory(repository: HomeRepository, meEventsStream: MeEventsStream) =
             object : ViewModelProvider.Factory {
