@@ -207,9 +207,11 @@ fun HeroInfo(
                                     }
                                 }
                                 .then(
-                                    if (playFocused)
+                                    if (playFocused) {
                                         Modifier.border(2.dp, Color.White, RoundedCornerShape(10.dp))
-                                    else Modifier,
+                                    } else {
+                                        Modifier
+                                    },
                                 ),
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
@@ -230,9 +232,11 @@ fun HeroInfo(
                                 }
                                 .scale(detailsScale)
                                 .then(
-                                    if (detailsFocused)
+                                    if (detailsFocused) {
                                         Modifier.border(2.dp, Color.White, RoundedCornerShape(10.dp))
-                                    else Modifier,
+                                    } else {
+                                        Modifier
+                                    },
                                 ),
                         ) {
                             Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.height(18.dp))

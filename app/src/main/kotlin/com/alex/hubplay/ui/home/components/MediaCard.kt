@@ -11,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -131,56 +132,67 @@ fun MediaCard(
             modifier           = Modifier.fillMaxSize(),
         )
 
-        // Scrim + título: aparecen sólo al enfocar (estilo Prime Video).
-        // El degradado oscuro de abajo garantiza legibilidad del título
-        // sobre cualquier artwork claro y da el acabado "editorial".
-        AnimatedVisibility(
-            visible  = focused,
-            enter    = fadeIn(),
-            exit     = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomStart),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.85f),
-                        ),
-                    ),
-            ) {
-                Text(
-                    text       = item.title,
-                    color      = Color.White,
-                    style      = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines   = 1,
-                    overflow   = TextOverflow.Ellipsis,
-                    modifier   = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                )
-            }
-        }
+        FocusTitleOverlay(title = item.title, visible = focused)
 
-        if (progressPct > 0f) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
+        if (progressPct > 0f) ProgressStripe(progressPct = progressPct)
+    }
+}
+
+/**
+ * Scrim + título que aparecen sólo al enfocar (estilo Prime Video). El
+ * degradado oscuro de abajo garantiza legibilidad del título sobre
+ * cualquier artwork claro y da el acabado "editorial".
+ */
+@Composable
+private fun BoxScope.FocusTitleOverlay(title: String, visible: Boolean) {
+    AnimatedVisibility(
+        visible  = visible,
+        enter    = fadeIn(),
+        exit     = fadeOut(),
+        modifier = Modifier.align(Alignment.BottomStart),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        1f to Color.Black.copy(alpha = 0.85f),
+                    ),
+                ),
+        ) {
+            Text(
+                text       = title,
+                color      = Color.White,
+                style      = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines   = 1,
+                overflow   = TextOverflow.Ellipsis,
+                modifier   = Modifier
                     .fillMaxWidth()
-                    .height(3.dp)
-                    .background(Color.Black.copy(alpha = 0.5f)),
-            ) {
-                LinearProgressIndicator(
-                    progress   = { progressPct },
-                    modifier   = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp),
-                    color      = Accent,
-                    trackColor = Color.Transparent,
-                )
-            }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            )
         }
+    }
+}
+
+/** Barra fina de progreso de reproducción anclada al borde inferior. */
+@Composable
+private fun BoxScope.ProgressStripe(progressPct: Float) {
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth()
+            .height(3.dp)
+            .background(Color.Black.copy(alpha = 0.5f)),
+    ) {
+        LinearProgressIndicator(
+            progress   = { progressPct },
+            modifier   = Modifier
+                .fillMaxWidth()
+                .height(3.dp),
+            color      = Accent,
+            trackColor = Color.Transparent,
+        )
     }
 }
