@@ -208,7 +208,7 @@ fun HeroInfo(
                                 }
                                 .then(
                                     if (playFocused)
-                                        Modifier.border(2.dp, Accent, RoundedCornerShape(10.dp))
+                                        Modifier.border(2.dp, Color.White, RoundedCornerShape(10.dp))
                                     else Modifier,
                                 ),
                         ) {
@@ -231,7 +231,7 @@ fun HeroInfo(
                                 .scale(detailsScale)
                                 .then(
                                     if (detailsFocused)
-                                        Modifier.border(2.dp, Accent, RoundedCornerShape(10.dp))
+                                        Modifier.border(2.dp, Color.White, RoundedCornerShape(10.dp))
                                     else Modifier,
                                 ),
                         ) {
