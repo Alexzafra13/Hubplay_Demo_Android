@@ -9,6 +9,7 @@ import com.alex.hubplay.data.MeEvent
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -134,6 +135,30 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `progress event refreshes only the continue-watching rail`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val events = MutableSharedFlow<MeEvent>(extraBufferCapacity = 8)
+        val repo = FakeHomeRepository(
+            trending = listOf(movie("t1"), movie("t2")),
+            continueWatching = listOf(movie("cw1")),
+        )
+        val vm = HomeViewModel(repo, events)
+        advanceUntilIdle()
+        assertThat(vm.ui.value.data.continueWatching).hasSize(1)
+        val trendingBefore = vm.ui.value.data.trending
+
+        // El servidor pasa a tener 2 items en Continuar viendo; un
+        // ProgressUpdated debe refrescar SOLO ese rail tras el debounce,
+        // dejando trending intacto (sin recargar el Home entero).
+        repo.continueWatchingOverride = listOf(movie("cw1"), movie("cw2"))
+        events.tryEmit(MeEvent.ProgressUpdated(itemId = "cw1", positionTicks = 1L, completed = false))
+        advanceUntilIdle()
+
+        assertThat(vm.ui.value.data.continueWatching).hasSize(2)
+        assertThat(vm.ui.value.data.trending).isEqualTo(trendingBefore)
+    }
+
+    @Test
     fun `onTrailerTimeUpdate updates trailerCurrentTimeSec`() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val vm = viewModel(FakeHomeRepository())
@@ -162,6 +187,10 @@ class HomeViewModelTest {
         private val throwOnContinueWatching: Boolean = false,
     ) : HomeRepository {
 
+        /** Permite cambiar el rail de Continuar viendo tras construir el
+         *  fake, para verificar el refresco selectivo por SSE. */
+        var continueWatchingOverride: List<Content.Resumable>? = null
+
         override suspend fun fetchTrending(limit: Int): List<Content> {
             if (throwOnAll) throw RuntimeException("network")
             return trending
@@ -172,7 +201,7 @@ class HomeViewModelTest {
         }
         override suspend fun fetchContinueWatching(): List<Content.Resumable> {
             if (throwOnAll || throwOnContinueWatching) throw RuntimeException("network")
-            return continueWatching
+            return continueWatchingOverride ?: continueWatching
         }
         override suspend fun fetchNextUp(): List<Content.Episode> {
             if (throwOnAll) throw RuntimeException("network")
