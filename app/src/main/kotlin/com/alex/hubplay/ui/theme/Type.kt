@@ -1,6 +1,7 @@
 package com.alex.hubplay.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -19,6 +20,7 @@ import com.alex.hubplay.R
  * binary serves every weight via [FontVariation], keeping the APK lean
  * (~860 KB for one file vs. 4 static cuts).
  */
+@OptIn(ExperimentalTextApi::class)
 private fun interWeight(weight: Int) = Font(
     resId             = R.font.inter_variable,
     weight            = FontWeight(weight),
