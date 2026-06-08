@@ -81,6 +81,45 @@ class DetailViewModel(
         }
     }
 
+    /**
+     * Toggle the played / unplayed state from the overflow menu.
+     * Optimistic, same as [toggleFavorite]: flip the local flag so the
+     * menu label and the Play button update instantly, then reconcile
+     * with the server and revert on failure.
+     *
+     * Marking watched also clears the local resume position — the server
+     * wipes `position_ticks` on `markPlayed`, so the Play CTA should drop
+     * back to "Reproducir" instead of showing a stale "Reanudar 12:34".
+     */
+    fun toggleWatched() {
+        val current = _ui.value.item ?: return
+        val target = when (current) {
+            is Content.Movie   -> !current.watched
+            is Content.Series  -> !current.watched
+            is Content.Episode -> !current.watched
+            else               -> return
+        }
+        val optimistic: Content = when (current) {
+            is Content.Movie -> current.copy(
+                watched      = target,
+                progressPct  = if (target) 0f else current.progressPct,
+                resumePosSec = if (target) 0L else current.resumePosSec,
+            )
+            is Content.Series  -> current.copy(watched = target)
+            is Content.Episode -> current.copy(
+                watched      = target,
+                progressPct  = if (target) 0f else current.progressPct,
+                resumePosSec = if (target) 0L else current.resumePosSec,
+            )
+            else -> return
+        }
+        _ui.value = _ui.value.copy(item = optimistic)
+        viewModelScope.launch {
+            runCatching { repository.setItemWatched(current.id, target) }
+                .onFailure { _ui.value = _ui.value.copy(item = current) } // revert
+        }
+    }
+
     companion object {
         fun factory(repository: HomeRepository, itemId: String) =
             object : ViewModelProvider.Factory {

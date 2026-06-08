@@ -106,6 +106,9 @@
     <string name="detail_resume_format">Resume %1$d:%2$02d</string>
     <string name="detail_play">Play</string>
     <string name="detail_duration_minutes">%1$d min</string>
+    <string name="detail_action_mark_watched">Mark as watched</string>
+    <string name="detail_action_mark_unwatched">Mark as unwatched</string>
+    <string name="detail_action_info">Information</string>
 
     <!-- Series -->
     <string name="series_section_label">SERIES</string>

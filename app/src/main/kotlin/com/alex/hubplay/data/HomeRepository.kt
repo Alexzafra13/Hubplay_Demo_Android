@@ -29,6 +29,7 @@ interface HomeRepository {
     suspend fun fetchCollectionDetail(id: String): CollectionDetail
     suspend fun fetchItemDetail(itemId: String): Content
     suspend fun toggleItemFavorite(itemId: String): Boolean
+    suspend fun setItemWatched(itemId: String, watched: Boolean)
     suspend fun searchItems(query: String, limit: Int = 60): List<Content>
 }
 
@@ -253,6 +254,7 @@ class HomeRepositoryImpl(
                 trailerKey     = data.trailer?.key,
                 trailerSite    = data.trailer?.site,
                 isFavorite     = data.userData?.isFavorite == true,
+                watched        = data.userData?.played == true,
                 collectionId   = data.collection?.id,
                 collectionName = data.collection?.name,
             )
@@ -270,6 +272,7 @@ class HomeRepositoryImpl(
                 trailerKey  = data.trailer?.key,
                 trailerSite = data.trailer?.site,
                 isFavorite  = data.userData?.isFavorite == true,
+                watched     = data.userData?.played == true,
             )
             MediaKind.Episode -> Content.Episode(
                 id           = data.id,
@@ -286,6 +289,7 @@ class HomeRepositoryImpl(
                 resumePosSec = resumeSec,
                 durationSec  = totalSec,
                 isFavorite   = data.userData?.isFavorite == true,
+                watched      = data.userData?.played == true,
             )
             MediaKind.Season -> Content.Season(
                 id          = data.id,
@@ -325,6 +329,17 @@ class HomeRepositoryImpl(
     override suspend fun toggleItemFavorite(itemId: String): Boolean {
         val resp = api.toggleItemFavorite(itemId)
         return resp.data?.isFavorite == true
+    }
+
+    /**
+     * Mark an item played / unplayed from the Detail overflow menu.
+     * `markPlayed` bumps play_count, clears the resume position and
+     * drops the item from Continue Watching; `markUnplayed` is the
+     * undo. Both are idempotent server-side, so the caller can flip the
+     * local state optimistically and just fire-and-await this.
+     */
+    override suspend fun setItemWatched(itemId: String, watched: Boolean) {
+        if (watched) api.markPlayed(itemId) else api.markUnplayed(itemId)
     }
 
     /**

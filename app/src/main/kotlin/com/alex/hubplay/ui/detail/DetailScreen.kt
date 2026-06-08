@@ -4,7 +4,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,11 +25,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Collections
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +46,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,6 +63,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
@@ -64,6 +74,8 @@ import com.alex.hubplay.ui.components.HeroIconButton
 import com.alex.hubplay.data.LocalTrailerHost
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.BgBase
+import com.alex.hubplay.ui.theme.BgElevated
+import com.alex.hubplay.ui.theme.Border
 
 /**
  * Movie detail surface — same cinematic Netflix-style hero pattern as
@@ -101,6 +113,7 @@ fun DetailScreen(
                 onPlay             = onPlay,
                 onBack             = onBack,
                 onToggleFavorite   = viewModel::toggleFavorite,
+                onToggleWatched    = viewModel::toggleWatched,
                 onOpenCollection   = onOpenCollection,
                 trailerResumeSec   = trailerResumeSec,
             )
@@ -114,6 +127,7 @@ private fun HeroFull(
     onPlay:             (String, Long) -> Unit,
     onBack:             () -> Unit,
     onToggleFavorite:   () -> Unit,
+    onToggleWatched:    () -> Unit,
     onOpenCollection:   (String) -> Unit,
     trailerResumeSec:   Long = 0L,
 ) {
@@ -126,6 +140,16 @@ private fun HeroFull(
         ?: (item as? Content.Series)?.isFavorite
         ?: (item as? Content.Episode)?.isFavorite
         ?: false
+    // Only Movies / Series / Episodes carry a watched flag, and only
+    // those expose mark-played on the server. Everything else hides the
+    // toggle (the overflow menu still shows "Información").
+    val watched = (item as? Content.Movie)?.watched
+        ?: (item as? Content.Series)?.watched
+        ?: (item as? Content.Episode)?.watched
+    val canToggleWatched = watched != null
+
+    // Drives the Plex-style full-info dialog raised from the overflow menu.
+    var showInfo by remember { mutableStateOf(false) }
 
     // Backdrop ↔ trailer crossfade. El trailer ya no es local: vive en
     // TrailerHostOverlay (root). Si llegamos desde Home con el trailer
@@ -237,11 +261,16 @@ private fun HeroFull(
                                      else            stringResource(R.string.cd_add_favorite),
                 onClick            = onToggleFavorite,
             )
-            HeroIconButton(
-                icon               = Icons.Default.MoreVert,
-                contentDescription = stringResource(R.string.action_more_options),
-                onClick            = { /* TODO: overflow menu (marcar visto, info, eliminar) */ },
+            OverflowMenuButton(
+                watched          = watched,
+                canToggleWatched = canToggleWatched,
+                onToggleWatched  = onToggleWatched,
+                onShowInfo       = { showInfo = true },
             )
+        }
+
+        if (showInfo) {
+            InfoDialog(item = item, onDismiss = { showInfo = false })
         }
 
         // ── Two-column layout: poster + Play left, info + secondary right
@@ -461,6 +490,128 @@ private fun PartOfChip(name: String, onClick: () -> Unit) {
                 color      = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Medium,
             )
+        }
+    }
+}
+
+/**
+ * The "⋮" overflow affordance and its dropdown. Two honest actions:
+ *
+ *  - Mark watched / unwatched — only when the variant carries a played
+ *    flag (movies, series, episodes). Backed by /me/progress/{id}/played
+ *    and its unplayed sibling.
+ *  - Información — raises the Plex-style full-info dialog.
+ *
+ * No "delete": the server exposes no item-deletion route, and wiping
+ * library media from a lean-back TV remote is the wrong place for a
+ * destructive action anyway.
+ */
+@Composable
+private fun OverflowMenuButton(
+    watched:          Boolean?,
+    canToggleWatched: Boolean,
+    onToggleWatched:  () -> Unit,
+    onShowInfo:       () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        HeroIconButton(
+            icon               = Icons.Default.MoreVert,
+            contentDescription = stringResource(R.string.action_more_options),
+            onClick            = { expanded = true },
+        )
+        DropdownMenu(
+            expanded         = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            if (canToggleWatched) {
+                val isWatched = watched == true
+                DropdownMenuItem(
+                    text        = {
+                        Text(
+                            stringResource(
+                                if (isWatched) R.string.detail_action_mark_unwatched
+                                else           R.string.detail_action_mark_watched,
+                            ),
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector        = if (isWatched) Icons.Outlined.VisibilityOff
+                                                 else           Icons.Default.Check,
+                            contentDescription = null,
+                        )
+                    },
+                    onClick     = {
+                        expanded = false
+                        onToggleWatched()
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text        = { Text(stringResource(R.string.detail_action_info)) },
+                leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = null) },
+                onClick     = {
+                    expanded = false
+                    onShowInfo()
+                },
+            )
+        }
+    }
+}
+
+/**
+ * Plex-style "full info" sheet. The hero only shows a 6-line overview to
+ * keep the cinematic layout breathing; this dialog gives the complete
+ * synopsis plus the full meta block (rating, year, runtime, every genre)
+ * for the user who actually wants to read it. Scrollable so a long
+ * synopsis never gets clipped on a 720p panel.
+ */
+@Composable
+private fun InfoDialog(item: Content, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape    = RoundedCornerShape(16.dp),
+            color    = BgElevated,
+            modifier = Modifier
+                .widthIn(max = 720.dp)
+                .fillMaxWidth()
+                .border(1.dp, Border, RoundedCornerShape(16.dp)),
+        ) {
+            Column(
+                modifier            = Modifier
+                    .heightIn(max = 480.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(28.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(
+                    text       = item.title,
+                    style      = MaterialTheme.typography.headlineSmall,
+                    color      = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.Bold,
+                )
+                item.subtitle?.takeIf { it.isNotBlank() }?.let { sub ->
+                    Text(
+                        text  = sub,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                MetaRow(item)
+                item.overview?.takeIf { it.isNotBlank() }?.let { ov ->
+                    Text(
+                        text  = ov,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) {
+                        Text(stringResource(R.string.action_close))
+                    }
+                }
+            }
         }
     }
 }
