@@ -526,22 +526,11 @@ private fun OverflowMenuButton(
         ) {
             if (canToggleWatched) {
                 val isWatched = watched == true
+                val label = if (isWatched) R.string.detail_action_mark_unwatched else R.string.detail_action_mark_watched
+                val markIcon = if (isWatched) Icons.Outlined.VisibilityOff else Icons.Default.Check
                 DropdownMenuItem(
-                    text        = {
-                        Text(
-                            stringResource(
-                                if (isWatched) R.string.detail_action_mark_unwatched
-                                else           R.string.detail_action_mark_watched,
-                            ),
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector        = if (isWatched) Icons.Outlined.VisibilityOff
-                                                 else           Icons.Default.Check,
-                            contentDescription = null,
-                        )
-                    },
+                    text        = { Text(stringResource(label)) },
+                    leadingIcon = { Icon(markIcon, contentDescription = null) },
                     onClick     = {
                         expanded = false
                         onToggleWatched()
