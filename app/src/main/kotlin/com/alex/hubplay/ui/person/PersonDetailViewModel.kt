@@ -29,11 +29,15 @@ class PersonDetailViewModel(
         _ui.value = _ui.value.copy(isLoading = true, error = null)
         viewModelScope.launch {
             runCatching { repository.fetchPerson(personId) }
-                .onSuccess { person -> _ui.value = PersonUiState(isLoading = false, person = person) }
-                .onFailure { err -> _ui.value = _ui.value.copy(
-                    isLoading = false,
-                    error     = err.message ?: "No se pudo cargar la persona",
-                ) }
+                .onSuccess { person ->
+                    _ui.value = PersonUiState(isLoading = false, person = person)
+                }
+                .onFailure { err ->
+                    _ui.value = _ui.value.copy(
+                        isLoading = false,
+                        error     = err.message ?: "No se pudo cargar la persona",
+                    )
+                }
         }
     }
 
