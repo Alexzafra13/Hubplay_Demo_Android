@@ -109,6 +109,13 @@
     <string name="detail_action_mark_watched">Mark as watched</string>
     <string name="detail_action_mark_unwatched">Mark as unwatched</string>
     <string name="detail_action_info">Information</string>
+    <string name="detail_section_cast">Cast &amp; crew</string>
+
+    <!-- Person detail -->
+    <string name="person_role_actor">Actor</string>
+    <string name="person_role_director">Director</string>
+    <string name="person_role_writer">Writer</string>
+    <string name="person_no_filmography">No titles in your library</string>
 
     <!-- Series -->
     <string name="series_section_label">SERIES</string>

@@ -67,6 +67,7 @@ sealed interface Content {
         val watched:               Boolean      = false,
         val collectionId:          String?      = null,
         val collectionName:        String?      = null,
+        val people:                List<Person> = emptyList(),
     ) : Resumable {
         override val kind: MediaKind get() = MediaKind.Movie
     }
@@ -87,6 +88,7 @@ sealed interface Content {
         val trailerSite:          String?      = null,
         val isFavorite:           Boolean      = false,
         val watched:              Boolean      = false,
+        val people:               List<Person> = emptyList(),
     ) : Content {
         override val kind: MediaKind get() = MediaKind.Series
     }
@@ -130,6 +132,7 @@ sealed interface Content {
         val episodeNumber:         Int?         = null,
         val isFavorite:            Boolean      = false,
         val watched:               Boolean      = false,
+        val people:                List<Person> = emptyList(),
     ) : Resumable {
         override val kind: MediaKind get() = MediaKind.Episode
     }
@@ -194,3 +197,32 @@ enum class MediaKind {
         }
     }
 }
+
+/**
+ * A cast or crew credit on an item. `role` is the lowercase server value
+ * ("actor" / "director" / "writer"); `character` is set only for actors.
+ * Carried on [Content.Movie] / [Content.Series] / [Content.Episode] so
+ * the Detail screen can render a "Reparto y equipo" rail.
+ */
+@Immutable
+data class Person(
+    val id:        String,
+    val name:      String,
+    val role:      String? = null,
+    val character: String? = null,
+    val imageUrl:  String? = null,
+)
+
+/**
+ * A person profile + their filmography. Filmography entries reuse
+ * [Content] so the PersonDetail screen renders them with the same
+ * MediaCard + navigation rules as every other grid.
+ */
+@Immutable
+data class PersonDetail(
+    val id:          String,
+    val name:        String,
+    val type:        String?       = null,
+    val imageUrl:    String?       = null,
+    val filmography: List<Content> = emptyList(),
+)

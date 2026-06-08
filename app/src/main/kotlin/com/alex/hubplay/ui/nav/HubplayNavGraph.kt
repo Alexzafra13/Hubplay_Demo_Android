@@ -29,6 +29,8 @@ import com.alex.hubplay.ui.livetv.LiveTvScreen
 import com.alex.hubplay.ui.livetv.LiveTvViewModel
 import com.alex.hubplay.ui.login.LoginScreen
 import com.alex.hubplay.ui.login.LoginViewModel
+import com.alex.hubplay.ui.person.PersonDetailScreen
+import com.alex.hubplay.ui.person.PersonDetailViewModel
 import com.alex.hubplay.ui.player.PlayerScreen
 import com.alex.hubplay.ui.player.PlayerViewModel
 import com.alex.hubplay.ui.search.SearchScreen
@@ -144,6 +146,9 @@ fun HubplayNavGraph(
         }
         val openCollection: (String) -> Unit = { collectionId ->
             navController.navigate(Route.CollectionDetail.route(collectionId))
+        }
+        val openPerson: (String) -> Unit = { personId ->
+            navController.navigate(Route.Person.route(personId))
         }
         val openSettings: () -> Unit = {
             navController.navigate(Route.Settings.path)
@@ -341,6 +346,26 @@ fun HubplayNavGraph(
                 },
                 onBack             = { navController.popBackStack() },
                 onOpenCollection   = openCollection,
+                onOpenPerson       = openPerson,
+            )
+        }
+
+        // ── Person detail (cast/crew tap-through) ────────────────────
+        composable(
+            route     = Route.Person.path,
+            arguments = listOf(
+                navArgument(Route.Person.ARG_PERSON_ID) { type = NavType.StringType },
+            ),
+        ) { entry ->
+            val rawId = entry.arguments?.getString(Route.Person.ARG_PERSON_ID) ?: return@composable
+            val personId = java.net.URLDecoder.decode(rawId, Charsets.UTF_8)
+            val vm = viewModel<PersonDetailViewModel>(
+                factory = PersonDetailViewModel.factory(container.homeRepository, personId),
+            )
+            PersonDetailScreen(
+                viewModel  = vm,
+                onOpenItem = openItem,
+                onBack     = { navController.popBackStack() },
             )
         }
 

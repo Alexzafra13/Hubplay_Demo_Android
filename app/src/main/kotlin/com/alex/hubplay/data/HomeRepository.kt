@@ -6,6 +6,8 @@ import com.alex.hubplay.data.api.dto.ContinueWatchingEntryDto
 import com.alex.hubplay.data.api.dto.ItemSummaryDto
 import com.alex.hubplay.data.api.dto.LiveNowChannelDto
 import com.alex.hubplay.data.api.dto.NextUpItemDto
+import com.alex.hubplay.data.api.dto.PersonFilmographyEntryDto
+import com.alex.hubplay.data.api.dto.PersonRefDto
 import com.alex.hubplay.data.api.dto.RecommendedItemDto
 import com.alex.hubplay.data.api.dto.TrendingItemDto
 
@@ -28,6 +30,7 @@ interface HomeRepository {
     suspend fun fetchCollections(): List<CollectionSummary>
     suspend fun fetchCollectionDetail(id: String): CollectionDetail
     suspend fun fetchItemDetail(itemId: String): Content
+    suspend fun fetchPerson(personId: String): PersonDetail
     suspend fun toggleItemFavorite(itemId: String): Boolean
     suspend fun setItemWatched(itemId: String, watched: Boolean)
     suspend fun searchItems(query: String, limit: Int = 60): List<Content>
@@ -257,6 +260,7 @@ class HomeRepositoryImpl(
                 watched        = data.userData?.played == true,
                 collectionId   = data.collection?.id,
                 collectionName = data.collection?.name,
+                people         = data.people.map { it.toPerson(server) },
             )
             MediaKind.Series -> Content.Series(
                 id          = data.id,
@@ -273,6 +277,7 @@ class HomeRepositoryImpl(
                 trailerSite = data.trailer?.site,
                 isFavorite  = data.userData?.isFavorite == true,
                 watched     = data.userData?.played == true,
+                people      = data.people.map { it.toPerson(server) },
             )
             MediaKind.Episode -> Content.Episode(
                 id           = data.id,
@@ -290,6 +295,7 @@ class HomeRepositoryImpl(
                 durationSec  = totalSec,
                 isFavorite   = data.userData?.isFavorite == true,
                 watched      = data.userData?.played == true,
+                people       = data.people.map { it.toPerson(server) },
             )
             MediaKind.Season -> Content.Season(
                 id          = data.id,
@@ -340,6 +346,25 @@ class HomeRepositoryImpl(
      */
     override suspend fun setItemWatched(itemId: String, watched: Boolean) {
         if (watched) api.markPlayed(itemId) else api.markUnplayed(itemId)
+    }
+
+    /**
+     * GET /people/{id} — profile + filmography. Image + poster paths come
+     * back server-relative, so we absolutize them here. Filmography
+     * entries are mapped to [Content] so the PersonDetail grid reuses
+     * MediaCard + the standard open-item navigation.
+     */
+    override suspend fun fetchPerson(personId: String): PersonDetail {
+        val server = serverUrl()
+        val data = api.getPerson(personId).data
+            ?: error("people/$personId returned no data envelope")
+        return PersonDetail(
+            id          = data.id,
+            name        = data.name,
+            type        = data.type,
+            imageUrl    = absolutize(data.imageUrl, server),
+            filmography = data.filmography.map { it.toContent(server) },
+        )
     }
 
     /**
@@ -667,6 +692,47 @@ class HomeRepositoryImpl(
             logoBg       = logoBg,
             logoFg       = logoFg,
         )
+    }
+
+    private fun PersonRefDto.toPerson(server: String): Person = Person(
+        id        = id,
+        name      = name,
+        role      = role,
+        character = character,
+        imageUrl  = absolutize(imageUrl, server),
+    )
+
+    /**
+     * Filmography entries from /people/{id} → [Content]. They carry only
+     * id + type + title + year + poster, so the resulting variants are
+     * sparse — enough for a poster grid that taps through to the real
+     * Detail / Series screen (which then loads the full item).
+     */
+    private fun PersonFilmographyEntryDto.toContent(server: String): Content {
+        val poster = absolutize(posterUrl, server)
+        val sub = year?.toString()
+        return when (MediaKind.from(type)) {
+            MediaKind.Series -> Content.Series(
+                id = itemId, title = title.orEmpty(), subtitle = sub,
+                posterUrl = poster, backdropUrl = poster, year = year,
+            )
+            MediaKind.Episode -> Content.Episode(
+                id = itemId, title = title.orEmpty(), subtitle = sub,
+                posterUrl = poster, backdropUrl = poster, year = year,
+            )
+            MediaKind.Season -> Content.Season(
+                id = itemId, title = title.orEmpty(), subtitle = sub,
+                posterUrl = poster, backdropUrl = poster, year = year,
+            )
+            MediaKind.Movie -> Content.Movie(
+                id = itemId, title = title.orEmpty(), subtitle = sub,
+                posterUrl = poster, backdropUrl = poster, year = year,
+            )
+            else -> Content.Unknown(
+                id = itemId, title = title.orEmpty(), subtitle = sub,
+                posterUrl = poster, backdropUrl = poster, year = year,
+            )
+        }
     }
 
     /**
