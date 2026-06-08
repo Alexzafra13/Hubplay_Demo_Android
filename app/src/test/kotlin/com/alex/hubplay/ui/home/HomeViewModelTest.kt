@@ -6,6 +6,7 @@ import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.MeEvent
+import com.alex.hubplay.data.PersonDetail
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -234,6 +235,7 @@ class HomeViewModelTest {
         override suspend fun fetchCollectionDetail(id: String): CollectionDetail = throw RuntimeException("unused")
         override suspend fun toggleItemFavorite(itemId: String) = false
         override suspend fun setItemWatched(itemId: String, watched: Boolean) {}
+        override suspend fun fetchPerson(personId: String): PersonDetail = throw RuntimeException("unused")
         override suspend fun searchItems(query: String, limit: Int) = emptyList<Content>()
     }
 }

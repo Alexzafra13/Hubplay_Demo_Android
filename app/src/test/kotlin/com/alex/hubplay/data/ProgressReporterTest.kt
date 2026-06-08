@@ -20,6 +20,7 @@ import com.alex.hubplay.data.api.dto.LatestResponse
 import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.NextUpResponse
+import com.alex.hubplay.data.api.dto.PersonDetailResponse
 import com.alex.hubplay.data.api.dto.ProfilesResponse
 import com.alex.hubplay.data.api.dto.SearchResponse
 import com.alex.hubplay.data.api.dto.SwitchProfileRequest
@@ -222,6 +223,7 @@ class ProgressReporterTest {
         override suspend fun getLiveNow(limit: Int): LiveNowResponse          = TODO()
         override suspend fun getItem(itemId: String): ItemDetailResponse      = TODO()
         override suspend fun getChildren(itemId: String): ChildrenResponse    = TODO()
+        override suspend fun getPerson(personId: String): PersonDetailResponse = TODO()
         override suspend fun getNextUp(): NextUpResponse                      = TODO()
         override suspend fun getStreamInfo(itemId: String, capabilities: String): StreamInfoResponse = TODO()
         override suspend fun listChannels(libraryId: String, active: Boolean, includeHidden: Boolean): ChannelsResponse = TODO()

@@ -1,10 +1,59 @@
 # Estado del proyecto — HubPlay Android
 
 > **Última sesión**: 2026-06-08 — rama `claude/tv-app-dev-review-J7RAr`.
-> Análisis completo del estado de la app TV + cierre del stub del menú
-> overflow del Detail (marcar visto/no visto + Información estilo Plex).
-> Dirección estética acordada: **virar fichas a "Plex de verdad"**
-> (densidad de datos: reparto/equipo + relacionados, próximas sesiones).
+> (1) Análisis completo TV + overflow menu del Detail (visto/Información).
+> (2) **Reparto y equipo (cast & crew)** en el Detail + pantalla
+> **PersonDetail** navegable — el "alma Plex". Dirección estética
+> acordada: **"Plex de verdad"** (ficha densa).
+
+---
+
+## 🎭 Sesión 2026-06-08 (cont.) — Reparto/equipo + PersonDetail
+
+El backend YA exponía todo (verificado): `GET /items/{id}` trae `people[]`
+(reparto+equipo con personaje e imagen), `GET /people/{id}` trae perfil +
+filmografía, `GET /items/{id}/recommendations` ("más como esto") y
+`GET /studios/{slug}`. Por tanto esta tanda fue **solo Android**.
+
+### Entregado
+- **Fila "Reparto y equipo"** anclada abajo en el hero del Detail
+  (overlay hermano de `HeroFull`, estilo Plex/Prime). Avatares circulares
+  con nombre + personaje/rol; foco con scale+borde. Tap → PersonDetail.
+- **PersonDetail** (`ui/person/`): cabecera (avatar + nombre + rol) +
+  rejilla de filmografía reutilizando `PortraitCatalogCard`/`MediaCard`,
+  que navega al Detail/Series real de cada título.
+
+### Cambios
+- DTOs: `PersonRefDto`, `people` en `ItemDetailDto`, `PersonDetailDto` +
+  `PersonFilmographyEntryDto` + response. `HubplayApi.getPerson()`.
+- `Content`: `Person` + `PersonDetail` domain; `people: List<Person>` en
+  Movie/Series/Episode. `HomeRepository.fetchPerson()` + mapeo `people`
+  en `fetchItemDetail` + mappers (`toPerson`, filmografía→`Content`).
+- UI: `CastCrewRail`/`CastCard` en DetailScreen; `PersonDetailScreen` +
+  `PersonDetailViewModel`; ruta `Route.Person` + wiring en NavGraph
+  (`openPerson`); `onOpenPerson` en DetailScreen.
+- strings es/en (`detail_section_cast`, `person_role_*`,
+  `person_no_filmography`). Fakes de test (2 FakeApi + FakeHomeRepository).
+- detekt-baseline: regeneradas entradas ImportOrdering/LongMethod de
+  DetailScreen (método validado byte-a-byte).
+
+### Decisiones técnicas (anti-CI-rojo, sin SDK local)
+- **Fila de reparto FUERA de `HeroFull`** (sibling en DetailScreen): así
+  `HeroFull` se queda en 7 params, evitando `LongParameterList`
+  (threshold 8, semántica `>`/`>=` ambigua — no arriesgar).
+- Sin `zIndex` en la fila (hermano posterior del Box ya pinta encima) —
+  evita un `5f` mágico (MagicNumber).
+- `tween(durationMillis = 180)` (named) + `CAST_FOCUS_SCALE` const —
+  evitan MagicNumber. `if/else` de una línea (no MultiLineIfElse).
+- Imports de ficheros nuevos ordenados ASCII (sin baseline que los cubra).
+
+### Pendiente (mismo eje Plex)
+- **"Más como esto"** (`/items/{id}/recommendations`) como rail en Detail.
+- **StudioDetail** (`/studios/{slug}`) — clic en estudio.
+- Overflow menu del Detail → llevar también a SeriesScreen.
+- Auto-play siguiente episodio (VOD).
+- Verificación en device: foco ▼ Play→reparto, solape de la fila con la
+  columna info en contenidos con sinopsis larga.
 
 ---
 

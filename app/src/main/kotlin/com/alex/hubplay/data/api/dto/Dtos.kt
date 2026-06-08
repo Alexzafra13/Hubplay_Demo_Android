@@ -127,7 +127,24 @@ data class ItemDetailDto(
      * chip on the Detail screen that jumps to /collections/{id}.
      */
     val collection:                                        CollectionRefDto? = null,
+    /** Cast + crew, ordered by the server (cast by billing, crew after). */
+    val people:                                            List<PersonRefDto> = emptyList(),
     @Json(name = "user_data")        val userData:        UserDataDto? = null,
+)
+
+/**
+ * One cast/crew credit on an item. `role` is "actor" / "director" /
+ * "writer" (lowercase, from TMDb); `character` only present for actors;
+ * `image_url` is a server-relative thumb path, omitted when no photo.
+ */
+@JsonClass(generateAdapter = true)
+data class PersonRefDto(
+    val id:                                            String,
+    val name:                                          String,
+    val role:                                          String? = null,
+    val character:                                     String? = null,
+    @Json(name = "image_url")    val imageUrl:         String? = null,
+    @Json(name = "sort_order")   val sortOrder:        Int     = 0,
 )
 
 /**
@@ -550,4 +567,37 @@ data class ItemFavoriteToggleResponse(
 @JsonClass(generateAdapter = true)
 data class SearchResponse(
     val data: List<ItemSummaryDto> = emptyList(),
+)
+
+// ─── People (cast & crew detail) ────────────────────────────────────────────
+//
+// GET /api/v1/people/{id} — person profile + deduped filmography. Ground
+// truth: internal/api/handlers/media/people.go::Get(). Filmography entries
+// are item-shaped (item_id + type + title + year + poster_url) plus the
+// person's role/character on that item.
+
+@JsonClass(generateAdapter = true)
+data class PersonFilmographyEntryDto(
+    @Json(name = "item_id")     val itemId:     String,
+    val type:                                   String? = null,
+    val title:                                  String? = null,
+    val year:                                   Int?    = null,
+    val role:                                   String? = null,
+    val character:                              String? = null,
+    @Json(name = "sort_order")  val sortOrder:  Int     = 0,
+    @Json(name = "poster_url")  val posterUrl:  String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class PersonDetailDto(
+    val id:                                     String,
+    val name:                                   String,
+    val type:                                   String? = null,
+    @Json(name = "image_url")   val imageUrl:   String? = null,
+    val filmography:                            List<PersonFilmographyEntryDto> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class PersonDetailResponse(
+    val data: PersonDetailDto? = null,
 )

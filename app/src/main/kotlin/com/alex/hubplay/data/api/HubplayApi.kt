@@ -19,6 +19,7 @@ import com.alex.hubplay.data.api.dto.LatestResponse
 import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.NextUpResponse
+import com.alex.hubplay.data.api.dto.PersonDetailResponse
 import com.alex.hubplay.data.api.dto.ProfilesResponse
 import com.alex.hubplay.data.api.dto.RecommendedResponse
 import com.alex.hubplay.data.api.dto.SearchResponse
@@ -126,6 +127,13 @@ interface HubplayApi {
      */
     @GET("items/{id}/children")
     suspend fun getChildren(@Path("id") itemId: String): ChildrenResponse
+
+    /**
+     * GET /api/v1/people/{id} — person profile + deduped filmography.
+     * Powers the cast/crew tap-through from the Detail screen.
+     */
+    @GET("people/{id}")
+    suspend fun getPerson(@Path("id") personId: String): PersonDetailResponse
 
     /**
      * GET /api/v1/me/next-up

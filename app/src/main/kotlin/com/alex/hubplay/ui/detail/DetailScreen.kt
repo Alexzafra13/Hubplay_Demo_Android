@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -53,6 +56,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -68,6 +73,7 @@ import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
 import com.alex.hubplay.data.Content
+import com.alex.hubplay.data.Person
 import com.alex.hubplay.ui.components.BackPill
 import com.alex.hubplay.ui.components.HeroCtaButton
 import com.alex.hubplay.ui.components.HeroIconButton
@@ -100,25 +106,50 @@ fun DetailScreen(
     onPlay:             (itemId: String, resumePosSec: Long) -> Unit,
     onBack:             () -> Unit,
     onOpenCollection:   (collectionId: String) -> Unit = {},
+    onOpenPerson:       (personId: String) -> Unit = {},
     trailerResumeSec:   Long = 0L,
 ) {
     val ui by viewModel.ui.collectAsState()
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
+        val item = ui.item
         when {
-            ui.isLoading       -> CenteredSpinner()
-            ui.error != null   -> ErrorBanner(message = ui.error!!, onRetry = viewModel::load)
-            ui.item != null    -> HeroFull(
-                item               = ui.item!!,
-                onPlay             = onPlay,
-                onBack             = onBack,
-                onToggleFavorite   = viewModel::toggleFavorite,
-                onToggleWatched    = viewModel::toggleWatched,
-                onOpenCollection   = onOpenCollection,
-                trailerResumeSec   = trailerResumeSec,
-            )
+            ui.isLoading     -> CenteredSpinner()
+            ui.error != null -> ErrorBanner(message = ui.error!!, onRetry = viewModel::load)
+            item != null     -> Box(modifier = Modifier.fillMaxSize()) {
+                HeroFull(
+                    item               = item,
+                    onPlay             = onPlay,
+                    onBack             = onBack,
+                    onToggleFavorite   = viewModel::toggleFavorite,
+                    onToggleWatched    = viewModel::toggleWatched,
+                    onOpenCollection   = onOpenCollection,
+                    trailerResumeSec   = trailerResumeSec,
+                )
+                // Cast & crew strip layered on top of the hero, anchored
+                // bottom-left (Plex-style). Kept a sibling of HeroFull so the
+                // hero's own signature stays lean. Hides itself when empty.
+                val people = peopleOf(item)
+                if (people.isNotEmpty()) {
+                    CastCrewRail(
+                        people       = people,
+                        onOpenPerson = onOpenPerson,
+                        // Later sibling in the Box → already drawn on top of
+                        // the hero; no zIndex needed.
+                        modifier     = Modifier.align(Alignment.BottomStart),
+                    )
+                }
+            }
         }
     }
+}
+
+/** Cast + crew of the variants that carry it; empty for everything else. */
+private fun peopleOf(item: Content): List<Person> = when (item) {
+    is Content.Movie   -> item.people
+    is Content.Series  -> item.people
+    is Content.Episode -> item.people
+    else               -> emptyList()
 }
 
 @Composable
@@ -489,6 +520,111 @@ private fun PartOfChip(name: String, onClick: () -> Unit) {
                 style      = MaterialTheme.typography.labelLarge,
                 color      = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Medium,
+            )
+        }
+    }
+}
+
+/** Focus "pop" of a cast avatar — matches the MediaCard feel on TV. */
+private const val CAST_FOCUS_SCALE = 1.08f
+
+/**
+ * "Reparto y equipo" — a horizontal strip of circular cast/crew avatars
+ * pinned to the bottom of the hero (the Plex / Prime detail pattern).
+ * Each card taps through to the PersonDetail screen.
+ */
+@Composable
+private fun CastCrewRail(
+    people:       List<Person>,
+    onOpenPerson: (String) -> Unit,
+    modifier:     Modifier = Modifier,
+) {
+    Column(
+        modifier            = modifier
+            .fillMaxWidth()
+            .padding(start = 48.dp, end = 24.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text       = stringResource(R.string.detail_section_cast),
+            style      = MaterialTheme.typography.titleMedium,
+            color      = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.SemiBold,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            items(people, key = { it.id }) { person ->
+                CastCard(person = person, onClick = { onOpenPerson(person.id) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun CastCard(person: Person, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue   = if (focused) CAST_FOCUS_SCALE else 1f,
+        animationSpec = tween(durationMillis = 180),
+        label         = "cast-scale",
+    )
+    Column(
+        modifier            = Modifier
+            .width(96.dp)
+            .scale(scale)
+            .clip(RoundedCornerShape(10.dp))
+            .onFocusChanged { focused = it.isFocused }
+            .clickable(onClick = onClick)
+            .padding(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            modifier         = Modifier
+                .size(84.dp)
+                .clip(CircleShape)
+                .background(BgElevated)
+                .then(if (focused) Modifier.border(2.dp, Accent, CircleShape) else Modifier),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (person.imageUrl != null) {
+                AsyncImage(
+                    model              = person.imageUrl,
+                    contentDescription = person.name,
+                    contentScale       = ContentScale.Crop,
+                    modifier           = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(
+                    text  = person.name.take(1).uppercase(),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Text(
+            text      = person.name,
+            style     = MaterialTheme.typography.labelMedium,
+            color     = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.Medium,
+            maxLines  = 1,
+            overflow  = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
+        val sub = person.character?.takeIf { it.isNotBlank() }
+            ?: when (person.role?.lowercase()) {
+                "director" -> stringResource(R.string.person_role_director)
+                "writer"   -> stringResource(R.string.person_role_writer)
+                "actor"    -> stringResource(R.string.person_role_actor)
+                else       -> null
+            }
+        sub?.let {
+            Text(
+                text      = it,
+                style     = MaterialTheme.typography.labelSmall,
+                color     = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines  = 1,
+                overflow  = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
             )
         }
     }

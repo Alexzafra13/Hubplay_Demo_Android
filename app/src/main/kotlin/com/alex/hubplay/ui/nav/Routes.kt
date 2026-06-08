@@ -42,6 +42,13 @@ sealed class Route(val path: String) {
         fun route(seriesId: String): String = "series/$seriesId"
     }
 
+    /** Person detail — profile + filmography (tap-through from cast row). */
+    data object Person : Route("person/{personId}") {
+        const val ARG_PERSON_ID = "personId"
+        fun route(personId: String): String =
+            "person/${java.net.URLEncoder.encode(personId, Charsets.UTF_8)}"
+    }
+
     data object Player : Route("player/{itemId}?resume={resumePosSec}") {
         const val ARG_ITEM_ID = "itemId"
         const val ARG_RESUME  = "resumePosSec"

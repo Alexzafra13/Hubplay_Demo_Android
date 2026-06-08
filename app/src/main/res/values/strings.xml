@@ -109,6 +109,13 @@
     <string name="detail_action_mark_watched">Marcar como visto</string>
     <string name="detail_action_mark_unwatched">Marcar como no visto</string>
     <string name="detail_action_info">Información</string>
+    <string name="detail_section_cast">Reparto y equipo</string>
+
+    <!-- Person detail -->
+    <string name="person_role_actor">Actor/Actriz</string>
+    <string name="person_role_director">Dirección</string>
+    <string name="person_role_writer">Guion</string>
+    <string name="person_no_filmography">Sin títulos en tu biblioteca</string>
 
     <!-- Series -->
     <string name="series_section_label">SERIES</string>
