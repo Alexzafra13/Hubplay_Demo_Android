@@ -1,6 +1,64 @@
 # Estado del proyecto — HubPlay Android
 
-> **Última sesión**: 2026-05-27 — rama `claude/project-review-QU5nR`.
+> **Última sesión**: 2026-06-08 — rama `claude/tv-app-dev-review-J7RAr`.
+> Análisis completo del estado de la app TV + cierre del stub del menú
+> overflow del Detail (marcar visto/no visto + Información estilo Plex).
+> Dirección estética acordada: **virar fichas a "Plex de verdad"**
+> (densidad de datos: reparto/equipo + relacionados, próximas sesiones).
+
+---
+
+## 🎬 Sesión 2026-06-08 — Overflow menu del Detail (Plex-style)
+
+Cierre del único stub visible que quedaba en el Detail (`DetailScreen.kt:243`,
+el `onClick` vacío de los 3 puntos). El menú ahora tiene **dos acciones
+honestas**:
+
+1. **Marcar como visto / no visto** — backed por `markPlayed` /
+   `markUnplayed` (ya existían en `HubplayApi`). Optimista con rollback,
+   mismo patrón que `toggleFavorite`. Al marcar visto se resetea
+   `progressPct`/`resumePosSec` en local (el server limpia
+   `position_ticks`), así el CTA vuelve de "Reanudar 12:34" a "Reproducir".
+2. **Información** — diálogo Plex-style (`InfoDialog`) con sinopsis
+   COMPLETA (el hero la corta a 6 líneas) + meta row completa,
+   scrollable. Primer paso del giro a "ficha densa estilo Plex".
+
+**Descartado "Eliminar"**: el backend no expone ruta de borrado de items
+y borrar media desde un mando de TV es el sitio equivocado para una
+acción destructiva.
+
+### Cambios
+- `Content.kt` — `watched: Boolean` añadido a Movie / Series / Episode
+  (simétrico con `isFavorite`).
+- `HomeRepository` — nuevo `setItemWatched(itemId, watched)` + mapeo de
+  `userData.played` → `watched` en `fetchItemDetail`.
+- `DetailViewModel` — `toggleWatched()` optimista con revert.
+- `DetailScreen` — `OverflowMenuButton` (DropdownMenu anclado al 3-dots,
+  patrón ya usado en `TopNav`) + `InfoDialog`.
+- `strings.xml` (es + en) — `detail_action_mark_watched` /
+  `_mark_unwatched` / `detail_action_info`. `action_close` reutilizado.
+- `HomeViewModelTest.FakeHomeRepository` — stub del método nuevo.
+- `config/detekt-baseline.xml` — regeneradas a mano (sin SDK local) las
+  entradas `ImportOrdering` + `LongMethod` de DetailScreen (cambió la
+  firma de `HeroFull` y el bloque de imports). Método validado byte-a-byte
+  contra el baseline original antes de patchear. Entrada `ForbiddenComment`
+  del TODO eliminada (ya no existe el comentario).
+
+### Verificación
+- **No hay SDK Android ni gradlew en el entorno remoto** → no se pudo
+  compilar/correr detekt local. Validación: revisión manual + chequeo de
+  idempotencia de los IDs del baseline. **CI valida en el push.**
+
+### Pendiente / próximo (dirección Plex acordada)
+- **Reparto + equipo (cast & crew)**: no existe en el modelo `Content` ni
+  en el DTO. Es "el alma Plex". Requiere campos nuevos + sección en
+  Detail/Series + pantallas PersonDetail / StudioDetail.
+- **Rail de relacionados** ("Más como esto") en Detail.
+- **Auto-play del siguiente episodio** (VOD).
+- Test de `DetailViewModel.toggleWatched` (el VM ya es testable: toma la
+  interfaz `HomeRepository`). No añadido esta sesión por no poder correrlo.
+
+---
 > **Estado**: Auditoría arquitectónica completa (Principal Engineer level)
 > + Fase 1 robustez + Fase 2 parcial. Fix ANR crítico en interceptors,
 > paginación infinita en catálogo/search, interfaz HomeRepository, 22

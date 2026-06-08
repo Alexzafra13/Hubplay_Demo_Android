@@ -233,6 +233,7 @@ class HomeViewModelTest {
         override suspend fun fetchCollections() = emptyList<CollectionSummary>()
         override suspend fun fetchCollectionDetail(id: String): CollectionDetail = throw RuntimeException("unused")
         override suspend fun toggleItemFavorite(itemId: String) = false
+        override suspend fun setItemWatched(itemId: String, watched: Boolean) {}
         override suspend fun searchItems(query: String, limit: Int) = emptyList<Content>()
     }
 }

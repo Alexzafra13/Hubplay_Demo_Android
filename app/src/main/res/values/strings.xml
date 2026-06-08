@@ -106,6 +106,9 @@
     <string name="detail_resume_format">Reanudar %1$d:%2$02d</string>
     <string name="detail_play">Reproducir</string>
     <string name="detail_duration_minutes">%1$d min</string>
+    <string name="detail_action_mark_watched">Marcar como visto</string>
+    <string name="detail_action_mark_unwatched">Marcar como no visto</string>
+    <string name="detail_action_info">Información</string>
 
     <!-- Series -->
     <string name="series_section_label">SERIES</string>

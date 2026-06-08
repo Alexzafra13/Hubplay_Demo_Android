@@ -64,6 +64,7 @@ sealed interface Content {
         val trailerKey:            String?      = null,
         val trailerSite:           String?      = null,
         val isFavorite:            Boolean      = false,
+        val watched:               Boolean      = false,
         val collectionId:          String?      = null,
         val collectionName:        String?      = null,
     ) : Resumable {
@@ -85,6 +86,7 @@ sealed interface Content {
         val trailerKey:           String?      = null,
         val trailerSite:          String?      = null,
         val isFavorite:           Boolean      = false,
+        val watched:              Boolean      = false,
     ) : Content {
         override val kind: MediaKind get() = MediaKind.Series
     }
@@ -127,6 +129,7 @@ sealed interface Content {
         val seasonNumber:          Int?         = null,
         val episodeNumber:         Int?         = null,
         val isFavorite:            Boolean      = false,
+        val watched:               Boolean      = false,
     ) : Resumable {
         override val kind: MediaKind get() = MediaKind.Episode
     }
