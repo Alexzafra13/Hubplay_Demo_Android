@@ -601,3 +601,33 @@ data class PersonDetailDto(
 data class PersonDetailResponse(
     val data: PersonDetailDto? = null,
 )
+
+// ─── Per-item recommendations ("Más como esto") ─────────────────────────────
+//
+// GET /api/v1/items/{id}/recommendations — TMDb-powered "more like this".
+// Ground truth: item_recommendations_handler.go. Each candidate is
+// cross-referenced against the local library; only `in_library` entries
+// carry a `local_id` we can deep-link to. No `type` field — for a movie's
+// detail these are movies, so the client treats them as such.
+
+@JsonClass(generateAdapter = true)
+data class ItemRecommendationDto(
+    @Json(name = "tmdb_id")    val tmdbId:    String? = null,
+    val title:                                String? = null,
+    val year:                                 Int?    = null,
+    val overview:                             String? = null,
+    @Json(name = "poster_url") val posterUrl: String? = null,
+    val rating:                               Float?  = null,
+    @Json(name = "in_library") val inLibrary: Boolean = false,
+    @Json(name = "local_id")   val localId:   String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ItemRecommendationsPayload(
+    val items: List<ItemRecommendationDto> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class ItemRecommendationsResponse(
+    val data: ItemRecommendationsPayload? = null,
+)

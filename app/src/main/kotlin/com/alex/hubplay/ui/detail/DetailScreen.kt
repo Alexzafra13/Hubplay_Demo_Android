@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -48,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,7 +75,9 @@ import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
 import com.alex.hubplay.data.Content
+import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.data.Person
+import com.alex.hubplay.ui.catalog.PortraitCatalogCard
 import com.alex.hubplay.ui.components.BackPill
 import com.alex.hubplay.ui.components.HeroCtaButton
 import com.alex.hubplay.ui.components.HeroIconButton
@@ -107,6 +111,7 @@ fun DetailScreen(
     onBack:             () -> Unit,
     onOpenCollection:   (collectionId: String) -> Unit = {},
     onOpenPerson:       (personId: String) -> Unit = {},
+    onOpenItem:         (itemId: String, kind: MediaKind) -> Unit = { _, _ -> },
     trailerResumeSec:   Long = 0L,
 ) {
     val ui by viewModel.ui.collectAsState()
@@ -116,28 +121,43 @@ fun DetailScreen(
         when {
             ui.isLoading     -> CenteredSpinner()
             ui.error != null -> ErrorBanner(message = ui.error!!, onRetry = viewModel::load)
-            item != null     -> Box(modifier = Modifier.fillMaxSize()) {
-                HeroFull(
-                    item               = item,
-                    onPlay             = onPlay,
-                    onBack             = onBack,
-                    onToggleFavorite   = viewModel::toggleFavorite,
-                    onToggleWatched    = viewModel::toggleWatched,
-                    onOpenCollection   = onOpenCollection,
-                    trailerResumeSec   = trailerResumeSec,
-                )
-                // Cast & crew strip layered on top of the hero, anchored
-                // bottom-left (Plex-style). Kept a sibling of HeroFull so the
-                // hero's own signature stays lean. Hides itself when empty.
-                val people = peopleOf(item)
-                if (people.isNotEmpty()) {
-                    CastCrewRail(
-                        people       = people,
-                        onOpenPerson = onOpenPerson,
-                        // Later sibling in the Box → already drawn on top of
-                        // the hero; no zIndex needed.
-                        modifier     = Modifier.align(Alignment.BottomStart),
-                    )
+            item != null     -> BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                // The hero is one full viewport tall; the cast / related rails
+                // sit below it and the whole thing scrolls (the Plex detail
+                // page). Pulling the rails into the scroll — instead of an
+                // overlay — is what lets a second rail coexist with the cast.
+                val heroHeight = maxHeight
+                val scrollState = rememberScrollState()
+                val trailerHost = LocalTrailerHost.current
+                // Once the user scrolls into the rails, kill the hero trailer
+                // so it doesn't keep playing fullscreen over the content below.
+                val scrolledIntoRails by remember {
+                    derivedStateOf { scrollState.value > SCROLL_TRAILER_HIDE_PX }
+                }
+                LaunchedEffect(scrolledIntoRails) {
+                    if (scrolledIntoRails) trailerHost.hideNow()
+                }
+
+                Column(modifier = Modifier.verticalScroll(scrollState)) {
+                    Box(modifier = Modifier.height(heroHeight)) {
+                        HeroFull(
+                            item             = item,
+                            onPlay           = onPlay,
+                            onBack           = onBack,
+                            onToggleFavorite = viewModel::toggleFavorite,
+                            onToggleWatched  = viewModel::toggleWatched,
+                            onOpenCollection = onOpenCollection,
+                            trailerResumeSec = trailerResumeSec,
+                        )
+                    }
+                    val people = peopleOf(item)
+                    if (people.isNotEmpty()) {
+                        CastCrewRail(people = people, onOpenPerson = onOpenPerson)
+                    }
+                    if (ui.related.isNotEmpty()) {
+                        RelatedRail(items = ui.related, onOpenItem = onOpenItem)
+                    }
+                    Spacer(Modifier.height(32.dp))
                 }
             }
         }
@@ -528,6 +548,39 @@ private fun PartOfChip(name: String, onClick: () -> Unit) {
 /** Focus "pop" of a cast avatar — matches the MediaCard feel on TV. */
 private const val CAST_FOCUS_SCALE = 1.08f
 
+/** Scroll offset (px) past which the hero trailer is force-hidden. */
+private const val SCROLL_TRAILER_HIDE_PX = 80
+
+/**
+ * "Más como esto" — TMDb recommendations the user owns, as a poster rail.
+ * Reuses the catalogue card so a tap opens the real Detail / Series.
+ */
+@Composable
+private fun RelatedRail(
+    items:      List<Content>,
+    onOpenItem: (String, MediaKind) -> Unit,
+    modifier:   Modifier = Modifier,
+) {
+    Column(
+        modifier            = modifier
+            .fillMaxWidth()
+            .padding(start = 48.dp, end = 24.dp, top = 8.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text       = stringResource(R.string.detail_section_related),
+            style      = MaterialTheme.typography.titleMedium,
+            color      = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.SemiBold,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(items, key = { it.id }) { related ->
+                PortraitCatalogCard(related, onOpenItem)
+            }
+        }
+    }
+}
+
 /**
  * "Reparto y equipo" — a horizontal strip of circular cast/crew avatars
  * pinned to the bottom of the hero (the Plex / Prime detail pattern).
@@ -542,7 +595,7 @@ private fun CastCrewRail(
     Column(
         modifier            = modifier
             .fillMaxWidth()
-            .padding(start = 48.dp, end = 24.dp, bottom = 24.dp),
+            .padding(start = 48.dp, end = 24.dp, top = 8.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(

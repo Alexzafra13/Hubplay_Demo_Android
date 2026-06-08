@@ -16,6 +16,7 @@ import com.alex.hubplay.data.api.dto.GroupsResponse
 import com.alex.hubplay.data.api.dto.HomeLayoutResponse
 import com.alex.hubplay.data.api.dto.ItemDetailResponse
 import com.alex.hubplay.data.api.dto.ItemFavoriteToggleResponse
+import com.alex.hubplay.data.api.dto.ItemRecommendationsResponse
 import com.alex.hubplay.data.api.dto.LatestResponse
 import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
@@ -251,6 +252,7 @@ class ProfileRepositoryTest {
         override suspend fun getItem(itemId: String): ItemDetailResponse      = TODO()
         override suspend fun getChildren(itemId: String): ChildrenResponse    = TODO()
         override suspend fun getPerson(personId: String): PersonDetailResponse = TODO()
+        override suspend fun getRecommendations(itemId: String): ItemRecommendationsResponse = TODO()
         override suspend fun getNextUp(): NextUpResponse                      = TODO()
         override suspend fun getStreamInfo(itemId: String, capabilities: String): StreamInfoResponse = TODO()
         override suspend fun listChannels(libraryId: String, active: Boolean, includeHidden: Boolean): ChannelsResponse = TODO()

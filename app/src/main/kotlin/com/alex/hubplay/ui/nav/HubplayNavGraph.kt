@@ -347,6 +347,7 @@ fun HubplayNavGraph(
                 onBack             = { navController.popBackStack() },
                 onOpenCollection   = openCollection,
                 onOpenPerson       = openPerson,
+                onOpenItem         = openItem,
             )
         }
 

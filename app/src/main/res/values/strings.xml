@@ -110,6 +110,7 @@
     <string name="detail_action_mark_unwatched">Marcar como no visto</string>
     <string name="detail_action_info">Información</string>
     <string name="detail_section_cast">Reparto y equipo</string>
+    <string name="detail_section_related">Más como esto</string>
 
     <!-- Person detail -->
     <string name="person_role_actor">Actor/Actriz</string>
