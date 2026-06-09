@@ -49,6 +49,13 @@ sealed class Route(val path: String) {
             "person/${java.net.URLEncoder.encode(personId, Charsets.UTF_8)}"
     }
 
+    /** Studio / network detail — profile + catalogue (tap-through from chip). */
+    data object Studio : Route("studio/{studioSlug}") {
+        const val ARG_STUDIO_SLUG = "studioSlug"
+        fun route(slug: String): String =
+            "studio/${java.net.URLEncoder.encode(slug, Charsets.UTF_8)}"
+    }
+
     data object Player : Route("player/{itemId}?resume={resumePosSec}") {
         const val ARG_ITEM_ID = "itemId"
         const val ARG_RESUME  = "resumePosSec"

@@ -8,6 +8,59 @@
 
 ---
 
+## 🏢 Sesión 2026-06-08 (cont. 3) — StudioDetail (clic en estudio)
+
+Chip "Estudio: X" en el Detalle (InfoColumn) → pantalla **StudioDetail**
+con el catálogo de ese estudio. `GET /studios/{slug}` (ya existía). Cierra
+el patrón Plex de metadatos clicables (persona ✅, estudio ✅).
+
+- DTOs `StudioDetail*` (items reusan ItemSummaryDto + su `toContent`),
+  `studio_slug` en ItemDetailDto, `HubplayApi.getStudio`.
+- `Content`: `studioName`/`studioSlug` en Movie/Series; dominio
+  `StudioDetail`. `HomeRepository.fetchStudio` + mapeo en fetchItemDetail.
+- UI: `ui/studio/StudioDetailScreen` + ViewModel (espejo de PersonDetail),
+  `StudioChip`+`MetaChips` en DetailScreen, `Route.Studio`, wiring NavGraph.
+- detekt: regen 4 ImportOrdering + HeroFull LongMethod; `InfoColumn` se
+  pasó de 80 líneas → extraídos los chips a `ColumnScope.MetaChips`.
+- **Riesgo conocido**: DetailScreen y HeroFull a 8 params. Aposté a que
+  `LongParameterList` (threshold 8) usa `>` (8 permitido). Si CI lo marca,
+  añadir 2 entradas al baseline.
+
+---
+
+## 🎞️ Sesión 2026-06-08 (cont. 2) — "Más como esto" + Detail scrollable
+
+El Detalle pasa de hero fijo a **página scrollable** (estilo Plex):
+hero a pantalla completa → reparto → **"Más como esto"**. La fila de
+relacionados usa `GET /items/{id}/recommendations` (TMDb), filtrando a
+los que el usuario tiene en biblioteca (`in_library` + `local_id`) para
+que cada card abra un Detalle real. Sin `type` en el DTO → se tratan como
+Movie (en el Detalle de una peli las recs son pelis).
+
+- DTOs `ItemRecommendation*`, `HubplayApi.getRecommendations`,
+  `HomeRepository.fetchRecommendations` (+ mapper, filtra no-biblioteca).
+- `DetailViewModel`: `related` en el estado, `loadRelated()` best-effort
+  tras cargar el item (fallo = rail oculto, nunca bloquea).
+- `DetailScreen`: `BoxWithConstraints` + `Column(verticalScroll)`; hero en
+  `Box(height=maxHeight)`, luego `CastCrewRail` + `RelatedRail` (la fila
+  de reparto deja de ser overlay y entra en el scroll). Trailer: al
+  scrollear más de 80px se llama `trailerHost.hideNow()` para que no siga
+  sonando fullscreen sobre los rails (`derivedStateOf` + `LaunchedEffect`).
+- `onOpenItem` añadido a DetailScreen (wiring `openItem` en NavGraph).
+  strings `detail_section_related`. Fakes de test (2 FakeApi + FakeRepo).
+- detekt: regeneradas 4 entradas ImportOrdering (HubplayApi, 2 tests,
+  DetailScreen); `DetailViewModel.load().onFailure` reformateado a bloque
+  para no depender del baseline de Wrapping.
+
+**Verificar en device**: scroll hero→rails con D-pad, que el trailer se
+corte al bajar, y que las recs solo muestren títulos navegables.
+
+### Pendiente mismo eje Plex
+- StudioDetail (`/studios/{slug}`), reparto+overflow en SeriesScreen,
+  auto-play siguiente episodio.
+
+---
+
 ## 🎭 Sesión 2026-06-08 (cont.) — Reparto/equipo + PersonDetail
 
 El backend YA exponía todo (verificado): `GET /items/{id}` trae `people[]`

@@ -36,11 +36,27 @@ class DetailViewModel(
         _ui.value = _ui.value.copy(isLoading = true, error = null)
         viewModelScope.launch {
             runCatching { repository.fetchItemDetail(itemId) }
-                .onSuccess { item -> _ui.value = DetailUiState(isLoading = false, item = item) }
-                .onFailure { err  -> _ui.value = _ui.value.copy(
-                    isLoading = false,
-                    error     = err.message ?: "No se pudo cargar el detalle",
-                ) }
+                .onSuccess { item ->
+                    _ui.value = DetailUiState(isLoading = false, item = item)
+                    loadRelated()
+                }
+                .onFailure { err ->
+                    _ui.value = _ui.value.copy(
+                        isLoading = false,
+                        error     = err.message ?: "No se pudo cargar el detalle",
+                    )
+                }
+        }
+    }
+
+    /**
+     * "Más como esto" — best-effort. A failure (or no recs) just leaves the
+     * rail hidden; it never blocks or errors the main detail view.
+     */
+    private fun loadRelated() {
+        viewModelScope.launch {
+            runCatching { repository.fetchRecommendations(itemId) }
+                .onSuccess { related -> _ui.value = _ui.value.copy(related = related) }
         }
     }
 
@@ -133,7 +149,8 @@ class DetailViewModel(
 
 @androidx.compose.runtime.Immutable
 data class DetailUiState(
-    val isLoading: Boolean    = false,
-    val item:      Content?  = null,
-    val error:     String?    = null,
+    val isLoading: Boolean        = false,
+    val item:      Content?       = null,
+    val related:   List<Content>  = emptyList(),
+    val error:     String?        = null,
 )

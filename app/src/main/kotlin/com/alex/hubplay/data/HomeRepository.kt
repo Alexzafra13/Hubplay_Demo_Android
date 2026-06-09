@@ -3,6 +3,7 @@ package com.alex.hubplay.data
 import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.dto.CollectionListEntryDto
 import com.alex.hubplay.data.api.dto.ContinueWatchingEntryDto
+import com.alex.hubplay.data.api.dto.ItemRecommendationDto
 import com.alex.hubplay.data.api.dto.ItemSummaryDto
 import com.alex.hubplay.data.api.dto.LiveNowChannelDto
 import com.alex.hubplay.data.api.dto.NextUpItemDto
@@ -31,6 +32,8 @@ interface HomeRepository {
     suspend fun fetchCollectionDetail(id: String): CollectionDetail
     suspend fun fetchItemDetail(itemId: String): Content
     suspend fun fetchPerson(personId: String): PersonDetail
+    suspend fun fetchStudio(slug: String): StudioDetail
+    suspend fun fetchRecommendations(itemId: String): List<Content>
     suspend fun toggleItemFavorite(itemId: String): Boolean
     suspend fun setItemWatched(itemId: String, watched: Boolean)
     suspend fun searchItems(query: String, limit: Int = 60): List<Content>
@@ -260,6 +263,8 @@ class HomeRepositoryImpl(
                 watched        = data.userData?.played == true,
                 collectionId   = data.collection?.id,
                 collectionName = data.collection?.name,
+                studioName     = data.studio,
+                studioSlug     = data.studioSlug,
                 people         = data.people.map { it.toPerson(server) },
             )
             MediaKind.Series -> Content.Series(
@@ -277,6 +282,8 @@ class HomeRepositoryImpl(
                 trailerSite = data.trailer?.site,
                 isFavorite  = data.userData?.isFavorite == true,
                 watched     = data.userData?.played == true,
+                studioName  = data.studio,
+                studioSlug  = data.studioSlug,
                 people      = data.people.map { it.toPerson(server) },
             )
             MediaKind.Episode -> Content.Episode(
@@ -365,6 +372,35 @@ class HomeRepositoryImpl(
             imageUrl    = absolutize(data.imageUrl, server),
             filmography = data.filmography.map { it.toContent(server) },
         )
+    }
+
+    /**
+     * GET /studios/{slug} — studio/network profile + its catalogue.
+     * Items reuse the ItemSummaryDto mapper so navigation works as usual.
+     */
+    override suspend fun fetchStudio(slug: String): StudioDetail {
+        val server = serverUrl()
+        val data = api.getStudio(slug).data
+            ?: error("studios/$slug returned no data envelope")
+        return StudioDetail(
+            id      = data.id,
+            name    = data.name,
+            slug    = data.slug,
+            logoUrl = absolutize(data.logoUrl, server),
+            items   = data.items.map { it.toContent(server) },
+        )
+    }
+
+    /**
+     * GET /items/{id}/recommendations — TMDb "more like this", filtered to
+     * candidates the user actually owns (`in_library` + a `local_id`) so
+     * every card on the rail opens a real Detail. The DTO carries no type;
+     * on a movie's Detail these are movies, so we emit [Content.Movie].
+     */
+    override suspend fun fetchRecommendations(itemId: String): List<Content> {
+        val server = serverUrl()
+        return api.getRecommendations(itemId).data?.items.orEmpty()
+            .mapNotNull { rec -> rec.toContent(server) }
     }
 
     /**
@@ -691,6 +727,27 @@ class HomeRepositoryImpl(
             logoInitials = logoInitials,
             logoBg       = logoBg,
             logoFg       = logoFg,
+        )
+    }
+
+    /**
+     * Recommendation → [Content.Movie], or null for candidates the user
+     * doesn't own (no `local_id` to navigate to). `poster_url` is usually
+     * an absolute TMDb URL; absolutize() leaves those untouched.
+     */
+    private fun ItemRecommendationDto.toContent(server: String): Content.Movie? {
+        val id = localId
+        if (!inLibrary || id == null) return null
+        val poster = absolutize(posterUrl, server)
+        return Content.Movie(
+            id          = id,
+            title       = title.orEmpty(),
+            subtitle    = year?.toString(),
+            posterUrl   = poster,
+            backdropUrl = poster,
+            overview    = overview,
+            rating      = rating,
+            year        = year,
         )
     }
 

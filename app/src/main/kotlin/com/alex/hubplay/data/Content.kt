@@ -67,6 +67,8 @@ sealed interface Content {
         val watched:               Boolean      = false,
         val collectionId:          String?      = null,
         val collectionName:        String?      = null,
+        val studioName:            String?      = null,
+        val studioSlug:            String?      = null,
         val people:                List<Person> = emptyList(),
     ) : Resumable {
         override val kind: MediaKind get() = MediaKind.Movie
@@ -88,6 +90,8 @@ sealed interface Content {
         val trailerSite:          String?      = null,
         val isFavorite:           Boolean      = false,
         val watched:              Boolean      = false,
+        val studioName:           String?      = null,
+        val studioSlug:           String?      = null,
         val people:               List<Person> = emptyList(),
     ) : Content {
         override val kind: MediaKind get() = MediaKind.Series
@@ -225,4 +229,18 @@ data class PersonDetail(
     val type:        String?       = null,
     val imageUrl:    String?       = null,
     val filmography: List<Content> = emptyList(),
+)
+
+/**
+ * A studio / network profile + the items it produced. Items reuse
+ * [Content] so the StudioDetail screen renders them with the same
+ * MediaCard + navigation rules as every other grid.
+ */
+@Immutable
+data class StudioDetail(
+    val id:      String,
+    val name:    String,
+    val slug:    String?       = null,
+    val logoUrl: String?       = null,
+    val items:   List<Content> = emptyList(),
 )

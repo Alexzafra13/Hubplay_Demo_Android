@@ -15,6 +15,7 @@ import com.alex.hubplay.data.api.dto.GroupsResponse
 import com.alex.hubplay.data.api.dto.HomeLayoutResponse
 import com.alex.hubplay.data.api.dto.ItemDetailResponse
 import com.alex.hubplay.data.api.dto.ItemFavoriteToggleResponse
+import com.alex.hubplay.data.api.dto.ItemRecommendationsResponse
 import com.alex.hubplay.data.api.dto.LatestResponse
 import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
@@ -27,6 +28,7 @@ import com.alex.hubplay.data.api.dto.SwitchProfileRequest
 import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.StatusResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
+import com.alex.hubplay.data.api.dto.StudioDetailResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
 import com.alex.hubplay.data.api.dto.UpdateProgressRequest
 import com.alex.hubplay.data.api.dto.WatchBeaconResponse
@@ -134,6 +136,20 @@ interface HubplayApi {
      */
     @GET("people/{id}")
     suspend fun getPerson(@Path("id") personId: String): PersonDetailResponse
+
+    /**
+     * GET /api/v1/items/{id}/recommendations — TMDb "more like this".
+     * Powers the "Más como esto" rail on the Detail screen.
+     */
+    @GET("items/{id}/recommendations")
+    suspend fun getRecommendations(@Path("id") itemId: String): ItemRecommendationsResponse
+
+    /**
+     * GET /api/v1/studios/{slug} — studio/network profile + its items.
+     * Powers the tap-through from the studio chip on the Detail screen.
+     */
+    @GET("studios/{slug}")
+    suspend fun getStudio(@Path("slug") slug: String): StudioDetailResponse
 
     /**
      * GET /api/v1/me/next-up

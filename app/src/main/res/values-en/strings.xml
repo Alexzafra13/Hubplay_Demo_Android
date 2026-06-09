@@ -110,6 +110,9 @@
     <string name="detail_action_mark_unwatched">Mark as unwatched</string>
     <string name="detail_action_info">Information</string>
     <string name="detail_section_cast">Cast &amp; crew</string>
+    <string name="detail_section_related">More like this</string>
+    <string name="detail_studio_chip">Studio: %1$s</string>
+    <string name="studio_no_items">No titles from this studio in your library</string>
 
     <!-- Person detail -->
     <string name="person_role_actor">Actor</string>
