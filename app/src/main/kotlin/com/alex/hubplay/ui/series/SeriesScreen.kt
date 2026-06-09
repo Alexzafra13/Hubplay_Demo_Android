@@ -21,15 +21,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -62,6 +69,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
@@ -72,6 +80,8 @@ import com.alex.hubplay.ui.components.HeroIconButton
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.AccentSoft
 import com.alex.hubplay.ui.theme.BgBase
+import com.alex.hubplay.ui.theme.BgElevated
+import com.alex.hubplay.ui.theme.Border
 
 /**
  * Series detail surface — Netflix-style two-view flow:
@@ -136,6 +146,8 @@ private fun SeriesHeroFull(
     onToggleFavorite: () -> Unit,
 ) {
     val series = data.series
+    // Drives the full-info dialog raised from the overflow menu.
+    var showInfo by remember { mutableStateOf(false) }
 
     // Backdrop ↔ trailer crossfade. El trailer vive en TrailerHostOverlay
     // (root) — esta pantalla solo activa un claim para su serie. Si venimos
@@ -225,20 +237,37 @@ private fun SeriesHeroFull(
             )
         }
 
-        // ── Favourite heart, top-right ─────────────────────────────────────
-        // Series-level toggle — same item id the backend stores user_data
-        // against, so a heart here matches what the user sees from the web.
-        HeroIconButton(
-            icon               = if (series?.isFavorite == true) Icons.Default.Favorite
-                                 else                            Icons.Default.FavoriteBorder,
-            contentDescription = if (series?.isFavorite == true) stringResource(R.string.cd_remove_favorite)
-                                 else                            stringResource(R.string.cd_add_favorite),
-            onClick            = onToggleFavorite,
-            modifier           = Modifier
+        // ── Favourite heart + overflow, top-right ─────────────────────────
+        // Series-level favourite toggle — same item id the backend stores
+        // user_data against. The 3-dots opens the full-info dialog (Plex
+        // parity with the movie Detail). No "mark watched" here yet: that
+        // action's semantics on a whole series need a device check first.
+        Row(
+            modifier              = Modifier
                 .align(Alignment.TopEnd)
                 .padding(end = 24.dp, top = 20.dp)
                 .zIndex(10f),
-        )
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+        ) {
+            HeroIconButton(
+                icon               = if (series?.isFavorite == true) Icons.Default.Favorite
+                                     else                            Icons.Default.FavoriteBorder,
+                contentDescription = if (series?.isFavorite == true) stringResource(R.string.cd_remove_favorite)
+                                     else                            stringResource(R.string.cd_add_favorite),
+                onClick            = onToggleFavorite,
+            )
+            SeriesOverflowButton(onShowInfo = { showInfo = true })
+        }
+
+        if (showInfo && series != null) {
+            SeriesInfoDialog(
+                series       = series,
+                seasonsCount = data.seasons.size,
+                episodeCount = data.episodesBySeasonId.values.sumOf { it.size },
+                onDismiss    = { showInfo = false },
+            )
+        }
 
         // ── Info column on the left half ──────────────────────────────────
         Column(
@@ -704,6 +733,86 @@ private fun EpisodeRow(
 }
 
 // ─── Shared bits ────────────────────────────────────────────────────────────
+
+@Composable
+/**
+ * The "⋮" overflow next to the favourite heart. One action for now —
+ * "Información" (the full-info dialog). Mark-watched is deliberately
+ * omitted until the whole-series semantics can be checked on a device.
+ */
+@Composable
+private fun SeriesOverflowButton(onShowInfo: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        HeroIconButton(
+            icon               = Icons.Default.MoreVert,
+            contentDescription = stringResource(R.string.action_more_options),
+            onClick            = { expanded = true },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text        = { Text(stringResource(R.string.detail_action_info)) },
+                leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = null) },
+                onClick     = {
+                    expanded = false
+                    onShowInfo()
+                },
+            )
+        }
+    }
+}
+
+/**
+ * Plex-style full-info sheet for a series — complete synopsis + the full
+ * meta block, scrollable so a long overview never clips. Mirrors the
+ * movie Detail's InfoDialog but reuses this screen's own [MetaRow].
+ */
+@Composable
+private fun SeriesInfoDialog(
+    series:       Content.Series,
+    seasonsCount: Int,
+    episodeCount: Int,
+    onDismiss:    () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape    = RoundedCornerShape(16.dp),
+            color    = BgElevated,
+            modifier = Modifier
+                .widthIn(max = 720.dp)
+                .fillMaxWidth()
+                .border(1.dp, Border, RoundedCornerShape(16.dp)),
+        ) {
+            Column(
+                modifier            = Modifier
+                    .heightIn(max = 480.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(28.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(
+                    text       = series.title,
+                    style      = MaterialTheme.typography.headlineSmall,
+                    color      = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.Bold,
+                )
+                MetaRow(item = series, seasonsCount = seasonsCount, episodeCount = episodeCount)
+                series.overview?.takeIf { it.isNotBlank() }?.let { overview ->
+                    Text(
+                        text  = overview,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) {
+                        Text(stringResource(R.string.action_close))
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun CenteredSpinner() {
