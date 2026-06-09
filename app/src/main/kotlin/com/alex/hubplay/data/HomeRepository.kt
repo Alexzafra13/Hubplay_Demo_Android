@@ -32,6 +32,7 @@ interface HomeRepository {
     suspend fun fetchCollectionDetail(id: String): CollectionDetail
     suspend fun fetchItemDetail(itemId: String): Content
     suspend fun fetchPerson(personId: String): PersonDetail
+    suspend fun fetchStudio(slug: String): StudioDetail
     suspend fun fetchRecommendations(itemId: String): List<Content>
     suspend fun toggleItemFavorite(itemId: String): Boolean
     suspend fun setItemWatched(itemId: String, watched: Boolean)
@@ -262,6 +263,8 @@ class HomeRepositoryImpl(
                 watched        = data.userData?.played == true,
                 collectionId   = data.collection?.id,
                 collectionName = data.collection?.name,
+                studioName     = data.studio,
+                studioSlug     = data.studioSlug,
                 people         = data.people.map { it.toPerson(server) },
             )
             MediaKind.Series -> Content.Series(
@@ -279,6 +282,8 @@ class HomeRepositoryImpl(
                 trailerSite = data.trailer?.site,
                 isFavorite  = data.userData?.isFavorite == true,
                 watched     = data.userData?.played == true,
+                studioName  = data.studio,
+                studioSlug  = data.studioSlug,
                 people      = data.people.map { it.toPerson(server) },
             )
             MediaKind.Episode -> Content.Episode(
@@ -366,6 +371,23 @@ class HomeRepositoryImpl(
             type        = data.type,
             imageUrl    = absolutize(data.imageUrl, server),
             filmography = data.filmography.map { it.toContent(server) },
+        )
+    }
+
+    /**
+     * GET /studios/{slug} — studio/network profile + its catalogue.
+     * Items reuse the ItemSummaryDto mapper so navigation works as usual.
+     */
+    override suspend fun fetchStudio(slug: String): StudioDetail {
+        val server = serverUrl()
+        val data = api.getStudio(slug).data
+            ?: error("studios/$slug returned no data envelope")
+        return StudioDetail(
+            id      = data.id,
+            name    = data.name,
+            slug    = data.slug,
+            logoUrl = absolutize(data.logoUrl, server),
+            items   = data.items.map { it.toContent(server) },
         )
     }
 

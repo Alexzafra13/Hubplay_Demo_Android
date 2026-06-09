@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -112,6 +114,7 @@ fun DetailScreen(
     onOpenCollection:   (collectionId: String) -> Unit = {},
     onOpenPerson:       (personId: String) -> Unit = {},
     onOpenItem:         (itemId: String, kind: MediaKind) -> Unit = { _, _ -> },
+    onOpenStudio:       (studioSlug: String) -> Unit = {},
     trailerResumeSec:   Long = 0L,
 ) {
     val ui by viewModel.ui.collectAsState()
@@ -147,6 +150,7 @@ fun DetailScreen(
                             onToggleFavorite = viewModel::toggleFavorite,
                             onToggleWatched  = viewModel::toggleWatched,
                             onOpenCollection = onOpenCollection,
+                            onOpenStudio     = onOpenStudio,
                             trailerResumeSec = trailerResumeSec,
                         )
                     }
@@ -180,6 +184,7 @@ private fun HeroFull(
     onToggleFavorite:   () -> Unit,
     onToggleWatched:    () -> Unit,
     onOpenCollection:   (String) -> Unit,
+    onOpenStudio:       (String) -> Unit,
     trailerResumeSec:   Long = 0L,
 ) {
     // Pull the variant-specific pair into locals so the rest of the hero
@@ -337,7 +342,11 @@ private fun HeroFull(
             PosterAndPlayColumn(item = item, onPlay = onPlay)
 
             // ── Right column: logo/title, meta, overview, secondary CTAs
-            InfoColumn(item = item, onOpenCollection = onOpenCollection)
+            InfoColumn(
+                item             = item,
+                onOpenCollection = onOpenCollection,
+                onOpenStudio     = onOpenStudio,
+            )
         }
     }
 }
@@ -393,7 +402,11 @@ private fun PosterAndPlayColumn(item: Content, onPlay: (String, Long) -> Unit) {
 }
 
 @Composable
-private fun InfoColumn(item: Content, onOpenCollection: (String) -> Unit) {
+private fun InfoColumn(
+    item:             Content,
+    onOpenCollection: (String) -> Unit,
+    onOpenStudio:     (String) -> Unit,
+) {
     Column(
         modifier            = Modifier.fillMaxHeight(),
         verticalArrangement = Arrangement.Center,
@@ -448,17 +461,34 @@ private fun InfoColumn(item: Content, onOpenCollection: (String) -> Unit) {
             )
         }
 
-        // "Parte de [Saga]" chip — clickable, jumps to the collection
-        // detail screen. Only present on movies the scanner matched
-        // to a TMDb collection; everything else (series, channels,
-        // orphan movies) doesn't render this row at all.
-        val movie = item as? Content.Movie
-        val collectionId = movie?.collectionId
-        val collectionName = movie?.collectionName
-        if (collectionId != null && !collectionName.isNullOrBlank()) {
-            Spacer(Modifier.height(14.dp))
-            PartOfChip(name = collectionName, onClick = { onOpenCollection(collectionId) })
-        }
+        MetaChips(item = item, onOpenCollection = onOpenCollection, onOpenStudio = onOpenStudio)
+    }
+}
+
+/**
+ * The "Parte de [Saga]" + "Estudio: X" chips under the overview. Emitted
+ * straight into the info [Column] (ColumnScope receiver) so the spacers
+ * flow with the rest. Each hides itself when its data is absent.
+ */
+@Composable
+private fun ColumnScope.MetaChips(
+    item:             Content,
+    onOpenCollection: (String) -> Unit,
+    onOpenStudio:     (String) -> Unit,
+) {
+    val movie = item as? Content.Movie
+    val collectionId = movie?.collectionId
+    val collectionName = movie?.collectionName
+    if (collectionId != null && !collectionName.isNullOrBlank()) {
+        Spacer(Modifier.height(14.dp))
+        PartOfChip(name = collectionName, onClick = { onOpenCollection(collectionId) })
+    }
+
+    val studioName = (item as? Content.Movie)?.studioName ?: (item as? Content.Series)?.studioName
+    val studioSlug = (item as? Content.Movie)?.studioSlug ?: (item as? Content.Series)?.studioSlug
+    if (!studioSlug.isNullOrBlank() && !studioName.isNullOrBlank()) {
+        Spacer(Modifier.height(10.dp))
+        StudioChip(name = studioName, onClick = { onOpenStudio(studioSlug) })
     }
 }
 
@@ -537,6 +567,36 @@ private fun PartOfChip(name: String, onClick: () -> Unit) {
             )
             Text(
                 text       = stringResource(R.string.collections_part_of, name),
+                style      = MaterialTheme.typography.labelLarge,
+                color      = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    }
+}
+
+/** "Estudio: X" pill — jumps to the studio's catalogue. Sibling of [PartOfChip]. */
+@Composable
+private fun StudioChip(name: String, onClick: () -> Unit) {
+    Surface(
+        color    = MaterialTheme.colorScheme.surface,
+        shape    = RoundedCornerShape(999.dp),
+        tonalElevation = 2.dp,
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier              = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                imageVector        = Icons.Outlined.Business,
+                contentDescription = null,
+                tint               = Accent,
+                modifier           = Modifier.size(16.dp),
+            )
+            Text(
+                text       = stringResource(R.string.detail_studio_chip, name),
                 style      = MaterialTheme.typography.labelLarge,
                 color      = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Medium,

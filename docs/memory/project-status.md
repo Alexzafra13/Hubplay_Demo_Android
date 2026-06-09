@@ -8,6 +8,26 @@
 
 ---
 
+## 🏢 Sesión 2026-06-08 (cont. 3) — StudioDetail (clic en estudio)
+
+Chip "Estudio: X" en el Detalle (InfoColumn) → pantalla **StudioDetail**
+con el catálogo de ese estudio. `GET /studios/{slug}` (ya existía). Cierra
+el patrón Plex de metadatos clicables (persona ✅, estudio ✅).
+
+- DTOs `StudioDetail*` (items reusan ItemSummaryDto + su `toContent`),
+  `studio_slug` en ItemDetailDto, `HubplayApi.getStudio`.
+- `Content`: `studioName`/`studioSlug` en Movie/Series; dominio
+  `StudioDetail`. `HomeRepository.fetchStudio` + mapeo en fetchItemDetail.
+- UI: `ui/studio/StudioDetailScreen` + ViewModel (espejo de PersonDetail),
+  `StudioChip`+`MetaChips` en DetailScreen, `Route.Studio`, wiring NavGraph.
+- detekt: regen 4 ImportOrdering + HeroFull LongMethod; `InfoColumn` se
+  pasó de 80 líneas → extraídos los chips a `ColumnScope.MetaChips`.
+- **Riesgo conocido**: DetailScreen y HeroFull a 8 params. Aposté a que
+  `LongParameterList` (threshold 8) usa `>` (8 permitido). Si CI lo marca,
+  añadir 2 entradas al baseline.
+
+---
+
 ## 🎞️ Sesión 2026-06-08 (cont. 2) — "Más como esto" + Detail scrollable
 
 El Detalle pasa de hero fijo a **página scrollable** (estilo Plex):

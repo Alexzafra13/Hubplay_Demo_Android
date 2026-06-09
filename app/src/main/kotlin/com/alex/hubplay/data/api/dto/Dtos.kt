@@ -113,6 +113,7 @@ data class ItemDetailDto(
     val overview:                                          String? = null,
     val tagline:                                           String? = null,
     val studio:                                            String? = null,
+    @Json(name = "studio_slug")      val studioSlug:      String? = null,
     @Json(name = "studio_logo_url")  val studioLogoUrl:   String? = null,
     val genres:                                            List<String> = emptyList(),
     @Json(name = "duration_ticks")   val durationTicks:   Long?    = null,
@@ -630,4 +631,25 @@ data class ItemRecommendationsPayload(
 @JsonClass(generateAdapter = true)
 data class ItemRecommendationsResponse(
     val data: ItemRecommendationsPayload? = null,
+)
+
+// ─── Studio detail ──────────────────────────────────────────────────────────
+//
+// GET /api/v1/studios/{slug} — studio/network profile + its items. Ground
+// truth: studios handler. Items are item-shaped, so we reuse ItemSummaryDto
+// + its existing toContent() mapper.
+
+@JsonClass(generateAdapter = true)
+data class StudioDetailDto(
+    val id:   String,
+    val name: String,
+    val slug: String? = null,
+    @Json(name = "logo_url") val logoUrl: String? = null,
+    @Json(name = "tmdb_id")  val tmdbId:  Int?    = null,
+    val items: List<ItemSummaryDto> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class StudioDetailResponse(
+    val data: StudioDetailDto? = null,
 )

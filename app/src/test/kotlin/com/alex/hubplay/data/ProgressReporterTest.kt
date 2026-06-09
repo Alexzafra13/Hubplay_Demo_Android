@@ -28,6 +28,7 @@ import com.alex.hubplay.data.api.dto.SwitchProfileRequest
 import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.StatusResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
+import com.alex.hubplay.data.api.dto.StudioDetailResponse
 import com.alex.hubplay.data.api.dto.RecommendedResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
 import com.alex.hubplay.data.api.dto.UpdateProgressRequest
@@ -226,6 +227,7 @@ class ProgressReporterTest {
         override suspend fun getChildren(itemId: String): ChildrenResponse    = TODO()
         override suspend fun getPerson(personId: String): PersonDetailResponse = TODO()
         override suspend fun getRecommendations(itemId: String): ItemRecommendationsResponse = TODO()
+        override suspend fun getStudio(slug: String): StudioDetailResponse    = TODO()
         override suspend fun getNextUp(): NextUpResponse                      = TODO()
         override suspend fun getStreamInfo(itemId: String, capabilities: String): StreamInfoResponse = TODO()
         override suspend fun listChannels(libraryId: String, active: Boolean, includeHidden: Boolean): ChannelsResponse = TODO()

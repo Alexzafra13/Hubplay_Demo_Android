@@ -28,6 +28,7 @@ import com.alex.hubplay.data.api.dto.SwitchProfileRequest
 import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.StatusResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
+import com.alex.hubplay.data.api.dto.StudioDetailResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
 import com.alex.hubplay.data.api.dto.UpdateProgressRequest
 import com.alex.hubplay.data.api.dto.WatchBeaconResponse
@@ -142,6 +143,13 @@ interface HubplayApi {
      */
     @GET("items/{id}/recommendations")
     suspend fun getRecommendations(@Path("id") itemId: String): ItemRecommendationsResponse
+
+    /**
+     * GET /api/v1/studios/{slug} — studio/network profile + its items.
+     * Powers the tap-through from the studio chip on the Detail screen.
+     */
+    @GET("studios/{slug}")
+    suspend fun getStudio(@Path("slug") slug: String): StudioDetailResponse
 
     /**
      * GET /api/v1/me/next-up

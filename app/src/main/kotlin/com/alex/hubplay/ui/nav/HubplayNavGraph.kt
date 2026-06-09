@@ -41,6 +41,8 @@ import com.alex.hubplay.ui.settings.SettingsScreen
 import com.alex.hubplay.ui.settings.SettingsViewModel
 import com.alex.hubplay.ui.settings.TrustedServersScreen
 import com.alex.hubplay.ui.settings.TrustedServersViewModel
+import com.alex.hubplay.ui.studio.StudioDetailScreen
+import com.alex.hubplay.ui.studio.StudioDetailViewModel
 import com.alex.hubplay.ui.whoiswatching.WhoIsWatchingScreen
 import com.alex.hubplay.ui.whoiswatching.WhoIsWatchingViewModel
 
@@ -149,6 +151,9 @@ fun HubplayNavGraph(
         }
         val openPerson: (String) -> Unit = { personId ->
             navController.navigate(Route.Person.route(personId))
+        }
+        val openStudio: (String) -> Unit = { slug ->
+            navController.navigate(Route.Studio.route(slug))
         }
         val openSettings: () -> Unit = {
             navController.navigate(Route.Settings.path)
@@ -348,6 +353,7 @@ fun HubplayNavGraph(
                 onOpenCollection   = openCollection,
                 onOpenPerson       = openPerson,
                 onOpenItem         = openItem,
+                onOpenStudio       = openStudio,
             )
         }
 
@@ -364,6 +370,25 @@ fun HubplayNavGraph(
                 factory = PersonDetailViewModel.factory(container.homeRepository, personId),
             )
             PersonDetailScreen(
+                viewModel  = vm,
+                onOpenItem = openItem,
+                onBack     = { navController.popBackStack() },
+            )
+        }
+
+        // ── Studio detail (chip tap-through) ─────────────────────────
+        composable(
+            route     = Route.Studio.path,
+            arguments = listOf(
+                navArgument(Route.Studio.ARG_STUDIO_SLUG) { type = NavType.StringType },
+            ),
+        ) { entry ->
+            val rawSlug = entry.arguments?.getString(Route.Studio.ARG_STUDIO_SLUG) ?: return@composable
+            val slug = java.net.URLDecoder.decode(rawSlug, Charsets.UTF_8)
+            val vm = viewModel<StudioDetailViewModel>(
+                factory = StudioDetailViewModel.factory(container.homeRepository, slug),
+            )
+            StudioDetailScreen(
                 viewModel  = vm,
                 onOpenItem = openItem,
                 onBack     = { navController.popBackStack() },
