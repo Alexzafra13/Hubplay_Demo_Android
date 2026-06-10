@@ -174,6 +174,7 @@ class LiveTvViewModel(
                 channels  = emptyList(),
                 groups    = emptyList(),
                 favorites = emptySet(),
+                recentIds = emptyList(),
                 schedule  = emptyMap(),
             )
         }
