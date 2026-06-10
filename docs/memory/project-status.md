@@ -1,10 +1,81 @@
 # Estado del proyecto — HubPlay Android
 
-> **Última sesión**: 2026-06-08 — rama `claude/tv-app-dev-review-J7RAr`.
-> (1) Análisis completo TV + overflow menu del Detail (visto/Información).
-> (2) **Reparto y equipo (cast & crew)** en el Detail + pantalla
-> **PersonDetail** navegable — el "alma Plex". Dirección estética
-> acordada: **"Plex de verdad"** (ficha densa).
+> **Última sesión**: 2026-06-10 — rama `claude/tv-app-dev-3y6q0f`.
+> (1) **CI desbloqueado**: los 10 findings de detekt que dejaron `main`
+> en rojo tras el merge del PR #69, arreglados y verde.
+> (2) **Filtro "Vistos recientemente"** en el sidebar de Live TV,
+> server-backed (`/me/channels/continue-watching`) — sync
+> multidispositivo gratis.
+
+---
+
+## 🔧 Sesión 2026-06-10 — CI verde + "Vistos recientemente" (Live TV)
+
+### #1 Fix CI (commit `dc72914`) — main estaba ROJO
+
+El merge del PR #69 dejó `main` en rojo: 10 findings de detekt. La
+apuesta de la sesión anterior ("LongParameterList threshold 8 usa `>`")
+salió mal — **dispara con `>=`** (8 params ya marca). Fixes:
+
+- `DetailViewModelTest`: `RuntimeException` → `error(...)` ×6. Ojo:
+  el paso intermedio `throw IllegalStateException(...)` dispara
+  `UseCheckOrError` — ir directo a `error()`.
+- `ProgressReporterTest` / `ProfileRepositoryTest`: stub `getStudio`
+  con espacio simple antes de `= TODO()` (FunctionStartOfBodySpacing
+  no perdona la alineación por columnas en líneas NUEVAS; las viejas
+  alineadas viven en el baseline).
+- Baseline: +2 entradas LongParameterList (DetailScreen, HeroFull).
+
+**Lección/herramienta**: sin SDK Android en el entorno remoto, detekt
+SÍ se puede correr local con la CLI standalone:
+`detekt-cli 1.23.7 + detekt-formatting-1.23.7.jar` (GitHub releases /
+Maven Central) con `--build-upon-default-config --config
+config/detekt.yml --baseline config/detekt-baseline.xml --jvm-target 17
+--input app/src/main/kotlin,app/src/test/kotlin`. Reproduce CI
+exactamente, y `--create-baseline` genera las firmas exactas para
+copiar entradas al baseline real (no escribirlas a mano).
+
+### #2 Filtro "Vistos recientemente" (commit `62b0189`)
+
+Cambio de plan vs backlog: en vez de la lista circular en DataStore,
+**server-backed**. El beacon `POST /channels/{id}/watch` ya persistía
+watch history y el backend expone `GET /me/channels/continue-watching`
+(newest first, cap 20). Mismo razonamiento que el reorder: el server
+como source of truth da sync multidispositivo gratis.
+
+- `HubplayApi.listRecentChannels(limit=20)` (reusa `ChannelsResponse`;
+  Moshi ignora el `last_watched_at` extra).
+- `LiveTvRepository.fetchRecentChannelIds()` — solo ids; el inventario
+  ya tiene los `LiveChannel` personalizados.
+- `LiveTvViewModel`: `recentIds` en UiState; fetch en el fan-out de
+  `fetchInventory` como **best-effort** (runCatching → emptyList; su
+  fallo no tumba Live TV). `recordWatch` hace bump optimista local
+  (prepend + dedupe + cap 20) para que el filtro esté fresco al volver
+  del player sin refetch.
+- `LiveTvUiState.recentChannels`: proyección en orden de recencia,
+  ids huérfanos (canal oculto / M3U churn) se caen solos del lookup.
+  `visibleChannels` reescrito como `when(filter)` porque Recent es el
+  único filtro que NO preserva el orden del inventario.
+- `ChannelFilter.Recent` (object). Sidebar: fila auto entre Favoritos
+  y los grupos, oculta si no hay historial. Strings es/en
+  (`livetv_filter_recent`).
+- Tests: `LiveTvUiStateTest` (6) — la proyección de filtros es pura y
+  testeable en JVM aunque el VM no lo sea (LiveTvRepository es clase
+  concreta). Stubs `listRecentChannels` en los 2 FakeApi.
+- detekt: LiveTvSidebar llegó a 8 params → entrada baseline (coherente
+  con EpgRow/HeroInfo). `SpacingBetweenDeclarationsWithComments` pide
+  línea en blanco antes de KDoc en sealed members.
+
+**Conocido**: los zaps hechos DENTRO del player (channel up/down vía
+`PlayerViewModel.recordWatch`) no actualizan el estado del
+LiveTvViewModel hasta el próximo `load()`. Aceptado — el path
+principal (click desde Live TV) sí refresca optimista.
+
+### Pendiente (sin cambios de prioridad)
+
+- Vista EPG grid completa (pantalla alternativa, NO tocar el inicio).
+- Reparto + overflow menu en SeriesScreen; auto-play siguiente episodio.
+- Tests Compose UI + emulator en CI; Baseline Profile (device real).
 
 ---
 
