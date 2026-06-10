@@ -250,6 +250,15 @@ interface HubplayApi {
     @POST("channels/{channelId}/watch")
     suspend fun recordChannelWatch(@Path("channelId") channelId: String): WatchBeaconResponse
 
+    /**
+     * GET /api/v1/me/channels/continue-watching — most recently watched
+     * channels (newest first), fed by the [recordChannelWatch] beacon.
+     * Server-side per user, so the "recently watched" sidebar filter
+     * syncs across devices for free. Backend caps `limit` at 20.
+     */
+    @GET("me/channels/continue-watching")
+    suspend fun listRecentChannels(@Query("limit") limit: Int = 20): ChannelsResponse
+
     // ─── Playback progress / favourites for items ───────────────────────────
 
     /**

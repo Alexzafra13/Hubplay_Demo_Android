@@ -240,6 +240,7 @@ class ProgressReporterTest {
         override suspend fun addFavoriteChannel(channelId: String): FavoriteToggleResponse = TODO()
         override suspend fun removeFavoriteChannel(channelId: String): FavoriteToggleResponse = TODO()
         override suspend fun recordChannelWatch(channelId: String): WatchBeaconResponse = TODO()
+        override suspend fun listRecentChannels(limit: Int): ChannelsResponse = TODO()
         override suspend fun markUnplayed(itemId: String) = TODO()
         override suspend fun toggleItemFavorite(itemId: String): ItemFavoriteToggleResponse = TODO()
         override suspend fun searchItems(query: String, limit: Int): SearchResponse = TODO()

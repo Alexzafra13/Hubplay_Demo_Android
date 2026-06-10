@@ -86,6 +86,16 @@ class LiveTvRepository(
         return api.listFavoriteChannelIds().data.orEmpty().toSet()
     }
 
+    /**
+     * Ids of the caller's most recently watched channels, newest first.
+     * Order matters — the "recently watched" filter renders in recency
+     * order, not LCN order. We keep only the ids because the inventory
+     * already holds the personalised channel objects.
+     */
+    suspend fun fetchRecentChannelIds(limit: Int = RECENT_CHANNELS_LIMIT): List<String> {
+        return api.listRecentChannels(limit).data.orEmpty().map { it.id }
+    }
+
     /** Idempotent on the server side. Returns the new state. */
     suspend fun addFavorite(channelId: String): Boolean {
         return api.addFavoriteChannel(channelId).data?.isFavorite ?: true
@@ -184,6 +194,11 @@ class LiveTvRepository(
         if (path.startsWith("http://") || path.startsWith("https://")) return path
         val cleanPath = if (path.startsWith("/")) path else "/$path"
         return "$server$cleanPath"
+    }
+
+    companion object {
+        /** Backend caps `/me/channels/continue-watching` at 20 — ask for the max. */
+        const val RECENT_CHANNELS_LIMIT = 20
     }
 }
 

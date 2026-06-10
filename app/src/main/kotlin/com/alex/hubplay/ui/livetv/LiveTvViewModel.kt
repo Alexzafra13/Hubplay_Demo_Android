@@ -85,6 +85,7 @@ class LiveTvViewModel(
                             channels         = snapshot.channels,
                             groups           = snapshot.groups,
                             favorites        = snapshot.favorites,
+                            recentIds        = snapshot.recentIds,
                             scheduleByChannel = snapshot.schedule,
                             lastLoadedAt     = Instant.now(),
                             nowEpoch         = System.currentTimeMillis(),
@@ -147,8 +148,17 @@ class LiveTvViewModel(
         }
     }
 
-    /** Called from the screen right before navigating to the player. */
+    /**
+     * Called from the screen right before navigating to the player.
+     * Prepends the channel to the local recents optimistically so the
+     * "recently watched" filter is fresh when the user comes back from
+     * the player — the server copy catches up via the beacon.
+     */
     fun recordWatch(channelId: String) {
+        _ui.update {
+            val bumped = listOf(channelId) + it.recentIds.filterNot { id -> id == channelId }
+            it.copy(recentIds = bumped.take(LiveTvRepository.RECENT_CHANNELS_LIMIT))
+        }
         viewModelScope.launch {
             runCatching { repository.recordWatch(channelId) }
                 .onFailure { Log.w(TAG, "recordWatch($channelId) failed", it) }
@@ -182,6 +192,13 @@ class LiveTvViewModel(
             async { repository.fetchGroups(lib.id) }
         }
         val favoritesDeferred = async { repository.fetchFavoriteIds() }
+        // Best-effort: an empty recents list just hides the sidebar filter,
+        // it must never take the whole Live TV screen down with it.
+        val recentsDeferred = async {
+            runCatching { repository.fetchRecentChannelIds() }
+                .onFailure { Log.w(TAG, "fetchRecentChannelIds failed", it) }
+                .getOrDefault(emptyList())
+        }
 
         val channels = channelDeferreds.awaitAll().flatten()
             .map { ch -> ch.copy(groupName = normalizeGroup(ch.groupName)) }
@@ -191,6 +208,7 @@ class LiveTvViewModel(
             .filter { it.isNotBlank() }
             .distinct()
         val favorites = favoritesDeferred.await()
+        val recentIds = recentsDeferred.await()
 
         // 3) Bulk schedule. One round-trip even with hundreds of channels.
         val schedule = if (channels.isEmpty()) {
@@ -201,7 +219,7 @@ class LiveTvViewModel(
                 .getOrDefault(emptyMap())
         }
 
-        InventorySnapshot(channels, groups, favorites, schedule)
+        InventorySnapshot(channels, groups, favorites, recentIds, schedule)
     }
 
     /**
@@ -273,6 +291,7 @@ class LiveTvViewModel(
         val channels:  List<LiveChannel>,
         val groups:    List<String>,
         val favorites: Set<String>,
+        val recentIds: List<String>,
         val schedule:  Map<String, List<EpgProgram>>,
     )
 
@@ -323,6 +342,8 @@ data class LiveTvUiState(
     val channels:          List<LiveChannel> = emptyList(),
     val groups:            List<String> = emptyList(),
     val favorites:         Set<String> = emptySet(),
+    /** Most recently watched channel ids, newest first (server-fed). */
+    val recentIds:         List<String> = emptyList(),
     val scheduleByChannel: Map<String, List<EpgProgram>> = emptyMap(),
     val filter:            ChannelFilter = ChannelFilter.All,
     val focusedChannelId:  String? = null,
@@ -331,18 +352,29 @@ data class LiveTvUiState(
     val lastLoadedAt:      Instant? = null,
 ) {
     /**
+     * Channels in the recents list that still exist in the inventory,
+     * in recency order (newest first). Ids pointing at channels the
+     * user has since hidden — or that dropped off the M3U — silently
+     * disappear because the lookup misses.
+     */
+    val recentChannels: List<LiveChannel> get() {
+        if (recentIds.isEmpty()) return emptyList()
+        val byId = channels.associateBy { it.id }
+        return recentIds.mapNotNull { byId[it] }
+    }
+
+    /**
      * Applies the active filter to the channel list, preserving the order
      * already baked in by [LiveTvViewModel.fetchInventory] (per-library:
-     * default LCN sort overridden by the user's saved reorder).
+     * default LCN sort overridden by the user's saved reorder). The
+     * Recents filter is the exception: it renders in recency order.
      */
-    val visibleChannels: List<LiveChannel> get() = channels
-        .filter { ch ->
-            when (val f = filter) {
-                ChannelFilter.All       -> true
-                ChannelFilter.Favorites -> ch.id in favorites
-                is ChannelFilter.Group  -> ch.groupName.equals(f.name, ignoreCase = true)
-            }
-        }
+    val visibleChannels: List<LiveChannel> get() = when (val f = filter) {
+        ChannelFilter.All       -> channels
+        ChannelFilter.Recent    -> recentChannels
+        ChannelFilter.Favorites -> channels.filter { it.id in favorites }
+        is ChannelFilter.Group  -> channels.filter { it.groupName.equals(f.name, ignoreCase = true) }
+    }
 
     /**
      * The channel the hero panel should render right now.
@@ -372,5 +404,8 @@ data class LiveTvUiState(
 sealed class ChannelFilter {
     object All        : ChannelFilter()
     object Favorites  : ChannelFilter()
+
+    /** Auto-generated "recently watched" filter — hidden until there's history. */
+    object Recent     : ChannelFilter()
     data class Group(val name: String) : ChannelFilter()
 }
