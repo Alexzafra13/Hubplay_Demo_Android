@@ -71,10 +71,42 @@ como source of truth da sync multidispositivo gratis.
 LiveTvViewModel hasta el próximo `load()`. Aceptado — el path
 principal (click desde Live TV) sí refresca optimista.
 
+### #3 Auto-play siguiente episodio (misma sesión)
+
+El gap más visible vs Plex/Netflix para ver series. **Switch in-place**
+(mismo PlayerScreen, mismo ExoPlayer — sin tocar el nav stack):
+
+- **Resolución client-side determinista** (no depende del timing de
+  `/me/next-up`, que avanza con el markPlayed del 95%): hermanos de la
+  season vía `/items/{seasonId}/children` → si es el último, seasons de
+  la serie → primera de la siguiente (specials S0 no interfieren:
+  orden por season_number e índice). Pure object `NextEpisodeResolver`
+  (ui/player) + 8 tests JVM.
+- `ItemDetailDto` ganó `parent_id` / `series_id` / `series_title` /
+  `season_number` / `episode_number` (el backend YA los devolvía).
+- `PlayerViewModel`: `nextEpisode` en el estado (lookup best-effort al
+  resolver un VOD type=episode); `playNextEpisode(finalPositionSec)`
+  hace flush `completed=true` del reporter viejo (por si los créditos
+  cortos no llegaron al 95%) y re-resuelve con el id nuevo →
+  `startParams` cambia → el `LaunchedEffect(ui.startParams)` del screen
+  re-reproduce sin recrear el player (mismo mecanismo que el zapping).
+- `NextEpisodeOverlay`: card Netflix-style abajo-derecha al llegar a
+  STATE_ENDED con countdown 8s → auto-fire; botones "Reproducir ya"
+  (foco inicial) y "Cancelar". BACK con la card visible la cierra (el
+  BackHandler del overlay se compone DESPUÉS del de salida → gana).
+  `autoPlayDismissed` se resetea por `ui.itemId` (remember keyed).
+- Strings es/en `player_next_episode_*`.
+
+**Verificar en device**: fin de episodio → card; countdown arranca el
+siguiente; cancelar + BACK sale; season finale salta de season; último
+episodio de la serie no muestra card.
+
 ### Pendiente (sin cambios de prioridad)
 
 - Vista EPG grid completa (pantalla alternativa, NO tocar el inicio).
-- Reparto + overflow menu en SeriesScreen; auto-play siguiente episodio.
+  **Esperar a tener device** — es la pantalla más pesada de foco D-pad.
+- Reparto + overflow menu en SeriesScreen (componentes ya existen,
+  es wiring).
 - Tests Compose UI + emulator en CI; Baseline Profile (device real).
 
 ---

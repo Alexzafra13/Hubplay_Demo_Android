@@ -67,6 +67,7 @@ import java.time.Instant
 private enum class ChromeState { Hidden, Visible }
 
 private const val AUTO_HIDE_MS = 4_500L
+private const val MS_PER_SECOND = 1_000L
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -192,6 +193,29 @@ fun PlayerScreen(
                 )
             }
             BackHandler(onBack = onBack)
+
+            // ── Auto-play siguiente episodio ─────────────────────────
+            // When the episode reaches STATE_ENDED and the VM resolved
+            // a follow-up, show the countdown card. Cancel parks the
+            // player on the end screen; the flag resets per episode so
+            // the next finale gets its own window. The dismiss
+            // BackHandler is composed AFTER the exit one on purpose —
+            // the innermost enabled handler wins, so BACK closes the
+            // card first and only then exits the player.
+            var autoPlayDismissed by remember(ui.itemId) { mutableStateOf(false) }
+            val nextEpisode = ui.nextEpisode
+            if (playerState.isEnded && nextEpisode != null && !autoPlayDismissed) {
+                NextEpisodeOverlay(
+                    next      = nextEpisode,
+                    onPlayNow = {
+                        val durMs = player.exoPlayer.duration
+                        viewModel.playNextEpisode(if (durMs > 0) durMs / MS_PER_SECOND else 0L)
+                    },
+                    onCancel  = { autoPlayDismissed = true },
+                    modifier  = Modifier.align(Alignment.BottomEnd),
+                )
+                BackHandler { autoPlayDismissed = true }
+            }
         }
 
         // Loading overlay.

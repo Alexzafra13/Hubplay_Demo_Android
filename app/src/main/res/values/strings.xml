@@ -181,6 +181,10 @@
     <string name="player_audio_channels_format">%1$d canales</string>
     <string name="player_subtitle_flag_forced">forzados</string>
     <string name="player_subtitle_flag_default">por defecto</string>
+    <string name="player_next_episode_label">Siguiente episodio</string>
+    <string name="player_next_episode_countdown">Empieza en %1$d s</string>
+    <string name="player_next_episode_play_now">Reproducir ya</string>
+    <string name="player_next_episode_cancel">Cancelar</string>
     <string name="player_live_default_channel_name">Canal en vivo</string>
     <string name="player_live_default_emission">Emisión en directo</string>
     <string name="player_favorite_on">Favorito</string>
