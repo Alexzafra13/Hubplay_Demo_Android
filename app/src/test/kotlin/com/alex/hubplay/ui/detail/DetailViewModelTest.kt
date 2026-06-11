@@ -149,8 +149,8 @@ class DetailViewModelTest {
         val watchedCalls = mutableListOf<Pair<String, Boolean>>()
 
         override suspend fun fetchItemDetail(itemId: String): Content {
-            if (failDetail) throw RuntimeException("boom")
-            return item ?: throw RuntimeException("no item configured")
+            if (failDetail) error("boom")
+            return item ?: error("no item configured")
         }
 
         override suspend fun fetchRecommendations(itemId: String): List<Content> = related
@@ -159,11 +159,11 @@ class DetailViewModelTest {
 
         override suspend fun setItemWatched(itemId: String, watched: Boolean) {
             watchedCalls += itemId to watched
-            if (failWatched) throw RuntimeException("boom")
+            if (failWatched) error("boom")
         }
 
-        override suspend fun fetchPerson(personId: String): PersonDetail = throw RuntimeException("unused")
-        override suspend fun fetchStudio(slug: String): StudioDetail = throw RuntimeException("unused")
+        override suspend fun fetchPerson(personId: String): PersonDetail = error("unused")
+        override suspend fun fetchStudio(slug: String): StudioDetail = error("unused")
         override suspend fun fetchContinueWatching(): List<Content.Resumable> = emptyList()
         override suspend fun fetchTrending(limit: Int): List<Content> = emptyList()
         override suspend fun fetchRecommended(limit: Int): List<Content> = emptyList()
@@ -181,7 +181,7 @@ class DetailViewModelTest {
             sortOrder: String,
         ): List<Content> = emptyList()
         override suspend fun fetchCollections(): List<CollectionSummary> = emptyList()
-        override suspend fun fetchCollectionDetail(id: String): CollectionDetail = throw RuntimeException("unused")
+        override suspend fun fetchCollectionDetail(id: String): CollectionDetail = error("unused")
         override suspend fun searchItems(query: String, limit: Int): List<Content> = emptyList()
     }
 }

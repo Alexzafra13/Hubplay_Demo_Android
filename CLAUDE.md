@@ -103,8 +103,9 @@ Ver `docs/memory/` (versionado en git) para contexto entre sesiones:
 Ver `docs/memory/project-status.md → Backlog priorizado`. Lo más
 candente para la siguiente sesión:
 
-1. **Pantalla de reorder canales + hide canales** (Live TV polish).
-2. **"Recientemente visto"** filtro auto en sidebar Live TV.
+1. ~~**Pantalla de reorder canales + hide canales**~~ — HECHO.
+2. ~~**"Recientemente visto"** filtro auto en sidebar Live TV~~ — HECHO
+   (2026-06-10, server-backed vía `/me/channels/continue-watching`).
 3. **Vista EPG grid completa** como pantalla alternativa (NO tocar
    el inicio actual de Live TV).
 4. **Tests de Compose UI** + emulator en CI.

@@ -165,6 +165,7 @@ private fun MainLayout(
                 groups            = ui.groups,
                 selectedFilter    = ui.filter,
                 favoritesCount    = ui.favorites.size,
+                recentCount       = ui.recentChannels.size,
                 onFilterChanged   = onFilter,
                 onReorderChannels = onReorderChannels,
                 onOpenSettings    = onOpenSettings,

@@ -130,6 +130,14 @@ data class ItemDetailDto(
     val collection:                                        CollectionRefDto? = null,
     /** Cast + crew, ordered by the server (cast by billing, crew after). */
     val people:                                            List<PersonRefDto> = emptyList(),
+    // Series/season/episode hierarchy — set on episodes (parent = season)
+    // and seasons (parent = series). `series_id` is the breadcrumb the
+    // server folds in for episodes/seasons via attachSeriesContext.
+    @Json(name = "parent_id")        val parentId:        String? = null,
+    @Json(name = "series_id")        val seriesId:        String? = null,
+    @Json(name = "series_title")     val seriesTitle:     String? = null,
+    @Json(name = "season_number")    val seasonNumber:    Int?    = null,
+    @Json(name = "episode_number")   val episodeNumber:   Int?    = null,
     @Json(name = "user_data")        val userData:        UserDataDto? = null,
 )
 

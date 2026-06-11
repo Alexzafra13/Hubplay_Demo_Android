@@ -66,6 +66,8 @@ fun LiveTvSidebar(
     groups:           List<String>,
     selectedFilter:   ChannelFilter,
     favoritesCount:   Int,
+    /** Recently-watched channels available. 0 hides the auto filter. */
+    recentCount:      Int = 0,
     onFilterChanged:  (ChannelFilter) -> Unit,
     onReorderChannels: () -> Unit = {},
     onOpenSettings:    () -> Unit = {},
@@ -74,7 +76,8 @@ fun LiveTvSidebar(
     val allLabel        = stringResource(R.string.livetv_filter_all)
     val favoritesLabel  = stringResource(R.string.livetv_filter_favorites)
     val favoritesWithCt = stringResource(R.string.livetv_filter_favorites_count, favoritesCount)
-    val items = remember(groups, favoritesCount, allLabel, favoritesLabel, favoritesWithCt) {
+    val recentLabel     = stringResource(R.string.livetv_filter_recent)
+    val items = remember(groups, favoritesCount, recentCount, allLabel, favoritesLabel, favoritesWithCt, recentLabel) {
         buildList {
             add(SidebarItem.Builtin(allLabel, ChannelFilter.All))
             add(SidebarItem.Builtin(
@@ -82,6 +85,9 @@ fun LiveTvSidebar(
                 filter = ChannelFilter.Favorites,
                 isStar = true,
             ))
+            // Auto-generated: only shows up once there's watch history,
+            // sitting between Favoritos and the M3U group names.
+            if (recentCount > 0) add(SidebarItem.Builtin(recentLabel, ChannelFilter.Recent))
             for (g in groups) add(SidebarItem.Group(g))
         }
     }

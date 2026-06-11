@@ -9,6 +9,8 @@ import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.LiveTvRepository
 import com.alex.hubplay.data.ProgressReporter
 import com.alex.hubplay.data.api.HubplayApi
+import com.alex.hubplay.data.api.dto.ItemDetailDto
+import com.alex.hubplay.data.api.dto.ItemSummaryDto
 import com.alex.hubplay.player.ClientCapabilities
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,6 +94,7 @@ class PlayerViewModel(
                     error       = null,
                 )
             }
+            if (item != null && item.type == "episode") maybeResolveNextEpisode(item)
             return
         }
 
@@ -150,6 +153,78 @@ class PlayerViewModel(
         if (_ui.value.liveChannel?.id == channel.id) return
         switchToChannel(channel)
     }
+
+    // ─── Auto-play next episode (VOD episodes only) ─────────────────────────
+
+    /**
+     * Switch playback to the already-resolved next episode IN PLACE —
+     * same screen, same ExoPlayer — so binge-watching doesn't bounce
+     * through the navigation stack. Driven by the countdown overlay
+     * (auto-fire or "Reproducir ya").
+     *
+     * @param finalPositionSec where the finished episode ended. Flushed
+     *        with `completed = true` so continue-watching / next-up
+     *        advance server-side even if the 95% markPlayed trigger
+     *        never fired (think short post-credits stingers).
+     */
+    fun playNextEpisode(finalPositionSec: Long) {
+        val next = _ui.value.nextEpisode ?: return
+        Log.d(TAG, "playNextEpisode -> ${next.id} (${next.label})")
+        progressReporter?.flush(positionSec = finalPositionSec, completed = true)
+        _ui.update {
+            it.copy(
+                itemId      = next.id,
+                title       = next.title ?: it.title,
+                nextEpisode = null,
+                startParams = null,
+            )
+        }
+        viewModelScope.launch { resolve(next.id, 0L) }
+    }
+
+    /**
+     * Best-effort: a failed lookup just means no auto-play card — it
+     * must never disturb the playback that's already rolling.
+     */
+    private fun maybeResolveNextEpisode(current: ItemDetailDto) {
+        viewModelScope.launch {
+            val next = runCatching { findNextEpisode(current) }
+                .onFailure { Log.w(TAG, "next-episode lookup failed for ${current.id}", it) }
+                .getOrNull()
+            _ui.update { it.copy(nextEpisode = next) }
+        }
+    }
+
+    /**
+     * Deterministic sibling walk: next episode within the season, and
+     * when the credits belong to a season finale, the first episode of
+     * the following season. Returns null at the very end of the series.
+     */
+    private suspend fun findNextEpisode(current: ItemDetailDto): NextEpisodeInfo? {
+        val seasonId = current.parentId ?: return null
+        val siblings = api.getChildren(seasonId).data.orEmpty().mapNotNull { it.toEpisodeRef() }
+        NextEpisodeResolver.nextAfter(current.id, siblings)?.let { return it.toInfo() }
+
+        val seriesId = current.seriesId ?: return null
+        val seasons = api.getChildren(seriesId).data.orEmpty()
+            .filter { it.type == "season" }
+            .map { SeasonRef(id = it.id, seasonNumber = it.seasonNumber) }
+        val nextSeason = NextEpisodeResolver.seasonFollowing(seasonId, seasons) ?: return null
+        val episodes = api.getChildren(nextSeason.id).data.orEmpty().mapNotNull { it.toEpisodeRef() }
+        return NextEpisodeResolver.firstEpisode(episodes)?.toInfo()
+    }
+
+    private fun ItemSummaryDto.toEpisodeRef(): EpisodeRef? {
+        if (type != null && type != "episode") return null
+        return EpisodeRef(id = id, title = title, seasonNumber = seasonNumber, episodeNumber = episodeNumber)
+    }
+
+    private fun EpisodeRef.toInfo() = NextEpisodeInfo(
+        id            = id,
+        title         = title,
+        seasonNumber  = seasonNumber,
+        episodeNumber = episodeNumber,
+    )
 
     // ─── Progress reporting (VOD only) ──────────────────────────────────────
     //
@@ -334,6 +409,8 @@ data class PlayerUiState(
     val title:           String? = null,
     val startParams:     PlayerStartParams? = null,
     val error:           String? = null,
+    /** Episode to auto-play when this one ends. Null = end of series / not an episode. */
+    val nextEpisode:     NextEpisodeInfo? = null,
     // ── Live-mode extras ─────────────────────────────────────────────────
     val liveChannel:     LiveChannel? = null,
     /** Every channel in the library the current live channel belongs to. */
