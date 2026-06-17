@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRepository
+import com.alex.hubplay.ui.friendlyError
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,9 +14,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -112,7 +113,7 @@ class SearchViewModel(
                 }
                 .onFailure { err ->
                     if (rid != requestSeq) return@onFailure
-                    _ui.update { it.copy(isSearching = false, error = err.message ?: "Error de búsqueda") }
+                    _ui.update { it.copy(isSearching = false, error = friendlyError(err, "Error de búsqueda")) }
                 }
         }
     }

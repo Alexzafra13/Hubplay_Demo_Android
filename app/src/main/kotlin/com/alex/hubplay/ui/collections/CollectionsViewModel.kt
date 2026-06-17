@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.CollectionSummary
 import com.alex.hubplay.data.HomeRepository
+import com.alex.hubplay.ui.friendlyError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,7 +41,7 @@ class CollectionsViewModel(
                     _ui.value = CollectionsUi(
                         isLoading = false,
                         entries   = _ui.value.entries,
-                        error     = err.message ?: "No se pudieron cargar las colecciones",
+                        error     = friendlyError(err, "No se pudieron cargar las colecciones"),
                     )
                 }
         }

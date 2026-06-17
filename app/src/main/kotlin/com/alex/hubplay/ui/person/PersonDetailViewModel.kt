@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.PersonDetail
+import com.alex.hubplay.ui.friendlyError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,7 +36,7 @@ class PersonDetailViewModel(
                 .onFailure { err ->
                     _ui.value = _ui.value.copy(
                         isLoading = false,
-                        error     = err.message ?: "No se pudo cargar la persona",
+                        error     = friendlyError(err, "No se pudo cargar la persona"),
                     )
                 }
         }

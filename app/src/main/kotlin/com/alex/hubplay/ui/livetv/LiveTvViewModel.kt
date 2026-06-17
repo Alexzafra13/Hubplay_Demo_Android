@@ -10,6 +10,7 @@ import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.LiveTvRepository
 import com.alex.hubplay.data.MeEvent
 import com.alex.hubplay.data.MeEventsStream
+import com.alex.hubplay.ui.friendlyError
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -97,7 +98,7 @@ class LiveTvViewModel(
                     _ui.update {
                         it.copy(
                             isLoading = false,
-                            error     = err.message ?: "No se pudo cargar la TV en vivo",
+                            error     = friendlyError(err, "No se pudo cargar la TV en vivo"),
                         )
                     }
                 }

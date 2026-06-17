@@ -29,10 +29,23 @@
 > remotas (TMDb/logos IPTV) pasan sin tocar. Recorta ancho de banda + memoria
 > de decodificación en TV baratas (era el hallazgo nº1 de perf).
 >
+> **Lote 3 (saneo de errores, CI verde)**: nuevo helper puro `ui/ErrorMessages.kt`
+> `friendlyError(err, fallback)` que mapea `HttpException` (401/403→sesión,
+> 5xx→servidor) y causas de red (UnknownHost/timeout/SSL) a copy limpio, y
+> devuelve el fallback contextual para lo desconocido — **nunca `err.message`
+> crudo**. Sustituidos los 12 sitios en 9 ViewModels (Catalog, Detail, Person,
+> Search, LiveTv, ChannelOrder×4, Studio, Collections, CollectionDetail). Ya
+> no se filtra a la TV texto técnico/inglés ("HTTP 500", "Unable to resolve
+> host") ni rutas internas. (De paso, arreglado un `ImportOrdering`
+> preexistente que el baseline ocultaba en SearchViewModel.)
+>
 > **Pendiente de la auditoría (no aplicado — necesita device o es refactor grande)**:
-> auto-tune que abre transcode en Home; mapeo completo
-> `err.message`→string amable + extraer ~30 strings a `strings.xml`;
-> decidir OpenAPI generado (código muerto, 0 imports) y `ApiResult` (0 usos);
+> auto-tune que abre transcode en Home; **i18n real**: `friendlyError` y los
+> ~30 strings en VMs/repos (rail titles "Continuar viendo"…, "Temporada N",
+> literales ingleses en WhoIsWatchingViewModel) siguen hardcoded en español
+> → para que `values-en` los traduzca hace falta inyectar un resolver de
+> strings/Context en los VMs (centralizar el copy en `friendlyError` es el
+> primer paso); decidir OpenAPI generado (código muerto, 0 imports) y `ApiResult` (0 usos);
 > partir `data/` en `domain/`+`data/` y sacar `TrailerHost` de `data/`;
 > `PlayerViewModel` tras una `PlaybackRepository`. Tests: 0 instrumentados y
 > `AuthInterceptor`/`MeEventsStream`/`LanDiscovery` sin cobertura.
