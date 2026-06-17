@@ -72,6 +72,14 @@ class MeEventsStream(
 
             try {
                 openSource(request).collect { emit(it) }
+            } catch (e: NonRetryableSseException) {
+                // The AuthInterceptor already tried (and failed) to refresh
+                // the token before this surfaced, so the session is revoked
+                // server-side. Retrying every 2s would hammer the server and
+                // drain the battery forever — stop the loop. Other API calls
+                // hitting the same 401 will flip AuthState to logged-out.
+                Log.w(TAG, "stream auth-rejected (${e.code}); stopping reconnect")
+                return@flow
             } catch (t: Throwable) {
                 Log.w(TAG, "stream broke, will retry", t)
             }
@@ -90,7 +98,11 @@ class MeEventsStream(
                 trySend(parsed)
             }
             override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
-                close(t)
+                when (response?.code) {
+                    HTTP_UNAUTHORIZED, HTTP_FORBIDDEN ->
+                        close(NonRetryableSseException(response.code))
+                    else -> close(t)
+                }
             }
             override fun onClosed(eventSource: EventSource) {
                 close()
@@ -152,8 +164,14 @@ class MeEventsStream(
         @com.squareup.moshi.Json(name = "is_favorite")    val isFavorite:    Boolean? = null,
     )
 
+    /** Signals a server-side session rejection that token refresh can't fix. */
+    private class NonRetryableSseException(val code: Int) :
+        Exception("SSE rejected with HTTP $code")
+
     companion object {
         private const val TAG = "MeEventsStream"
+        private const val HTTP_UNAUTHORIZED = 401
+        private const val HTTP_FORBIDDEN = 403
     }
 }
 

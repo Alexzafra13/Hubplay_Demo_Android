@@ -19,6 +19,13 @@
 
 ## Aplicado en esta rama
 
+> Los tres fixes de abajo son de **capa de datos / sin foco UI**, por eso se
+> aplicaron sin device. Verificados contra el gate de CI con detekt
+> standalone (`detekt-cli 1.23.7 + detekt-formatting`, config + baseline del
+> repo, `--jvm-target 17`) → EXIT=0 sobre todo `app/src/main/kotlin`. Lo que
+> NO se puede verificar aquí es `assembleDebug` (sin SDK Android); revisión
+> de tipos manual.
+
 ### #1 — ExoPlayer `Player.Listener` no se desregistra ⚠️→ARREGLADO
 `player/HubplayPlayer.kt`. `release()` solo llamaba `exoPlayer.release()`.
 Matiz: NO es un leak real (el listener lo posee el propio ExoPlayer, que se
@@ -27,6 +34,24 @@ Pero `removeListener` antes de `release()` es el orden documentado y evita
 que un callback en vuelo toque `_state` tras liberar. **Aplicado**: listener
 extraído a `val playerListener` + `removeListener` en `release()`. Mismo
 patrón pendiente en `ChannelPreviewPlayer.kt` (no tocado aquí).
+
+### #11 — `LanDiscovery` crash por `ResolveListener` compartido ✅→ARREGLADO
+`data/LanDiscovery.kt`. Reusaba UNA instancia de `ResolveListener` para todos
+los `resolveService`, con un guard `resolving` **por-nombre**; pero la
+restricción del framework ("un resolve a la vez") es **global** y reusar el
+listener lanza `IllegalArgumentException: listener already in use` (en API
+34+ esa firma está deprecada justo por esto). Dos servicios `_http._tcp` con
+"hubplay" resolviendo a la vez → crash sin capturar. **Aplicado**: listener
+fresco por resolve (`newResolveListener(name)`) + `runCatching` defensivo
+alrededor de `resolveService`.
+
+### #7 — Bucle de reconexión SSE infinito en fallo no recuperable ✅→ARREGLADO
+`data/MeEventsStream.kt`. `while(true)` reintentaba cada ~2s ante CUALQUIER
+throwable, incluido un 401/403 que el AuthInterceptor ya no puede refrescar
+(sesión revocada server-side) → martilleo eterno de `/me/events`. **Aplicado**:
+`onFailure` distingue 401/403 (cierra con `NonRetryableSseException`) y
+`events()` hace `return@flow` en ese caso, parando el loop; el resto de
+errores siguen reintentando como antes.
 
 ---
 
@@ -53,25 +78,16 @@ BACK. **Fix propuesto**: botón Reintentar/Atrás en el estado de error y
 soltar keepScreenOn en error terminal. **Validar**: apuntar a un stream
 muerto y comprobar que se puede reintentar/salir con claridad.
 
-**#7 — Bucle de reconexión SSE infinito en fallo no recuperable** ✅
-`data/MeEventsStream.kt:60`. `while(true)` con backoff ~2s ante CUALQUIER
-throwable, incluido un 401/403 que el AuthInterceptor no puede refrescar
-(sesión revocada server-side). → martillea `/me/events` cada 2s para
-siempre (batería + carga servidor). **Fix propuesto**: en `openSource`,
-propagar `response?.code` del `onFailure` y, ante un status no recuperable
-(401 tras refresh fallido / 403), terminar el flow o escalar a re-login en
-vez de reintentar. **Validar**: revocar la sesión en el servidor con la app
-abierta y ver que no entra en bucle.
+**#7 — Bucle de reconexión SSE infinito** → **ARREGLADO** (ver arriba).
 
 ### MEDIUM
 
-**#5 — Resolución de siguiente episodio cruzando temporada** 🔎
-`ui/player/NextEpisodeResolver.kt`. `firstEpisode` usa
-`minByOrNull { episodeNumber ?: Int.MAX_VALUE }`; con metadatos sin numerar
-(specials/sin escanear) puede elegir el episodio equivocado al saltar de
-temporada. **Fix propuesto**: ordenar con la misma regla estable de
-`nextAfter` y tomar `firstOrNull()`. **Validar**: season finale → primer
-episodio de la siguiente.
+**#5 — Resolución de siguiente episodio cruzando temporada** ❌ DESCARTADO
+Releído: `firstEpisode` usa `minByOrNull`, que devuelve el PRIMER mínimo en
+orden estable — equivalente al patrón `sortedBy{}.firstOrNull()` de los
+otros métodos. Con todo sin numerar devuelve el primero en orden de
+scanner (correcto); con algunos numerados elige el de menor número
+(correcto, es lo que quieres). No es bug.
 
 **#8 — Auto-tune del preview es demasiado agresivo** 🔎
 `ui/player/ChannelPreviewPlayer.kt`. Tras `AUTO_TUNE_MS` (8s) con el foco en
@@ -91,9 +107,10 @@ distinguir `IOException` (mostrar error tras N fallos seguidos) de
 ### LOW / hygiene
 
 - **#10** `TrailerHost.embeddabilityCache` (`ConcurrentHashMap`) nunca
-  evicta — acotar a LRU de ~unos cientos. 🔎
-- **#11** `LanDiscovery` reusa un `resolveListener` único entre resolves —
-  en API 34+ se exige instancia por resolve. 🔎
+  evicta. ⚠️ DESCARTADO por ahora: impacto de memoria despreciable (haría
+  falta enfocar decenas de miles de items distintos en una sesión); no
+  compensa el riesgo de añadir un LRU.
+- **#11** `LanDiscovery` listener compartido → **ARREGLADO** (ver arriba).
 - **#13** `IdleController` evalúa idle solo en tick de 30s → screensaver
   puede tardar hasta 30s; posible flicker por carrera `setSuspended`/tick.⚠️
 - **#14** `HomeRail` `scrollToItem(focusedIndex)` sin re-check de
@@ -117,7 +134,8 @@ distinguir `IOException` (mostrar error tras N fallos seguidos) de
 
 ## Recomendación
 
-Los dos primeros que tocará validar en cuanto haya un device/emulador TV son
-**#2 (auto-play)** y **#3 (recuperación de error)** porque salen en minutos
-de uso normal con mando. **#7 (SSE)** es el más importante de fondo (drena
-batería). El resto es pulido incremental.
+Ya aplicados sin device (capa de datos): **#1**, **#7**, **#11**. Los dos que
+tocará validar en cuanto haya device/emulador TV son **#2 (auto-play)** y
+**#3 (recuperación de error)** porque salen en minutos de uso normal con
+mando, y requieren tocar UI/foco (por eso NO se aplicaron a ciegas). El resto
+es pulido incremental.
