@@ -11,6 +11,26 @@
 > aplicado el fix mecánico #1 (ExoPlayer `removeListener`). El resto necesita
 > device para validar el parche → queda como checklist.
 >
+> **Auditoría senior (3 agentes en paralelo: arquitectura/rendimiento/calidad)**
+> — las tres convergieron en ~7/10: código por encima de la media, publicable,
+> con grietas concretas. Fixes ya aplicados sin device (CI verde, detekt OK):
+> - **#1 (bug funcional)** paginación de búsqueda duplicaba resultados —
+>   `searchItems` no tenía `offset`. Arreglado end-to-end (+ 4 fakes de test).
+> - **#5** `DetailViewModel` → `.update{}` atómico; `PlayerViewModel.loadLiveChrome`
+>   ya no apila tickers `while(true)` (guard de re-entrada con `liveChromeJobs`);
+>   `pendingPersists` y `LanDiscovery.seen` ahora thread-safe.
+> - **#3 (parcial)** `PlayerViewModel` ya no filtra la ruta interna
+>   `/stream/$id/info` al usuario (detalle solo a logcat).
+>
+> **Pendiente de la auditoría (no aplicado — necesita device o es refactor grande)**:
+> imágenes a tamaño completo → `ImageRequest.size()`/`?w=` (perf, el gordo en
+> TV baratas); auto-tune que abre transcode en Home; mapeo completo
+> `err.message`→string amable + extraer ~30 strings a `strings.xml`;
+> decidir OpenAPI generado (código muerto, 0 imports) y `ApiResult` (0 usos);
+> partir `data/` en `domain/`+`data/` y sacar `TrailerHost` de `data/`;
+> `PlayerViewModel` tras una `PlaybackRepository`. Tests: 0 instrumentados y
+> `AuthInterceptor`/`MeEventsStream`/`LanDiscovery` sin cobertura.
+>
 > **Lo que aún BLOQUEA publicar y necesita a Alex (no automatizable)**:
 > capturas de Android TV (obligatorias por Leanback) + teléfono; hostear
 > PRIVACY.md en URL pública; form Data Safety; cuenta dev + 5 GitHub Secrets;
