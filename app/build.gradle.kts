@@ -158,6 +158,8 @@ android {
     // src/test/java — Kotlin's plugin picks it up automatically with
     // modern AGP, but declaring it explicitly removes any IDE doubt.
     sourceSets["test"].kotlin.srcDirs("src/test/kotlin")
+    // Instrumented (emulator) tests live alongside unit tests under /kotlin.
+    sourceSets["androidTest"].kotlin.srcDirs("src/androidTest/kotlin")
 
     testOptions {
         unitTests.isReturnDefaultValues = true
@@ -291,6 +293,12 @@ dependencies {
     testImplementation(libs.mockwebserver)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)
+    // Compose UI testing — versions come from the Compose BOM applied to
+    // androidTestImplementation/debugImplementation above (no explicit pin).
+    // createAndroidComposeRule + node matchers; ui-test-manifest provides
+    // the empty Activity the test host launches into.
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     // ── Static analysis — ktlint-backed formatting ruleset folded into
     //    the same detekt run, so a single `./gradlew detekt` covers both

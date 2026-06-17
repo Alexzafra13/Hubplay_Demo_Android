@@ -47,8 +47,17 @@
 > strings/Context en los VMs (centralizar el copy en `friendlyError` es el
 > primer paso); decidir OpenAPI generado (código muerto, 0 imports) y `ApiResult` (0 usos);
 > partir `data/` en `domain/`+`data/` y sacar `TrailerHost` de `data/`;
-> `PlayerViewModel` tras una `PlaybackRepository`. Tests: 0 instrumentados y
-> `AuthInterceptor`/`MeEventsStream`/`LanDiscovery` sin cobertura.
+> `PlayerViewModel` tras una `PlaybackRepository`. Tests:
+> `AuthInterceptor`/`MeEventsStream`/`LanDiscovery` sin cobertura unitaria.
+>
+> **Infra de test en device añadida (sin verificar — necesita tu PC)**:
+> `app/src/androidTest/.../LaunchSmokeTest.kt` (smoke: la app arranca y el
+> Login compone, sin backend) + deps Compose-UI-test (BOM) +
+> `.github/workflows/ui-tests.yml` (emulador Android TV, `workflow_dispatch`,
+> NO es gate aún) + `scripts/tv-smoke.sh` (recorrido D-pad con capturas +
+> logcat + detección de crash/ANR contra device real). Runbook en
+> `docs/TESTING_ON_DEVICE.md`. **Confirmar primera ejecución local**; siguiente
+> paso para tests robustos: `Modifier.testTag` en composables clave.
 >
 > **Lo que aún BLOQUEA publicar y necesita a Alex (no automatizable)**:
 > capturas de Android TV (obligatorias por Leanback) + teléfono; hostear
