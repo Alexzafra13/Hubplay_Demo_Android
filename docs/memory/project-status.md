@@ -1,6 +1,25 @@
 # Estado del proyecto — HubPlay Android
 
-> **Última sesión**: 2026-06-10 — rama `claude/tv-app-dev-3y6q0f`.
+> **Última sesión**: 2026-06-17 — rama `claude/tv-app-store-ready-xx73z0`.
+> Empuje hacia "store-ready": (1) **TV banner** generado y cableado en el
+> Manifest (`android:banner`, requisito Leanback que faltaba). (2) Assets de
+> ficha: **icono 512×512** + **feature graphic 1024×500** en
+> `docs/store-assets/`, reproducibles con `scripts/gen_store_assets.py`.
+> (3) **PRIVACY.md** rellenada (email + fecha) y **STORE_LISTING.md** con
+> copy ES/EN listo para pegar. (4) **Auditoría de robustez estática** en
+> `docs/memory/audit-2026-06-17-tv-robustness.md` (15 hallazgos priorizados);
+> aplicado el fix mecánico #1 (ExoPlayer `removeListener`). El resto necesita
+> device para validar el parche → queda como checklist.
+>
+> **Lo que aún BLOQUEA publicar y necesita a Alex (no automatizable)**:
+> capturas de Android TV (obligatorias por Leanback) + teléfono; hostear
+> PRIVACY.md en URL pública; form Data Safety; cuenta dev + 5 GitHub Secrets;
+> primera subida manual del AAB; closed testing 14 testers × 14 días.
+> Detalle en `docs/PLAY_STORE.md` y `docs/store-assets/STORE_LISTING.md`.
+
+---
+
+> **Sesión 2026-06-10** — rama `claude/tv-app-dev-3y6q0f`.
 > (1) **CI desbloqueado**: los 10 findings de detekt que dejaron `main`
 > en rojo tras el merge del PR #69, arreglados y verde.
 > (2) **Filtro "Vistos recientemente"** en el sidebar de Live TV,

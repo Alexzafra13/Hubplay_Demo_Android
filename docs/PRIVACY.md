@@ -1,14 +1,14 @@
 # Política de privacidad — HubPlay para Android
 
-**Última actualización**: por completar antes de publicar.
+**Última actualización**: 17 de junio de 2026.
 **Aplicación**: HubPlay Android (`com.alex.hubplay`)
-**Contacto**: por completar antes de publicar (email de contacto público).
+**Contacto**: alexzafra13@gmail.com
 
-> **Nota para quien aloje esta política**: este fichero es la
-> plantilla. Para Play Store necesitas publicarlo en una URL
-> pública (GitHub Pages, tu dominio, lo que sea) y dar de alta esa
-> URL en Play Console → Política de privacidad. Ajusta nombre,
-> email y fecha antes de publicar.
+> **Nota para quien aloje esta política**: para Play Store hay que
+> publicar este documento en una URL pública (GitHub Pages, tu
+> dominio, lo que sea) y dar de alta esa URL en Play Console → App
+> content → Privacy policy. Si cambia el email de contacto o los
+> datos que maneja la app, actualiza la fecha de arriba.
 
 ---
 
@@ -115,6 +115,6 @@ mostraremos un aviso dentro de la app la próxima vez que se abra.
 Para preguntas sobre privacidad o ejercer derechos sobre los datos
 que tu servidor HubPlay tenga (no nosotros), contacta a:
 
-- **Para la app Android**: por completar (email público).
+- **Para la app Android**: alexzafra13@gmail.com
 - **Para los datos almacenados en tu servidor HubPlay**: el operador
   de ese servidor (tú mismo si es self-hosted).
