@@ -146,6 +146,13 @@ class AppContainer(context: Context) {
     val liveTvRepository: LiveTvRepository = LiveTvRepository(hubplayApi, tokenStore)
 
     /**
+     * Federation — browse/play content shared by paired peer servers.
+     * Pairing is admin-only (web); the TV client only consumes peers that
+     * are already paired. Best-effort: a slow/offline peer never blocks the UI.
+     */
+    val federationRepository: FederationRepository = FederationRepositoryImpl(hubplayApi, tokenStore)
+
+    /**
      * "Who's watching?" multi-profile picker. The repository talks to
      * `/me/profiles` (list) and `/auth/switch-profile` (mint new bearer
      * for the target profile) and persists the active selection back

@@ -56,6 +56,21 @@ sealed class Route(val path: String) {
             "studio/${java.net.URLEncoder.encode(slug, Charsets.UTF_8)}"
     }
 
+    /** Federation landing — "Servidores conectados": unified shared-library grid. */
+    data object Peers : Route("peers")
+
+    /** A peer library's catalogue (grid of that peer's items). */
+    data object PeerLibrary : Route("peers/{peerId}/{peerName}/{libraryId}/{libraryName}") {
+        const val ARG_PEER_ID = "peerId"
+        const val ARG_PEER_NAME = "peerName"
+        const val ARG_LIBRARY_ID = "libraryId"
+        const val ARG_LIBRARY_NAME = "libraryName"
+        fun route(peerId: String, peerName: String, libraryId: String, libraryName: String): String {
+            fun enc(s: String) = java.net.URLEncoder.encode(s, Charsets.UTF_8)
+            return "peers/${enc(peerId)}/${enc(peerName)}/${enc(libraryId)}/${enc(libraryName)}"
+        }
+    }
+
     data object Player : Route("player/{itemId}?resume={resumePosSec}") {
         const val ARG_ITEM_ID = "itemId"
         const val ARG_RESUME  = "resumePosSec"
