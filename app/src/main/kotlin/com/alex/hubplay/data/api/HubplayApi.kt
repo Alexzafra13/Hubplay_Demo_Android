@@ -11,6 +11,7 @@ import com.alex.hubplay.data.api.dto.CollectionsListResponse
 import com.alex.hubplay.data.api.dto.ContinueWatchingResponse
 import com.alex.hubplay.data.api.dto.FavoriteIdsResponse
 import com.alex.hubplay.data.api.dto.FavoriteToggleResponse
+import com.alex.hubplay.data.api.dto.FederationHitsResponse
 import com.alex.hubplay.data.api.dto.GroupsResponse
 import com.alex.hubplay.data.api.dto.HomeLayoutResponse
 import com.alex.hubplay.data.api.dto.ItemDetailResponse
@@ -20,16 +21,22 @@ import com.alex.hubplay.data.api.dto.LatestResponse
 import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.NextUpResponse
+import com.alex.hubplay.data.api.dto.PeerContinueResponse
+import com.alex.hubplay.data.api.dto.PeerProgressRequest
+import com.alex.hubplay.data.api.dto.PeerStreamSessionResponse
+import com.alex.hubplay.data.api.dto.PeersResponse
 import com.alex.hubplay.data.api.dto.PersonDetailResponse
 import com.alex.hubplay.data.api.dto.ProfilesResponse
 import com.alex.hubplay.data.api.dto.RecommendedResponse
+import com.alex.hubplay.data.api.dto.RemoteItemsResponse
 import com.alex.hubplay.data.api.dto.SearchResponse
-import com.alex.hubplay.data.api.dto.SwitchProfileRequest
-import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.StatusResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import com.alex.hubplay.data.api.dto.StudioDetailResponse
+import com.alex.hubplay.data.api.dto.SwitchProfileRequest
+import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
+import com.alex.hubplay.data.api.dto.UnifiedLibrariesResponse
 import com.alex.hubplay.data.api.dto.UpdateProgressRequest
 import com.alex.hubplay.data.api.dto.WatchBeaconResponse
 import retrofit2.http.Body
@@ -354,4 +361,52 @@ interface HubplayApi {
      */
     @GET("collections/{id}")
     suspend fun getCollection(@Path("id") id: String): CollectionDetailResponse
+
+    // ─── Federation (peer servers) ──────────────────────────────────────────
+    // Pairing is admin-only (web); the TV client only browses/plays content
+    // from already-paired peers. Poster URLs come back same-origin (proxied).
+
+    /** GET /api/v1/me/peers — paired peers visible to this user. */
+    @GET("me/peers")
+    suspend fun listPeers(): PeersResponse
+
+    /** GET /api/v1/me/peers/libraries — every shared library × peer, flattened. */
+    @GET("me/peers/libraries")
+    suspend fun listAllPeerLibraries(): UnifiedLibrariesResponse
+
+    /** GET /api/v1/me/peers/{peer}/libraries/{lib}/items — paginated catalogue. */
+    @GET("me/peers/{peerId}/libraries/{libraryId}/items")
+    suspend fun browsePeerItems(
+        @Path("peerId")    peerId:    String,
+        @Path("libraryId") libraryId: String,
+        @Query("limit")    limit:     Int = 50,
+        @Query("offset")   offset:    Int = 0,
+    ): RemoteItemsResponse
+
+    /** GET /api/v1/me/peers/search?q=… — federated full-text search (best-effort). */
+    @GET("me/peers/search")
+    suspend fun searchPeers(@Query("q") query: String): FederationHitsResponse
+
+    /** GET /api/v1/me/peers/recent — "recently added on peers" fan-out. */
+    @GET("me/peers/recent")
+    suspend fun peerRecent(@Query("limit") limit: Int = 12): FederationHitsResponse
+
+    /** GET /api/v1/me/peers/continue-watching — cross-peer resume rail. */
+    @GET("me/peers/continue-watching")
+    suspend fun peerContinueWatching(): PeerContinueResponse
+
+    /** POST /api/v1/me/peers/{peer}/stream/{item}/session — open a playback session. */
+    @POST("me/peers/{peerId}/stream/{itemId}/session")
+    suspend fun openPeerStreamSession(
+        @Path("peerId") peerId: String,
+        @Path("itemId") itemId: String,
+    ): PeerStreamSessionResponse
+
+    /** POST /api/v1/me/peers/{peer}/items/{item}/progress — report resume position. */
+    @POST("me/peers/{peerId}/items/{itemId}/progress")
+    suspend fun reportPeerProgress(
+        @Path("peerId") peerId: String,
+        @Path("itemId") itemId: String,
+        @Body body: PeerProgressRequest,
+    )
 }

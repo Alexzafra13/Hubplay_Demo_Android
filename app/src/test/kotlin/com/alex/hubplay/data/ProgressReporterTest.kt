@@ -4,14 +4,15 @@ import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.dto.BulkScheduleRequest
 import com.alex.hubplay.data.api.dto.BulkScheduleResponse
 import com.alex.hubplay.data.api.dto.ChannelOrderRequest
-import com.alex.hubplay.data.api.dto.CollectionDetailResponse
-import com.alex.hubplay.data.api.dto.CollectionsListResponse
 import com.alex.hubplay.data.api.dto.ChannelVisibilityRequest
 import com.alex.hubplay.data.api.dto.ChannelsResponse
 import com.alex.hubplay.data.api.dto.ChildrenResponse
+import com.alex.hubplay.data.api.dto.CollectionDetailResponse
+import com.alex.hubplay.data.api.dto.CollectionsListResponse
 import com.alex.hubplay.data.api.dto.ContinueWatchingResponse
 import com.alex.hubplay.data.api.dto.FavoriteIdsResponse
 import com.alex.hubplay.data.api.dto.FavoriteToggleResponse
+import com.alex.hubplay.data.api.dto.FederationHitsResponse
 import com.alex.hubplay.data.api.dto.GroupsResponse
 import com.alex.hubplay.data.api.dto.HomeLayoutResponse
 import com.alex.hubplay.data.api.dto.ItemDetailResponse
@@ -21,16 +22,22 @@ import com.alex.hubplay.data.api.dto.LatestResponse
 import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
 import com.alex.hubplay.data.api.dto.NextUpResponse
+import com.alex.hubplay.data.api.dto.PeerContinueResponse
+import com.alex.hubplay.data.api.dto.PeerProgressRequest
+import com.alex.hubplay.data.api.dto.PeerStreamSessionResponse
+import com.alex.hubplay.data.api.dto.PeersResponse
 import com.alex.hubplay.data.api.dto.PersonDetailResponse
 import com.alex.hubplay.data.api.dto.ProfilesResponse
+import com.alex.hubplay.data.api.dto.RecommendedResponse
+import com.alex.hubplay.data.api.dto.RemoteItemsResponse
 import com.alex.hubplay.data.api.dto.SearchResponse
-import com.alex.hubplay.data.api.dto.SwitchProfileRequest
-import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.StatusResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import com.alex.hubplay.data.api.dto.StudioDetailResponse
-import com.alex.hubplay.data.api.dto.RecommendedResponse
+import com.alex.hubplay.data.api.dto.SwitchProfileRequest
+import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
+import com.alex.hubplay.data.api.dto.UnifiedLibrariesResponse
 import com.alex.hubplay.data.api.dto.UpdateProgressRequest
 import com.alex.hubplay.data.api.dto.WatchBeaconResponse
 import com.google.common.truth.Truth.assertThat
@@ -248,6 +255,14 @@ class ProgressReporterTest {
         override suspend fun switchProfile(body: SwitchProfileRequest): SwitchProfileResponse = TODO()
         override suspend fun listCollections(): CollectionsListResponse = TODO()
         override suspend fun getCollection(id: String): CollectionDetailResponse = TODO()
+        override suspend fun listPeers(): PeersResponse = TODO()
+        override suspend fun listAllPeerLibraries(): UnifiedLibrariesResponse = TODO()
+        override suspend fun browsePeerItems(peerId: String, libraryId: String, limit: Int, offset: Int): RemoteItemsResponse = TODO()
+        override suspend fun searchPeers(query: String): FederationHitsResponse = TODO()
+        override suspend fun peerRecent(limit: Int): FederationHitsResponse = TODO()
+        override suspend fun peerContinueWatching(): PeerContinueResponse = TODO()
+        override suspend fun openPeerStreamSession(peerId: String, itemId: String): PeerStreamSessionResponse = TODO()
+        override suspend fun reportPeerProgress(peerId: String, itemId: String, body: PeerProgressRequest) = TODO()
     }
 
     companion object {
