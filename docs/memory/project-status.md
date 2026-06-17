@@ -22,9 +22,15 @@
 > - **#3 (parcial)** `PlayerViewModel` ya no filtra la ruta interna
 >   `/stream/$id/info` al usuario (detalle solo a logcat).
 >
+> **Lote 2 (rendimiento, CI verde)**: imágenes ya no se piden a resolución
+> completa — `absolutize()` añade `?w=` al endpoint de imágenes del backend
+> (que cachea thumbnails): `IMG_W_CARD=400` por defecto (posters/logos/people)
+> e `IMG_W_BACKDROP=1280` en backdrops/hero. Solo URLs del backend; las
+> remotas (TMDb/logos IPTV) pasan sin tocar. Recorta ancho de banda + memoria
+> de decodificación en TV baratas (era el hallazgo nº1 de perf).
+>
 > **Pendiente de la auditoría (no aplicado — necesita device o es refactor grande)**:
-> imágenes a tamaño completo → `ImageRequest.size()`/`?w=` (perf, el gordo en
-> TV baratas); auto-tune que abre transcode en Home; mapeo completo
+> auto-tune que abre transcode en Home; mapeo completo
 > `err.message`→string amable + extraer ~30 strings a `strings.xml`;
 > decidir OpenAPI generado (código muerto, 0 imports) y `ApiResult` (0 usos);
 > partir `data/` en `domain/`+`data/` y sacar `TrailerHost` de `data/`;

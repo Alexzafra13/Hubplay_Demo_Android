@@ -209,7 +209,7 @@ class HomeRepositoryImpl(
             name        = data.name,
             overview    = data.overview,
             posterUrl   = absolutize(data.posterUrl, server),
-            backdropUrl = absolutize(data.backdropUrl, server),
+            backdropUrl = absolutize(data.backdropUrl, server, IMG_W_BACKDROP),
             items       = data.items.map { it.toContent(server) },
         )
     }
@@ -219,7 +219,7 @@ class HomeRepositoryImpl(
         name        = name,
         itemCount   = itemCount,
         posterUrl   = absolutize(posterUrl, server),
-        backdropUrl = absolutize(backdropUrl, server),
+        backdropUrl = absolutize(backdropUrl, server, IMG_W_BACKDROP),
     )
 
     override suspend fun fetchItemDetail(itemId: String): Content {
@@ -248,7 +248,7 @@ class HomeRepositoryImpl(
                 title          = data.title.orEmpty(),
                 subtitle       = data.tagline,
                 posterUrl      = absolutize(data.posterUrl, server),
-                backdropUrl    = absolutize(data.backdropUrl, server),
+                backdropUrl    = absolutize(data.backdropUrl, server, IMG_W_BACKDROP),
                 logoUrl        = absolutize(data.logoUrl ?: data.studioLogoUrl, server),
                 overview       = data.overview,
                 genres         = data.genres,
@@ -272,7 +272,7 @@ class HomeRepositoryImpl(
                 title       = data.title.orEmpty(),
                 subtitle    = data.tagline,
                 posterUrl   = absolutize(data.posterUrl, server),
-                backdropUrl = absolutize(data.backdropUrl, server),
+                backdropUrl = absolutize(data.backdropUrl, server, IMG_W_BACKDROP),
                 logoUrl     = absolutize(data.logoUrl ?: data.studioLogoUrl, server),
                 overview    = data.overview,
                 genres      = data.genres,
@@ -291,7 +291,7 @@ class HomeRepositoryImpl(
                 title        = data.title.orEmpty(),
                 subtitle     = data.tagline,
                 posterUrl    = absolutize(data.posterUrl, server),
-                backdropUrl  = absolutize(data.backdropUrl, server),
+                backdropUrl  = absolutize(data.backdropUrl, server, IMG_W_BACKDROP),
                 logoUrl      = absolutize(data.logoUrl, server),
                 overview     = data.overview,
                 genres       = data.genres,
@@ -309,7 +309,7 @@ class HomeRepositoryImpl(
                 title       = data.title.orEmpty(),
                 subtitle    = data.tagline,
                 posterUrl   = absolutize(data.posterUrl, server),
-                backdropUrl = absolutize(data.backdropUrl, server),
+                backdropUrl = absolutize(data.backdropUrl, server, IMG_W_BACKDROP),
                 logoUrl     = absolutize(data.logoUrl, server),
                 overview    = data.overview,
                 genres      = data.genres,
@@ -322,7 +322,7 @@ class HomeRepositoryImpl(
                 title       = data.title.orEmpty(),
                 subtitle    = data.tagline,
                 posterUrl   = absolutize(data.posterUrl, server),
-                backdropUrl = absolutize(data.backdropUrl, server),
+                backdropUrl = absolutize(data.backdropUrl, server, IMG_W_BACKDROP),
                 logoUrl     = absolutize(data.logoUrl, server),
                 overview    = data.overview,
                 genres      = data.genres,
@@ -438,7 +438,7 @@ class HomeRepositoryImpl(
                 id           = id,
                 title        = title.orEmpty(),
                 posterUrl    = absolutize(posterUrl, server),
-                backdropUrl  = absolutize(thumbUrl ?: backdropUrl ?: posterUrl, server),
+                backdropUrl  = absolutize(thumbUrl ?: backdropUrl ?: posterUrl, server, IMG_W_BACKDROP),
                 logoUrl      = absolutize(logoUrl, server),
                 year         = seriesYear,
                 progressPct  = progress,
@@ -461,7 +461,7 @@ class HomeRepositoryImpl(
                     title         = displayTitle,
                     subtitle      = episodeSubtitle,
                     posterUrl     = absolutize(posterUrl, server),
-                    backdropUrl   = absolutize(thumbUrl ?: backdropUrl ?: posterUrl, server),
+                    backdropUrl   = absolutize(thumbUrl ?: backdropUrl ?: posterUrl, server, IMG_W_BACKDROP),
                     logoUrl       = absolutize(logoUrl, server),
                     year          = seriesYear,
                     progressPct   = progress,
@@ -524,7 +524,7 @@ class HomeRepositoryImpl(
         val progress = if (totalSec > 0 && resumeSec > 0)
             (resumeSec.toFloat() / totalSec).coerceIn(0f, 1f) else 0f
         val poster = absolutize(posterUrl, server)
-        val backdrop = absolutize(backdropUrl ?: posterUrl, server)
+        val backdrop = absolutize(backdropUrl ?: posterUrl, server, IMG_W_BACKDROP)
         val logo = absolutize(logoUrl, server)
         val favorite = userData?.isFavorite == true
 
@@ -621,7 +621,7 @@ class HomeRepositoryImpl(
      */
     private fun TrendingItemDto.toContent(server: String): Content {
         val poster = absolutize(posterUrl, server)
-        val backdrop = absolutize(backdropUrl, server)
+        val backdrop = absolutize(backdropUrl, server, IMG_W_BACKDROP)
         val logo = absolutize(logoUrl, server)
         return when (MediaKind.from(type)) {
             MediaKind.Movie -> Content.Movie(
@@ -672,7 +672,7 @@ class HomeRepositoryImpl(
      */
     private fun RecommendedItemDto.toContent(server: String): Content {
         val poster = absolutize(posterUrl, server)
-        val backdrop = absolutize(backdropUrl, server)
+        val backdrop = absolutize(backdropUrl, server, IMG_W_BACKDROP)
         val logo = absolutize(logoUrl, server)
         return when (MediaKind.from(type)) {
             MediaKind.Movie -> Content.Movie(
@@ -797,16 +797,29 @@ class HomeRepositoryImpl(
      * paired serverUrl. Returns absolute URLs unchanged. Returns null
      * for null input so callers can pass through directly.
      */
-    private fun absolutize(path: String?, server: String): String? {
+    private fun absolutize(path: String?, server: String, width: Int = IMG_W_CARD): String? {
         if (path.isNullOrBlank()) return null
+        // Remote artwork (TMDb, IPTV channel logos) — we can't ask those hosts
+        // to resize, so pass them through untouched.
         if (path.startsWith("http://") || path.startsWith("https://")) return path
         val cleanPath = if (path.startsWith("/")) path else "/$path"
-        return "$server$cleanPath"
+        // The backend image endpoint serves a cached thumbnail at max width N
+        // when given ?w=N (0<N<4096); non-image server paths ignore the param.
+        // Big bandwidth + decode win on low-power TV boxes vs the full-res
+        // original (a 240dp card no longer pulls a 4K JPEG).
+        val sep = if (cleanPath.contains('?')) '&' else '?'
+        return "$server$cleanPath${sep}w=$width"
     }
 
     /** .NET ticks → seconds. 10_000_000 ticks per second (100ns each). */
     private fun ticksToSeconds(ticks: Long): Long = ticks / 10_000_000L
 }
+
+// Backend image-endpoint thumbnail widths (px). Sized for a 1080p TV so cheap
+// boxes don't download/decode source-resolution artwork into small targets.
+// See ImageHandler.ServeFile (?w=N) in the backend.
+private const val IMG_W_CARD     = 400   // portrait cards / logos / people
+private const val IMG_W_BACKDROP = 1280  // full-bleed hero / backdrop
 
 // ─── Domain types ────────────────────────────────────────────────────────────
 //
