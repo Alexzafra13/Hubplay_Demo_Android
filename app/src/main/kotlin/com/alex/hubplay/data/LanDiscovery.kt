@@ -45,7 +45,9 @@ class LanDiscovery(private val context: Context) {
             return@callbackFlow
         }
 
-        val seen = mutableSetOf<String>()
+        // Concurrent: written from NSD framework callbacks (onServiceResolved)
+        // which carry no documented single-thread guarantee.
+        val seen = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
         // Guards against kicking off a second resolve for a name already
         // being resolved (the framework re-fires onServiceFound).
         val resolving = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()

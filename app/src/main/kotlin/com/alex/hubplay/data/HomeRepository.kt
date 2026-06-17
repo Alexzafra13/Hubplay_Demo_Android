@@ -36,7 +36,7 @@ interface HomeRepository {
     suspend fun fetchRecommendations(itemId: String): List<Content>
     suspend fun toggleItemFavorite(itemId: String): Boolean
     suspend fun setItemWatched(itemId: String, watched: Boolean)
-    suspend fun searchItems(query: String, limit: Int = 60): List<Content>
+    suspend fun searchItems(query: String, limit: Int = 60, offset: Int = 0): List<Content>
 }
 
 /**
@@ -409,11 +409,11 @@ class HomeRepositoryImpl(
      * navigate to Detail/Series with the existing rules. Empty query
      * short-circuits without hitting the network.
      */
-    override suspend fun searchItems(query: String, limit: Int): List<Content> {
+    override suspend fun searchItems(query: String, limit: Int, offset: Int): List<Content> {
         val q = query.trim()
         if (q.isEmpty()) return emptyList()
         val server = serverUrl()
-        return api.searchItems(query = q, limit = limit).data.map { it.toContent(server) }
+        return api.searchItems(query = q, limit = limit, offset = offset).data.map { it.toContent(server) }
     }
 
     private suspend fun serverUrl(): String =

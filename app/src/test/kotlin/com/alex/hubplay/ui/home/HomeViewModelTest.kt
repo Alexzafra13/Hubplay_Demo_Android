@@ -239,6 +239,6 @@ class HomeViewModelTest {
         override suspend fun fetchPerson(personId: String): PersonDetail = throw RuntimeException("unused")
         override suspend fun fetchStudio(slug: String): StudioDetail = throw RuntimeException("unused")
         override suspend fun fetchRecommendations(itemId: String) = emptyList<Content>()
-        override suspend fun searchItems(query: String, limit: Int) = emptyList<Content>()
+        override suspend fun searchItems(query: String, limit: Int, offset: Int) = emptyList<Content>()
     }
 }

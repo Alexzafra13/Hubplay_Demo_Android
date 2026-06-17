@@ -57,8 +57,12 @@ class ChannelOrderViewModel(
     private val _ui = MutableStateFlow(ChannelOrderUiState(isLoading = true))
     val ui: StateFlow<ChannelOrderUiState> = _ui.asStateFlow()
 
-    /** Coalesces rapid reorder taps into one PUT — see [scheduleOrderPersist]. */
-    private val pendingPersists = mutableMapOf<String, Job>()
+    /**
+     * Coalesces rapid reorder taps into one PUT — see [scheduleOrderPersist].
+     * Concurrent map: persists are scheduled/cancelled from launched
+     * coroutines across libraries, so a plain HashMap would not be safe.
+     */
+    private val pendingPersists = java.util.concurrent.ConcurrentHashMap<String, Job>()
 
     /** Auto-commit timer for the type-a-number move buffer. */
     private var pendingCommitJob: Job? = null

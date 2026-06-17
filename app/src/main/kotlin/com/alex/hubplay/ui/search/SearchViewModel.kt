@@ -72,7 +72,7 @@ class SearchViewModel(
 
         _ui.update { it.copy(isLoadingMore = true) }
         viewModelScope.launch {
-            runCatching { repository.searchItems(query, limit = PAGE_SIZE) }
+            runCatching { repository.searchItems(query, limit = PAGE_SIZE, offset = currentOffset) }
                 .onSuccess { newItems ->
                     currentOffset += newItems.size
                     hasMore = newItems.size >= PAGE_SIZE

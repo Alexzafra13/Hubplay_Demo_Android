@@ -12,6 +12,7 @@ import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.dto.ItemDetailDto
 import com.alex.hubplay.data.api.dto.ItemSummaryDto
 import com.alex.hubplay.player.ClientCapabilities
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,6 +57,15 @@ class PlayerViewModel(
      * null — live streams have no concept of progress).
      */
     private var progressReporter: ProgressReporter? = null
+
+    /**
+     * The long-lived live-chrome coroutines (metadata fetch + 15s now-ticker
+     * + 5-min schedule refresher). Held so a re-resolve (e.g. auto-play next
+     * episode lands back on a channel) cancels the previous channel's tickers
+     * instead of stacking another pair of infinite `while(true)` loops onto
+     * viewModelScope. Only touched on the main dispatcher (from [resolve]).
+     */
+    private val liveChromeJobs = mutableListOf<Job>()
 
     init {
         viewModelScope.launch { resolve(itemId, resumePosSec) }
@@ -117,12 +127,14 @@ class PlayerViewModel(
             return
         }
 
-        val msg = when {
+        val detail = when {
             infoErr != null -> "Error pidiendo /stream/$targetItemId/info: ${describe(infoErr)}"
             else            -> "El server devolvió /stream/$targetItemId/info sin envelope `data`."
         }
-        Log.e(TAG, "resolve failed: $msg", infoErr)
-        _ui.update { it.copy(title = item?.title, error = msg) }
+        Log.e(TAG, "resolve failed: $detail", infoErr)
+        // User-facing copy stays clean — the diagnostic detail (endpoint path,
+        // HTTP status) goes to logcat only, never to the TV screen.
+        _ui.update { it.copy(title = item?.title, error = "No se pudo iniciar la reproducción. Inténtalo de nuevo.") }
     }
 
     /**
@@ -309,7 +321,11 @@ class PlayerViewModel(
      * EPG window so every neighbour has now/next data.
      */
     private fun loadLiveChrome(channelId: String) {
-        viewModelScope.launch {
+        // Cancel any chrome coroutines from a previous channel so a
+        // re-resolve doesn't stack duplicate now-tickers / refreshers.
+        liveChromeJobs.forEach { it.cancel() }
+        liveChromeJobs.clear()
+        liveChromeJobs += viewModelScope.launch {
             runCatching {
                 val libraries = liveTvRepo.fetchLiveLibraries()
                 // Find which library owns this channel. We walk libraries
@@ -352,14 +368,14 @@ class PlayerViewModel(
             }
         }
         // 15s now-ticker for the chrome progress bar + clock minute resolution.
-        viewModelScope.launch {
+        liveChromeJobs += viewModelScope.launch {
             while (true) {
                 delay(15_000L)
                 _ui.update { it.copy(nowEpoch = System.currentTimeMillis()) }
             }
         }
         // 5-minute schedule refresher.
-        viewModelScope.launch {
+        liveChromeJobs += viewModelScope.launch {
             while (true) {
                 delay(5L * 60_000L)
                 val ids = _ui.value.libraryChannels.map { it.id }

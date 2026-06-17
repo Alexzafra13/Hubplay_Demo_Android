@@ -182,6 +182,6 @@ class DetailViewModelTest {
         ): List<Content> = emptyList()
         override suspend fun fetchCollections(): List<CollectionSummary> = emptyList()
         override suspend fun fetchCollectionDetail(id: String): CollectionDetail = error("unused")
-        override suspend fun searchItems(query: String, limit: Int): List<Content> = emptyList()
+        override suspend fun searchItems(query: String, limit: Int, offset: Int): List<Content> = emptyList()
     }
 }
