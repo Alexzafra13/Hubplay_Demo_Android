@@ -9,6 +9,7 @@ import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.LiveLibrary
 import com.alex.hubplay.data.LiveTvRepository
 import com.alex.hubplay.data.TokenStore
+import com.alex.hubplay.ui.friendlyError
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -57,8 +58,12 @@ class ChannelOrderViewModel(
     private val _ui = MutableStateFlow(ChannelOrderUiState(isLoading = true))
     val ui: StateFlow<ChannelOrderUiState> = _ui.asStateFlow()
 
-    /** Coalesces rapid reorder taps into one PUT — see [scheduleOrderPersist]. */
-    private val pendingPersists = mutableMapOf<String, Job>()
+    /**
+     * Coalesces rapid reorder taps into one PUT — see [scheduleOrderPersist].
+     * Concurrent map: persists are scheduled/cancelled from launched
+     * coroutines across libraries, so a plain HashMap would not be safe.
+     */
+    private val pendingPersists = java.util.concurrent.ConcurrentHashMap<String, Job>()
 
     /** Auto-commit timer for the type-a-number move buffer. */
     private var pendingCommitJob: Job? = null
@@ -90,7 +95,7 @@ class ChannelOrderViewModel(
                     _ui.update {
                         it.copy(
                             isLoading = false,
-                            error     = err.message ?: "No se pudo cargar la lista de canales",
+                            error     = friendlyError(err, "No se pudo cargar la lista de canales"),
                         )
                     }
                 }
@@ -208,7 +213,7 @@ class ChannelOrderViewModel(
                         }
                         it.copy(
                             channelsByLib = it.channelsByLib + (libraryId to reverted),
-                            error         = err.message ?: "No se pudo cambiar la visibilidad del canal",
+                            error         = friendlyError(err, "No se pudo cambiar la visibilidad del canal"),
                         )
                     }
                 }
@@ -228,7 +233,7 @@ class ChannelOrderViewModel(
                 .onFailure { err ->
                     Log.w(TAG, "resetChannelOrder failed", err)
                     _ui.update {
-                        it.copy(error = err.message ?: "No se pudo restablecer el orden")
+                        it.copy(error = friendlyError(err, "No se pudo restablecer el orden"))
                     }
                 }
         }
@@ -263,7 +268,7 @@ class ChannelOrderViewModel(
                 .onFailure { err ->
                     Log.w(TAG, "replaceChannelOrder failed", err)
                     _ui.update {
-                        it.copy(error = err.message ?: "No se pudo guardar el orden")
+                        it.copy(error = friendlyError(err, "No se pudo guardar el orden"))
                     }
                 }
             pendingPersists.remove(libraryId)

@@ -1,6 +1,64 @@
 # Estado del proyecto — HubPlay Android
 
-> **Última sesión**: 2026-06-10 — rama `claude/tv-app-dev-3y6q0f`.
+> **Última sesión**: 2026-06-17 — rama `claude/tv-app-store-ready-xx73z0`.
+> Empuje hacia "store-ready": (1) **TV banner** generado y cableado en el
+> Manifest (`android:banner`, requisito Leanback que faltaba). (2) Assets de
+> ficha: **icono 512×512** + **feature graphic 1024×500** en
+> `docs/store-assets/`, reproducibles con `scripts/gen_store_assets.py`.
+> (3) **PRIVACY.md** rellenada (email + fecha) y **STORE_LISTING.md** con
+> copy ES/EN listo para pegar. (4) **Auditoría de robustez estática** en
+> `docs/memory/audit-2026-06-17-tv-robustness.md` (15 hallazgos priorizados);
+> aplicado el fix mecánico #1 (ExoPlayer `removeListener`). El resto necesita
+> device para validar el parche → queda como checklist.
+>
+> **Auditoría senior (3 agentes en paralelo: arquitectura/rendimiento/calidad)**
+> — las tres convergieron en ~7/10: código por encima de la media, publicable,
+> con grietas concretas. Fixes ya aplicados sin device (CI verde, detekt OK):
+> - **#1 (bug funcional)** paginación de búsqueda duplicaba resultados —
+>   `searchItems` no tenía `offset`. Arreglado end-to-end (+ 4 fakes de test).
+> - **#5** `DetailViewModel` → `.update{}` atómico; `PlayerViewModel.loadLiveChrome`
+>   ya no apila tickers `while(true)` (guard de re-entrada con `liveChromeJobs`);
+>   `pendingPersists` y `LanDiscovery.seen` ahora thread-safe.
+> - **#3 (parcial)** `PlayerViewModel` ya no filtra la ruta interna
+>   `/stream/$id/info` al usuario (detalle solo a logcat).
+>
+> **Lote 2 (rendimiento, CI verde)**: imágenes ya no se piden a resolución
+> completa — `absolutize()` añade `?w=` al endpoint de imágenes del backend
+> (que cachea thumbnails): `IMG_W_CARD=400` por defecto (posters/logos/people)
+> e `IMG_W_BACKDROP=1280` en backdrops/hero. Solo URLs del backend; las
+> remotas (TMDb/logos IPTV) pasan sin tocar. Recorta ancho de banda + memoria
+> de decodificación en TV baratas (era el hallazgo nº1 de perf).
+>
+> **Lote 3 (saneo de errores, CI verde)**: nuevo helper puro `ui/ErrorMessages.kt`
+> `friendlyError(err, fallback)` que mapea `HttpException` (401/403→sesión,
+> 5xx→servidor) y causas de red (UnknownHost/timeout/SSL) a copy limpio, y
+> devuelve el fallback contextual para lo desconocido — **nunca `err.message`
+> crudo**. Sustituidos los 12 sitios en 9 ViewModels (Catalog, Detail, Person,
+> Search, LiveTv, ChannelOrder×4, Studio, Collections, CollectionDetail). Ya
+> no se filtra a la TV texto técnico/inglés ("HTTP 500", "Unable to resolve
+> host") ni rutas internas. (De paso, arreglado un `ImportOrdering`
+> preexistente que el baseline ocultaba en SearchViewModel.)
+>
+> **Pendiente de la auditoría (no aplicado — necesita device o es refactor grande)**:
+> auto-tune que abre transcode en Home; **i18n real**: `friendlyError` y los
+> ~30 strings en VMs/repos (rail titles "Continuar viendo"…, "Temporada N",
+> literales ingleses en WhoIsWatchingViewModel) siguen hardcoded en español
+> → para que `values-en` los traduzca hace falta inyectar un resolver de
+> strings/Context en los VMs (centralizar el copy en `friendlyError` es el
+> primer paso); decidir OpenAPI generado (código muerto, 0 imports) y `ApiResult` (0 usos);
+> partir `data/` en `domain/`+`data/` y sacar `TrailerHost` de `data/`;
+> `PlayerViewModel` tras una `PlaybackRepository`. Tests: 0 instrumentados y
+> `AuthInterceptor`/`MeEventsStream`/`LanDiscovery` sin cobertura.
+>
+> **Lo que aún BLOQUEA publicar y necesita a Alex (no automatizable)**:
+> capturas de Android TV (obligatorias por Leanback) + teléfono; hostear
+> PRIVACY.md en URL pública; form Data Safety; cuenta dev + 5 GitHub Secrets;
+> primera subida manual del AAB; closed testing 14 testers × 14 días.
+> Detalle en `docs/PLAY_STORE.md` y `docs/store-assets/STORE_LISTING.md`.
+
+---
+
+> **Sesión 2026-06-10** — rama `claude/tv-app-dev-3y6q0f`.
 > (1) **CI desbloqueado**: los 10 findings de detekt que dejaron `main`
 > en rojo tras el merge del PR #69, arreglados y verde.
 > (2) **Filtro "Vistos recientemente"** en el sidebar de Live TV,

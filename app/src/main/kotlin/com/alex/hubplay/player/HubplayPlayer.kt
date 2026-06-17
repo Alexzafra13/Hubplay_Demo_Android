@@ -81,24 +81,29 @@ class HubplayPlayer(
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state
 
+    // Held so release() can detach it. ExoPlayer.release() already tears the
+    // player down, but removing the listener first is the documented order
+    // and stops any in-flight callback from touching _state post-release.
+    private val playerListener = object : Player.Listener {
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            _state.update {
+                it.copy(
+                    isBuffering = playbackState == Player.STATE_BUFFERING,
+                    isReady     = playbackState == Player.STATE_READY,
+                    isEnded     = playbackState == Player.STATE_ENDED,
+                )
+            }
+        }
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            _state.update { it.copy(isPlaying = isPlaying) }
+        }
+        override fun onPlayerError(error: PlaybackException) {
+            _state.update { it.copy(error = error.errorCodeName) }
+        }
+    }
+
     init {
-        exoPlayer.addListener(object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                _state.update {
-                    it.copy(
-                        isBuffering = playbackState == Player.STATE_BUFFERING,
-                        isReady     = playbackState == Player.STATE_READY,
-                        isEnded     = playbackState == Player.STATE_ENDED,
-                    )
-                }
-            }
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                _state.update { it.copy(isPlaying = isPlaying) }
-            }
-            override fun onPlayerError(error: PlaybackException) {
-                _state.update { it.copy(error = error.errorCodeName) }
-            }
-        })
+        exoPlayer.addListener(playerListener)
     }
 
     /**
@@ -130,6 +135,7 @@ class HubplayPlayer(
     }
 
     fun release() {
+        exoPlayer.removeListener(playerListener)
         exoPlayer.release()
     }
 

@@ -309,8 +309,9 @@ interface HubplayApi {
      */
     @GET("items/search")
     suspend fun searchItems(
-        @Query("q")     query: String,
-        @Query("limit") limit: Int = 60,
+        @Query("q")      query: String,
+        @Query("limit")  limit: Int = 60,
+        @Query("offset") offset: Int = 0,
     ): SearchResponse
 
     // ─── Multi-profile ("Who's watching?") ─────────────────────────────────

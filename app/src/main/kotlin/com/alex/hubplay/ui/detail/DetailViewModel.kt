@@ -5,9 +5,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRepository
+import com.alex.hubplay.ui.friendlyError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -33,18 +35,20 @@ class DetailViewModel(
     init { load() }
 
     fun load() {
-        _ui.value = _ui.value.copy(isLoading = true, error = null)
+        _ui.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
             runCatching { repository.fetchItemDetail(itemId) }
                 .onSuccess { item ->
-                    _ui.value = DetailUiState(isLoading = false, item = item)
+                    _ui.update { DetailUiState(isLoading = false, item = item) }
                     loadRelated()
                 }
                 .onFailure { err ->
-                    _ui.value = _ui.value.copy(
-                        isLoading = false,
-                        error     = err.message ?: "No se pudo cargar el detalle",
-                    )
+                    _ui.update {
+                        it.copy(
+                            isLoading = false,
+                            error     = friendlyError(err, "No se pudo cargar el detalle"),
+                        )
+                    }
                 }
         }
     }
@@ -56,7 +60,7 @@ class DetailViewModel(
     private fun loadRelated() {
         viewModelScope.launch {
             runCatching { repository.fetchRecommendations(itemId) }
-                .onSuccess { related -> _ui.value = _ui.value.copy(related = related) }
+                .onSuccess { related -> _ui.update { it.copy(related = related) } }
         }
     }
 
@@ -79,7 +83,7 @@ class DetailViewModel(
             is Content.Episode -> current.copy(isFavorite = !current.isFavorite)
             else               -> return
         }
-        _ui.value = _ui.value.copy(item = optimistic)
+        _ui.update { it.copy(item = optimistic) }
         viewModelScope.launch {
             runCatching { repository.toggleItemFavorite(current.id) }
                 .onSuccess { actual ->
@@ -89,10 +93,10 @@ class DetailViewModel(
                         is Content.Episode -> optimistic.copy(isFavorite = actual)
                         else               -> optimistic
                     }
-                    _ui.value = _ui.value.copy(item = applied)
+                    _ui.update { it.copy(item = applied) }
                 }
                 .onFailure {
-                    _ui.value = _ui.value.copy(item = current) // revert
+                    _ui.update { it.copy(item = current) } // revert
                 }
         }
     }
@@ -129,10 +133,10 @@ class DetailViewModel(
             )
             else -> return
         }
-        _ui.value = _ui.value.copy(item = optimistic)
+        _ui.update { it.copy(item = optimistic) }
         viewModelScope.launch {
             runCatching { repository.setItemWatched(current.id, target) }
-                .onFailure { _ui.value = _ui.value.copy(item = current) } // revert
+                .onFailure { _ui.update { it.copy(item = current) } } // revert
         }
     }
 

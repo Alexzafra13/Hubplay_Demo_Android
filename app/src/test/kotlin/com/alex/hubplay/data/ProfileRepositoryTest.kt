@@ -272,7 +272,7 @@ class ProfileRepositoryTest {
         override suspend fun markPlayed(itemId: String)                       = TODO()
         override suspend fun markUnplayed(itemId: String)                     = TODO()
         override suspend fun toggleItemFavorite(itemId: String): ItemFavoriteToggleResponse = TODO()
-        override suspend fun searchItems(query: String, limit: Int): SearchResponse = TODO()
+        override suspend fun searchItems(query: String, limit: Int, offset: Int): SearchResponse = TODO()
         override suspend fun listCollections(): CollectionsListResponse = TODO()
         override suspend fun getCollection(id: String): CollectionDetailResponse = TODO()
     }

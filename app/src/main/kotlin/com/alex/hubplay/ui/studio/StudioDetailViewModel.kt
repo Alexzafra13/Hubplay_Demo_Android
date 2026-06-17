@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.StudioDetail
+import com.alex.hubplay.ui.friendlyError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,7 +36,7 @@ class StudioDetailViewModel(
                 .onFailure { err ->
                     _ui.value = _ui.value.copy(
                         isLoading = false,
-                        error     = err.message ?: "No se pudo cargar el estudio",
+                        error     = friendlyError(err, "No se pudo cargar el estudio"),
                     )
                 }
         }

@@ -45,17 +45,28 @@ class LanDiscovery(private val context: Context) {
             return@callbackFlow
         }
 
-        val seen = mutableSetOf<String>()
-        // Older devices: avoid concurrent resolves (single-threaded API).
+        // Concurrent: written from NSD framework callbacks (onServiceResolved)
+        // which carry no documented single-thread guarantee.
+        val seen = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        // Guards against kicking off a second resolve for a name already
+        // being resolved (the framework re-fires onServiceFound).
         val resolving = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
-        val resolveListener = object : NsdManager.ResolveListener {
+        // A fresh ResolveListener is built per resolve inside onServiceFound:
+        // NsdManager rejects a listener instance that is already in use by
+        // another in-flight resolveService() — it throws
+        // IllegalArgumentException ("listener already in use"), and on
+        // API 34+ the shared-listener form is deprecated for exactly this
+        // reason. Sharing one instance (as before) crashed whenever two
+        // distinct services resolved concurrently, because the in-flight
+        // guard was keyed per-name while the framework constraint is global.
+        fun newResolveListener(name: String) = object : NsdManager.ResolveListener {
             override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                resolving.remove(serviceInfo.serviceName)
+                resolving.remove(name)
                 Log.d(TAG, "resolve failed ${serviceInfo.serviceName} err=$errorCode")
             }
             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                resolving.remove(serviceInfo.serviceName)
+                resolving.remove(name)
                 val host = serviceInfo.host?.hostAddress ?: return
                 val port = serviceInfo.port
                 if (port <= 0) return
@@ -94,7 +105,11 @@ class LanDiscovery(private val context: Context) {
                 if (!name.contains("hubplay", ignoreCase = true)) return
                 if (!resolving.add(name)) return
                 @Suppress("DEPRECATION")
-                nsd.resolveService(serviceInfo, resolveListener)
+                runCatching { nsd.resolveService(serviceInfo, newResolveListener(name)) }
+                    .onFailure {
+                        resolving.remove(name)
+                        Log.w(TAG, "resolveService threw for $name", it)
+                    }
             }
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
                 Log.d(TAG, "service lost ${serviceInfo.serviceName}")
