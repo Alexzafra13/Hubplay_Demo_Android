@@ -153,6 +153,32 @@ Xiaomi Mi TV (`MiTV-AFKR0`, Android 11, 1080p@320dpi) por
   El WebView del tráiler (`LAYER_TYPE_HARDWARE`, 1920×1080) cuesta
   5-40 ms/frame mientras se revela; no afecta a la navegación.
 
+### Ronda 5 — descubrimiento LAN, teclado zombi, medidas finales
+
+- **Fluidez, cifras finales en la Mi TV** (8 pulsaciones → en el rail
+  de posters, caché caliente): debug 29 % jank / p50 11 ms / p99 65 ms
+  (antes 64 % / 19 / 73); **release** (minificada, firmada con la clave
+  de debug solo para medir) 18 % / 9 ms / 34 ms. En frío (imágenes por
+  red) sigue alto en ambos: es decodificación + subida de texturas.
+  Añadido: el WebView del tráiler ya no usa `LAYER_TYPE_HARDWARE`
+  (copiaba cada frame de vídeo a una textura 1920×1080: 5-20 ms) y su
+  ocultación es `snap()` (se desvanecía bajo un backdrop ya opaco). En
+  reposo con tráiler: 0 % jank (antes 10 %).
+- **Descubrimiento LAN**: el servidor de casa (Docker, `ports:
+  8097:8096`) nunca aparecía: mDNS no sale del bridge. Nuevo
+  `data/LanProbe.kt`: sondeo UDP broadcast a `41860`
+  (`HUBPLAY-DISCOVER/1`, backend `internal/discovery`, URL = IP origen +
+  puerto anunciado, o `url` explícita si el server la envía) y barrido
+  HTTP de la /24 (`/api/v1/health` con marca `product` o claves
+  antiguas) como fallback para servers sin respondedor. `LanDiscovery`
+  fusiona mDNS + ambos, dedupe por URL; "Buscar de nuevo" relanza de
+  verdad; auto-skip con gracia 2 s. Verificado en la Mi TV: lista el
+  server local (UDP) y producción (barrido; su imagen aún no tiene el
+  respondedor). Un host con dos IPs sale dos veces (dedupe es por URL).
+- **Teclado zombi**: confirmar la URL con la tecla "Ir" del teclado del
+  TV dejaba el IME abierto sobre Inicio. `HubplayApp` cierra el teclado
+  al cambiar de ruta (salvo Login).
+
 ### Pendiente (siguiente sesión)
 
 - Re-medir jank en la Mi TV con el build de la ronda 4 y, si sigue

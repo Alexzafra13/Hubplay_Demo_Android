@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.zIndex
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -98,12 +99,19 @@ fun HubplayApp(container: AppContainer) {
     // tiene áreas transparentes. Sólo las 3 pantallas con trailer hero
     // (Home, Detail, Series) están exentas.
     val currentBackEntry by navController.currentBackStackEntryAsState()
+    val keyboard = LocalSoftwareKeyboardController.current
     androidx.compose.runtime.LaunchedEffect(currentBackEntry?.destination?.route) {
         val route = currentBackEntry?.destination?.route ?: return@LaunchedEffect
         val isTrailerScreen = route == Route.Home.path ||
             route.startsWith("detail/") ||
             route.startsWith("series/")
         if (!isTrailerScreen) trailerHost.hideNow()
+        // El teclado del TV se quedaba abierto sobre Inicio si el usuario
+        // confirmaba la URL con la tecla "Ir" del propio teclado: el IME
+        // seguía "solicitado" tras cambiar de pantalla. Ninguna pantalla
+        // fuera de Login/Buscar arranca con un campo de texto, así que
+        // cerrarlo al navegar es siempre correcto.
+        if (route != Route.Login.path) keyboard?.hide()
     }
 
     Box(modifier = Modifier.fillMaxSize().background(BgBase)) {

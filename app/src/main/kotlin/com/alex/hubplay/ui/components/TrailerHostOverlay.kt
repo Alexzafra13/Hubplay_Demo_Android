@@ -10,6 +10,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -66,7 +67,10 @@ fun TrailerHostOverlay(modifier: Modifier = Modifier) {
 
     val alpha by animateFloatAsState(
         targetValue   = if (revealed) 1f else 0f,
-        animationSpec = tween(durationMillis = 400),
+        // Al ocultar, snap: el backdrop de Home ya vuelve opaco al instante
+        // (ver HomeScreen), así que desvanecer la WebView debajo era pintar
+        // una capa 1920×1080 durante 24 frames sin que se viera.
+        animationSpec = if (revealed) tween(durationMillis = 400) else snap(),
         label         = "trailer-host-alpha",
     )
 
@@ -166,7 +170,13 @@ fun TrailerHostOverlay(modifier: Modifier = Modifier) {
                         @SuppressLint("SetAllowMixedContent")
                         mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     }
-                    setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                    // Sin capa hardware: con LAYER_TYPE_HARDWARE cada frame de
+                    // vídeo se copiaba a una textura 1920×1080 y luego se
+                    // componía (5-20 ms/frame en la GPU del TV box). El
+                    // functor del WebView dibuja directo en el frame; el alpha
+                    // del revelado lo gestiona HWUI con su propia capa solo
+                    // mientras dura el fundido.
+                    setLayerType(android.view.View.LAYER_TYPE_NONE, null)
                     setInitialScale(100)
 
                     android.webkit.CookieManager.getInstance()

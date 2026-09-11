@@ -7,6 +7,8 @@ import android.util.Log
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.merge
 
 /**
  * mDNS discovery of HubPlay servers on the local network.
@@ -36,9 +38,23 @@ import kotlinx.coroutines.flow.callbackFlow
  *    `IllegalArgumentException` if the discovery already stopped due to
  *    Wi-Fi flapping. Swallow the exception so the Flow tears down cleanly.
  */
-class LanDiscovery(private val context: Context) {
+class LanDiscovery(
+    private val context: Context,
+    private val probe: LanProbe = LanProbe(),
+) {
 
-    fun discover(): Flow<LanServer> = callbackFlow {
+    /**
+     * Todos los mecanismos a la vez, deduplicados por URL: mDNS (push,
+     * no termina), sondeo UDP por broadcast y barrido de la subred (ver
+     * [LanProbe] para por qué mDNS solo no basta con Docker).
+     */
+    fun discover(): Flow<LanServer> {
+        val seen = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        return merge(mdns(), probe.udpProbe(), probe.subnetProbe())
+            .filter { seen.add(it.url) }
+    }
+
+    private fun mdns(): Flow<LanServer> = callbackFlow {
         val nsd = context.getSystemService(Context.NSD_SERVICE) as? NsdManager
         if (nsd == null) {
             close()

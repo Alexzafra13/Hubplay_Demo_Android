@@ -41,7 +41,7 @@ class LoginViewModel(
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
     private var pollingJob: Job? = null
-    private val discoveryJob: Job
+    private var discoveryJob: Job? = null
 
     /**
      * Auto-skip stage 1 when there's exactly one HubPlay server on the
@@ -52,15 +52,7 @@ class LoginViewModel(
     @Volatile private var autoSkipConsumed: Boolean = false
 
     init {
-        discoveryJob = viewModelScope.launch {
-            _uiState.update { it.copy(lanSearching = true) }
-            lanDiscovery.discover().collect { entry ->
-                _uiState.update { state ->
-                    if (state.lanDiscovery.any { it.url == entry.url }) state
-                    else state.copy(lanDiscovery = state.lanDiscovery + entry)
-                }
-            }
-        }
+        startDiscovery()
         // mDNS discovery is push-driven and never "finishes" by itself, so
         // a naive UI would show the "Buscando…" spinner forever on a LAN
         // that has nothing to announce (router blocks multicast, remote
@@ -186,10 +178,26 @@ class LoginViewModel(
      * eats multicast traffic so the LAN search reliably finds nothing.
      */
     fun restartLanSearch() {
-        _uiState.update { it.copy(lanSearching = true) }
+        // Relanza de verdad: el sondeo UDP y el barrido de subred son
+        // finitos (terminan en unos segundos), así que "Buscar de nuevo"
+        // debe volver a emitirlos, no solo re-armar el spinner.
+        startDiscovery()
         viewModelScope.launch {
             delay(LAN_SEARCH_TIMEOUT_MS)
             _uiState.update { it.copy(lanSearching = false) }
+        }
+    }
+
+    private fun startDiscovery() {
+        discoveryJob?.cancel()
+        discoveryJob = viewModelScope.launch {
+            _uiState.update { it.copy(lanSearching = true) }
+            lanDiscovery.discover().collect { entry ->
+                _uiState.update { state ->
+                    if (state.lanDiscovery.any { it.url == entry.url }) state
+                    else state.copy(lanDiscovery = state.lanDiscovery + entry)
+                }
+            }
         }
     }
 
@@ -238,7 +246,7 @@ class LoginViewModel(
          * enough that the user doesn't notice the wait on a single-server
          * LAN.
          */
-        private const val AUTO_SKIP_GRACE_MS = 1_200L
+        private const val AUTO_SKIP_GRACE_MS = 2_000L
 
         /**
          * After this many ms with no hits we drop the "Buscando en tu red…"
