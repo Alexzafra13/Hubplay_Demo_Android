@@ -16,14 +16,13 @@ import com.alex.hubplay.data.AppContainer
  * singletons (network, storage, repositories) the rest of the app pulls
  * via composition-local in Compose.
  *
- * Also wires Coil's singleton ImageLoader to use the same OkHttp client
- * the API layer uses — without this, image URLs that need bearer auth
- * (the entire `/images/file/{id}` surface on HubPlay) would 401 because
- * Coil's default network engine spins up its own OkHttp with no
- * interceptors. Routing image loads through `appContainer.mainOkHttp`
- * means every request automatically carries `Authorization: Bearer …`,
- * gets the BaseUrlInterceptor's host rewrite, and benefits from the
- * shared connection pool.
+ * Also wires Coil's singleton ImageLoader to `appContainer.imageCallFactory`,
+ * which routes by host: backend image URLs (the `/images/file/{id}`
+ * surface) go through the authenticated, cert-pinned `mainOkHttp` — they
+ * need the bearer token or they 401 — while third-party art (TMDb posters
+ * on the "Más como esto" rail) goes through a plain client. Without that
+ * split, the backend client's host rewrite turned every TMDb URL into a
+ * 404 on the user's server.
  *
  * Manual DI on purpose — Hilt/Koin add ~1.2 MB to the APK and a non-
  * trivial annotation surface for what is, today, ~7 singletons. If the
@@ -62,7 +61,7 @@ class HubplayApp : Application(), SingletonImageLoader.Factory {
     override fun newImageLoader(context: PlatformContext): ImageLoader {
         return ImageLoader.Builder(context)
             .components {
-                add(OkHttpNetworkFetcherFactory(callFactory = container.mainOkHttp))
+                add(OkHttpNetworkFetcherFactory(callFactory = container.imageCallFactory))
             }
             // ─── Memory cache ────────────────────────────────────────────
             // Default is 25 % of app heap, which on a TV box with a

@@ -17,6 +17,12 @@ import okhttp3.Response
  * in-memory read. Falls back to the placeholder when no serverUrl is
  * stored — Retrofit will just fail the request with a connection error
  * which we handle upstream as "no server configured".
+ *
+ * NOTE: this client is only ever used for backend traffic (Retrofit's
+ * placeholder + backend image URLs). Third-party image hosts (TMDb art
+ * on the "Más como esto" rail) are routed through a separate plain client
+ * — see `AppContainer.imageCallFactory` — so they never reach this
+ * interceptor (which would otherwise rewrite their host to the server).
  */
 class BaseUrlInterceptor(private val tokenStore: TokenStore) : Interceptor {
 

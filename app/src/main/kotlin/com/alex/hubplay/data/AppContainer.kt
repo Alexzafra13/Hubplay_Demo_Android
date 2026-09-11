@@ -9,10 +9,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChangedBy
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import okhttp3.Call
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -102,6 +105,41 @@ class AppContainer(context: Context) {
         .readTimeout(30, TimeUnit.SECONDS)
         .also { if (BuildConfig.DEBUG) it.addInterceptor(loggingInterceptor()) }
         .build()
+
+    /**
+     * Plain client for third-party image hosts — today only TMDb poster
+     * art on the Detail screen's "Más como esto" rail. Deliberately has
+     * NONE of [mainOkHttp]'s backend machinery: no [BaseUrlInterceptor]
+     * (which would rewrite `image.tmdb.org` to the user's server → 404),
+     * no [AuthInterceptor] (we must not leak the bearer token to a CDN),
+     * and no TOFU pin store (TMDb has a normal public cert, validated by
+     * the system store — prompting "trust this server?" for a CDN would
+     * be nonsensical). Uses the platform default TLS / hostname verifier.
+     */
+    val externalOkHttp: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .also { if (BuildConfig.DEBUG) it.addInterceptor(loggingInterceptor()) }
+        .build()
+
+    /**
+     * Call factory Coil's image loader uses. Routes by host: the paired
+     * server's own images go through [mainOkHttp] (bearer auth + the
+     * pinned cert they need); everything else (TMDb art) goes through the
+     * plain [externalOkHttp]. Without this split, every image load went
+     * through the backend client and third-party URLs broke.
+     */
+    val imageCallFactory: Call.Factory = object : Call.Factory {
+        override fun newCall(request: Request): Call {
+            val serverHost = tokenStore.snapshotNow().serverUrl?.toHttpUrlOrNull()?.host
+            val client = if (serverHost != null && request.url.host == serverHost) {
+                mainOkHttp
+            } else {
+                externalOkHttp
+            }
+            return client.newCall(request)
+        }
+    }
 
     /**
      * Derived client for SSE (/me/events) and HLS streaming — infinite
