@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.alex.hubplay.data.AppContainer
 import com.alex.hubplay.ui.HubplayApp
+import com.alex.hubplay.ui.components.BrandIntroGate
 import com.alex.hubplay.ui.theme.HubPlayTheme
 
 /**
@@ -41,7 +42,14 @@ class MainActivity : ComponentActivity() {
         // in styles.xml as `postSplashScreenTheme`). Skipping this
         // would leave the launch theme stuck through Compose's first
         // frame, flashing the splash bg.
-        installSplashScreen()
+        val splash = installSplashScreen()
+        // Cuando el sistema retira su splash (icono estático), arranca el
+        // intro de marca en Compose. Sin esto el intro corría tapado por la
+        // capa del splash y el usuario solo veía el icono.
+        splash.setOnExitAnimationListener { provider ->
+            provider.remove()
+            BrandIntroGate.open()
+        }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 

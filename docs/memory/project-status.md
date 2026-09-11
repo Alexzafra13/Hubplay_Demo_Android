@@ -101,6 +101,23 @@ Xiaomi Mi TV (`MiTV-AFKR0`, Android 11, 1080p@320dpi) por
   hay vídeo por hardware; la reproducción se verifica por segmentos HLS
   en logcat + `dumpsys audio` (AudioTrack `started` del pid de la app).
 
+### Ronda 3 — arranque con marca
+
+- **Icono del splash recortado**: SplashScreen (y su backport) enmascara
+  el icono en un círculo de 2/3 del canvas; `brand_mark` ocupa la
+  diagonal completa → el mando salía cortado. Nuevo
+  `drawable/splash_icon.xml` = mismo path escalado al 52 % y centrado.
+- **`BrandIntro`** (Compose, `ui/components`): overlay BgBase sobre el
+  NavHost; el mando entra (alpha + scale) y el wordmark se revela de
+  izquierda a derecha con `clipRect` en `drawWithContent`; hold y fade.
+  ~1.2 s, una vez por proceso (`introPlayed`), solapa con la carga.
+  Coste: 4 `Animatable` + un clip sobre un vector; nada de bitmaps.
+- **`BrandIntroGate`**: en API < 31 la capa del splash del sistema
+  tapaba el intro entero. `MainActivity` abre la compuerta desde
+  `setOnExitAnimationListener` (el momento en que el sistema retira su
+  splash) y el intro espera a ella (tope 2,5 s). Verificado en la Mi TV
+  con capturas seguidas: splash → mando → wordmark → Home.
+
 ### Pendiente (siguiente sesión)
 
 - Detalle sin artwork: mucho vacío arriba; valorar backdrop de color

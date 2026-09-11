@@ -1,17 +1,20 @@
 package com.alex.hubplay.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -19,15 +22,18 @@ import androidx.navigation.compose.rememberNavController
 import com.alex.hubplay.data.AppContainer
 import com.alex.hubplay.data.LocalTrailerHost
 import com.alex.hubplay.data.TrailerHost
-import androidx.compose.foundation.background
+import com.alex.hubplay.ui.components.BrandIntro
 import com.alex.hubplay.ui.components.CertTrustDialog
 import com.alex.hubplay.ui.components.TrailerHostOverlay
-import com.alex.hubplay.ui.theme.BgBase
 import com.alex.hubplay.ui.home.components.LocalVisibleTabs
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.nav.HubplayNavGraph
 import com.alex.hubplay.ui.nav.Route
 import com.alex.hubplay.ui.screensaver.ScreensaverOverlay
+import com.alex.hubplay.ui.theme.BgBase
+
+/** El intro de marca va por encima del salvapantallas (100f). */
+private const val INTRO_Z_INDEX = 200f
 
 /**
  * Root composable. Owns the NavController and decides the start
@@ -130,6 +136,15 @@ fun HubplayApp(container: AppContainer) {
             modifier = Modifier.fillMaxSize().zIndex(100f),
         ) {
             ScreensaverOverlay(slides = slides)
+        }
+
+        // Intro de marca (una vez por proceso) por encima de todo mientras
+        // el NavHost carga debajo: al fundirse, la app ya está lista.
+        var introDone by remember { mutableStateOf(false) }
+        if (!introDone) {
+            Box(modifier = Modifier.fillMaxSize().zIndex(INTRO_Z_INDEX)) {
+                BrandIntro(onFinished = { introDone = true })
+            }
         }
 
         // Cert-trust dialog promoted from LoginScreen to the app root.

@@ -28,7 +28,9 @@
          and already sized to that — see drawable/brand_mark.xml. -->
     <style name="Theme.HubPlay.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#07090E</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/brand_mark</item>
+        <!-- splash_icon = brand_mark escalado al 52 %: la máscara circular
+             de SplashScreen recortaba el mando en diagonal. -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
         <item name="windowSplashScreenIconBackgroundColor">#07090E</item>
         <item name="postSplashScreenTheme">@style/Theme.HubPlay</item>
     </style>
