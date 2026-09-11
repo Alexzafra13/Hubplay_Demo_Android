@@ -1,13 +1,14 @@
 # HubPlay Android — Contexto de proyecto
 
 > Cliente Android nativo para [HubPlay](https://github.com/Alexzafra13/HubPlay_demo).
-> Single-Activity Compose, Media3 ExoPlayer, mDNS LAN discovery,
-> screensaver Jellyfin-style. Sirve para móvil + tablet + Android TV
-> (Leanback declarado en Manifest).
+> Single-Activity Compose, Media3 ExoPlayer, descubrimiento LAN
+> (mDNS + sondeo UDP + barrido de subred), screensaver Jellyfin-style.
+> El foco real es **Android TV** (Leanback); móvil/tablet compilan pero
+> están sin probar desde junio.
 >
-> **Leer `docs/memory/project-status.md` al inicio de cada sesión** para
-> retomar contexto. Ese fichero captura qué se ha hecho, qué falta,
-> convenciones y lecciones aprendidas.
+> **Leer `docs/memory/project-status.md` al inicio de cada sesión**: es
+> corto y tiene el estado, cómo probar en la TV real y lo pendiente.
+> El histórico largo de sesiones vive en `docs/memory/archive/`.
 
 ---
 
@@ -46,10 +47,15 @@ CI corre en cada push: `openApiGenerate → detekt → testDebugUnitTest → ass
 ```
 app/src/main/kotlin/com/alex/hubplay/
   HubplayApp.kt              # Application — instala CrashLogger + SingletonImageLoader
-  MainActivity.kt            # Single Activity — dispatch overrides para IdleController
+  MainActivity.kt            # Single Activity — splash → BrandIntroGate; dispatch para IdleController
   data/                      # Repos, interceptors, DTOs, store
+    LanDiscovery.kt          # mDNS + LanProbe (UDP 41860 + barrido /24) fusionados
+    TrailerHost.kt           # estado del único WebView de tráilers (claim/reveal/hide)
   player/                    # HubplayPlayer (Media3 wrapper) + capabilities
-  ui/                        # Composables por feature: login, home, livetv, player, …
+  ui/HubplayApp.kt           # raíz: TrailerHostOverlay (capa 0) + NavHost + screensaver + BrandIntro
+  ui/components/             # TvShell + NavSidebar (menú lateral común), BrandIntro, TrailerHostOverlay
+  ui/home/                   # HomeScreen (hero + rails) y components/ (MediaCard, HomeRail, HomeBackdrop…)
+  ui/                        # resto por feature: login, livetv, catalog, detail, player, …
 app/src/main/res/
   values/strings.xml         # es-ES (default locale)
   values-en/strings.xml      # en (114 keys, parity verificado)
@@ -72,10 +78,22 @@ docs/
 
 Ver `docs/memory/` (versionado en git) para contexto entre sesiones:
 
-- `project-status.md` — estado actual, qué se hizo, qué falta, próximos
-  pasos, convenciones, lecciones aprendidas.
+- `project-status.md` — **entrypoint**: estado, cómo probar en la TV
+  real y el emulador (adb, emparejado, capturas), arquitectura viva,
+  decisiones de diseño/rendimiento y pendientes.
+- `archive/` — histórico de sesiones (mayo–septiembre 2026) y audits
+  cerrados. Solo para arqueología; no leer al arrancar.
 
 **Leer `docs/memory/project-status.md` al inicio de cada sesión**.
+
+## Entorno Windows (máquina del autor)
+
+- Compilar desde Git Bash con `JAVA_HOME=~/.jdks/jbr-21.0.7` (el JBR
+  de Android Studio falla desde Git Bash con "could not open jvm.cfg").
+- Comando de validación completo (lo que corre CI):
+  `JAVA_HOME=~/.jdks/jbr-21.0.7 ./gradlew :app:detekt :app:testDebugUnitTest :app:assembleDebug -q`
+- `sed -i 'Na\…'` de Git Bash aplana los saltos de línea al insertar
+  varias líneas: para insertar bloques usar el tool Edit o `r fichero`.
 
 ---
 
