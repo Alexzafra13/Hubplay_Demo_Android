@@ -74,6 +74,7 @@ import kotlinx.coroutines.delay
 
 /** Margen para cerrar el IME que el TextField abre al ganar foco (ms). */
 private const val IME_SUPPRESS_DELAY_MS = 60L
+private const val IME_SUPPRESS_RETRY_MS = 450L
 
 /**
  * Login surface — two stages share one composable so the user's typed
@@ -415,8 +416,15 @@ private fun PrimaryUrlInput(ui: LoginUiState, viewModel: LoginViewModel) {
     var wantKeyboard by remember { mutableStateOf(false) }
     var fieldFocused by remember { mutableStateOf(false) }
     LaunchedEffect(fieldFocused, wantKeyboard) {
-        if (fieldFocused && !wantKeyboard) {
+        if (!wantKeyboard) {
+            // Dos intentos: el IME del TV puede aparecer DESPUÉS del primer
+            // hide (p.ej. al volver de "Cambiar servidor" el campo recupera
+            // el foco y el teclado asomaba tapando la lista de servidores).
+            // También al PERDER el foco: si el teclado quedó abierto no debe
+            // sobrevivir al campo.
             delay(IME_SUPPRESS_DELAY_MS)
+            keyboard?.hide()
+            delay(IME_SUPPRESS_RETRY_MS)
             keyboard?.hide()
         }
     }
