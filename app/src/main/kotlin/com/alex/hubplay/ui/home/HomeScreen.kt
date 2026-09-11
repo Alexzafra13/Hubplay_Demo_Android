@@ -340,8 +340,13 @@ fun HomeScreen(
                 ) {
 
                     // ── Layer 0: Full-screen backdrop ──────────────────
+                    // Un canal en vivo NO usa su logo como backdrop: a
+                    // pantalla completa sale pixelado y estirado. Queda el
+                    // fondo base y, cuando arranca, la preview del canal.
                     Crossfade(
-                        targetState = heroItem?.backdropUrl ?: heroItem?.posterUrl,
+                        targetState = heroItem
+                            ?.takeUnless { it is Content.LiveChannel }
+                            ?.let { it.backdropUrl ?: it.posterUrl },
                         animationSpec = tween(durationMillis = 300),
                         label = "home-backdrop",
                         modifier = Modifier

@@ -307,6 +307,12 @@ private fun buildIframeHtml(videoKey: String, startAtSec: Long): String {
                   if (f.contentWindow) {
                     f.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}', '*');
                     f.contentWindow.postMessage('{"event":"command","func":"setVolume","args":[80]}', '*');
+                    // Sin subtítulos automáticos: el trailer es fondo
+                    // ambiental, no un vídeo que se lee. unloadModule es
+                    // la única vía fiable del IFrame API (cc_load_policy
+                    // solo sabe forzarlos a ON).
+                    f.contentWindow.postMessage('{"event":"command","func":"unloadModule","args":["captions"]}', '*');
+                    f.contentWindow.postMessage('{"event":"command","func":"unloadModule","args":["cc"]}', '*');
                   }
                   if (duration === 0) send('getDuration');
                   if (!polling) polling = setInterval(function(){ send('getCurrentTime'); }, 300);

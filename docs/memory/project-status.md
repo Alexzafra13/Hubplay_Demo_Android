@@ -75,15 +75,42 @@ El emparejamiento se aprueba desde el backend con
 JDK local: `~/.jdks/jbr-21.0.7` (el JBR de Android Studio no arranca
 desde Git Bash).
 
+### Ronda 2 (misma sesión) — probado en la TV box real
+
+Xiaomi Mi TV (`MiTV-AFKR0`, Android 11, 1080p@320dpi) por
+`adb connect 192.168.1.132`, emparejada con **producción**
+(`hubplay.duckdns.org`, usuario admin) → contenido real con carátulas.
+
+- **Películas vacía en producción** ("No se pudo cargar el contenido"):
+  `JsonDataException: Non-null value 'genres' was null at
+  $.data.items[4].genres`. El backend serializa el slice Go nil como
+  `null` en ítems sin metadatos; el default `= emptyList()` del DTO
+  solo cubre la clave AUSENTE. Fix doble: `NullToEmptyListAdapterFactory`
+  en el `Moshi.Builder` (cualquier `List<T>` nula → vacía; test con el
+  wire real) y guard `len(genres) > 0` en `library.go` del backend
+  (los otros 4 sitios ya lo tenían).
+- `cleanChannelName`: fuera "(1080p)", "(HD)", "[Geo-blocked]"… de los
+  nombres M3U al mostrar (LiveTv + Home). Tests.
+- Hero: un canal en vivo ya no pinta su logo estirado como backdrop.
+- Tráiler: `unloadModule("captions"/"cc")` vía IFrame API al empezar a
+  reproducir (salían subtítulos automáticos de YouTube).
+- Menú: `focusProperties { enter = { activeRequester } }` en el
+  focusGroup → al entrar con ← el foco cae en la sección activa
+  (verificado: Inicio).
+- **Captura de vídeo**: `screencap` en la Xiaomi devuelve blanco cuando
+  hay vídeo por hardware; la reproducción se verifica por segmentos HLS
+  en logcat + `dumpsys audio` (AudioTrack `started` del pid de la app).
+
 ### Pendiente (siguiente sesión)
 
-- `←` desde Play abre el menú pero enfoca la fila más cercana en
-  vertical (Películas), no la activa (Inicio): `focusProperties.left`
-  hacia un requester de la fila activa.
 - Detalle sin artwork: mucho vacío arriba; valorar backdrop de color
   dominante o poster grande a la izquierda.
 - Revisar `CollectionDetailScreen` con las tarjetas más altas.
-- Probar en la TV box real (`adb connect <ip>`) y en móvil.
+- Ítems sin identificar muestran el nombre de fichero
+  ("Torrente.Presidente.2026.720p.CAMRip…"): es metadata del servidor
+  (identificar desde el panel), no de la app; valorar un "título
+  limpio" derivado del filename como fallback.
+- Probar en móvil.
 > **Sesión anterior**: 2026-06-17 — rama `claude/tv-app-store-ready-xx73z0`.
 > Empuje hacia "store-ready": (1) **TV banner** generado y cableado en el
 > Manifest (`android:banner`, requisito Leanback que faltaba). (2) Assets de

@@ -4,6 +4,7 @@ import android.content.Context
 import com.alex.hubplay.BuildConfig
 import com.alex.hubplay.data.api.AuthApi
 import com.alex.hubplay.data.api.HubplayApi
+import com.alex.hubplay.data.api.NullToEmptyListAdapterFactory
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +41,9 @@ class AppContainer(context: Context) {
     val authStateFlow = tokenStore.authStateFlow
 
     private val moshi: Moshi = Moshi.Builder()
+        // `"genres": null` (y cualquier lista nula del wire) → lista vacía
+        // en vez de tirar la respuesta entera. Ver NullToEmptyListAdapterFactory.
+        .add(NullToEmptyListAdapterFactory())
         .build()
 
     /**

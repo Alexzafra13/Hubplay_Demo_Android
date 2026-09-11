@@ -718,7 +718,7 @@ class HomeRepositoryImpl(
         val absoluteLogo = absolutize(channelLogo, server)
         return Content.LiveChannel(
             id           = channelId,
-            title        = channelName.orEmpty(),
+            title        = cleanChannelName(channelName.orEmpty()),
             subtitle     = programTitle,
             posterUrl    = absoluteLogo,
             backdropUrl  = absoluteLogo,

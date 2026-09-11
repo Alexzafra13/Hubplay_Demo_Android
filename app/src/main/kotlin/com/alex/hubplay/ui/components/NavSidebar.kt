@@ -39,9 +39,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -101,6 +105,7 @@ private const val ROW_FOCUS_SCALE    = 1.04f
  * horizontal opaco→transparente en el borde derecho.
  */
 @Composable
+@OptIn(ExperimentalComposeUiApi::class)
 fun NavSidebar(
     selectedTab:      Tab?,
     onNavigateToTab:  (Tab) -> Unit,
@@ -117,6 +122,11 @@ fun NavSidebar(
     val rowsFocused = remember { mutableStateMapOf<Int, Boolean>() }
     val expanded by remember { derivedStateOf { rowsFocused.values.any { it } } }
     LaunchedEffect(expanded) { onExpandedChange(expanded) }
+
+    // Al entrar en el menú (← desde el contenido) el foco aterriza en la
+    // sección ACTIVA, no en la fila que quede más cerca en vertical: desde
+    // el hero de Inicio se llegaba a "Películas" y desorientaba.
+    val activeRequester = remember { FocusRequester() }
 
     val animatedWidth by animateDpAsState(
         targetValue   = if (expanded) SidebarExpandedWidth else SIDEBAR_WIDTH,
@@ -144,6 +154,7 @@ fun NavSidebar(
                 .width(animatedWidth)
                 .fillMaxHeight()
                 .background(sidebarBrush)
+                .focusProperties { enter = { activeRequester } }
                 .focusGroup(),
         ) {
             SidebarBrand(expanded = expanded)
@@ -152,14 +163,23 @@ fun NavSidebar(
 
             // Índices estables por Tab (ordinal) — una fila oculta
             // simplemente no aparece y no descoloca al resto.
+            // Si ninguna fila es la activa (pantalla sin Tab, p.ej. detalle),
+            // el requester cae en Inicio para que `enter` siempre resuelva.
+            val fallbackIsHome = selectedTab == null && !settingsSelected
             Tab.entries.filter { it in visibleTabs }.forEach { tab ->
+                val active = tab == selectedTab
                 SidebarRow(
                     icon     = tab.icon,
                     label    = stringResource(tab.labelRes),
-                    active   = tab == selectedTab,
+                    active   = active,
                     expanded = expanded,
                     onClick  = { onNavigateToTab(tab) },
                     onFocusedChange = { f -> rowsFocused[tab.ordinal] = f },
+                    modifier = if (active || (fallbackIsHome && tab == Tab.Home)) {
+                        Modifier.focusRequester(activeRequester)
+                    } else {
+                        Modifier
+                    },
                 )
             }
 
@@ -172,6 +192,7 @@ fun NavSidebar(
                 expanded = expanded,
                 onClick  = onOpenSettings,
                 onFocusedChange = { f -> rowsFocused[Tab.entries.size] = f },
+                modifier = if (settingsSelected) Modifier.focusRequester(activeRequester) else Modifier,
             )
             Spacer(Modifier.height(16.dp))
         }
@@ -226,6 +247,7 @@ private fun SidebarRow(
     expanded:        Boolean,
     onClick:         () -> Unit,
     onFocusedChange: (Boolean) -> Unit,
+    modifier:        Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -250,7 +272,7 @@ private fun SidebarRow(
     val interactionSource = remember { MutableInteractionSource() }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .padding(horizontal = 6.dp, vertical = 2.dp)
             .height(SidebarRowHeight)
             .scale(scale)

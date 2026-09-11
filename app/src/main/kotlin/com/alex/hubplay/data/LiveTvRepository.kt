@@ -150,7 +150,7 @@ class LiveTvRepository(
 
     private fun ChannelDto.toDomain(server: String): LiveChannel = LiveChannel(
         id            = id,
-        name          = name,
+        name          = cleanChannelName(name),
         number        = number,
         groupName     = groupName.orEmpty(),
         category      = category.orEmpty(),
