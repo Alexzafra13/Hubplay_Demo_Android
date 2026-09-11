@@ -335,8 +335,11 @@ class HomeViewModel(
         // Tier 1 — "Nuevo": latest items added this year. If nothing
         // qualifies (cold catalogue), fall back to all latest so the
         // hero still has content from this source.
-        val thisYearOnly = latest.filter { it.year == currentYear && it !is Content.Episode }
-        val newPool      = if (thisYearOnly.isNotEmpty()) thisYearOnly else latest
+        // Ni episodios ni temporadas: un hero con "Season 1" como título
+        // no dice nada; el hero es para títulos (película / serie).
+        val titlesOnly   = latest.filter { it !is Content.Episode && it !is Content.Season }
+        val thisYearOnly = titlesOnly.filter { it.year == currentYear }
+        val newPool      = if (thisYearOnly.isNotEmpty()) thisYearOnly else titlesOnly
 
         // Tier 2 dedupes against Tier 1, Tier 3 against both. Sequence +
         // take() avoids the break/continue pattern detekt flags as too

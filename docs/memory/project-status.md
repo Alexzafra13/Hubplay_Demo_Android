@@ -1,6 +1,90 @@
 # Estado del proyecto — HubPlay Android
 
-> **Última sesión**: 2026-06-17 — rama `claude/tv-app-store-ready-xx73z0`.
+> **Última sesión**: 2026-09-11 — rediseño de navegación para TV
+> (menú lateral único en toda la app), fixes de foco con mando y
+> tarjetas legibles sin carátula. Verificado en emulador Android TV
+> (`Television_4K`, 960×540dp) contra un backend local (`10.0.2.2:8097`)
+> con capturas por `adb`.
+
+---
+
+## 🎨 Sesión 2026-09-11 — Navegación unificada + foco de mando
+
+**Decisión de diseño (usuario):** menú lateral izquierdo en TODAS las
+pantallas de primer nivel, plegado a iconos y expandido al enfocarlo.
+Fuera la barra superior (`TopNav`) que usaban Películas/Series/TV/Buscar.
+
+### Cambios
+
+- **`ui/components/TvShell.kt`** (nuevo): armazón común = contenido +
+  scrim degradado (al expandir el menú) + `NavSidebar`. Inicio pasa
+  `padContent=false` (su backdrop llega al borde). Lo usan Home,
+  Catalog (Películas/Series), Collections, LiveTv y Search.
+- **`ui/components/NavSidebar.kt`** (nuevo, sustituye a `HomeSidebar`):
+  logo arriba (marca plegado → wordmark expandido, crossfade), filas
+  con tres estados (foco = pill blanco; activo = barra de acento +
+  primario; resto apagado), Ajustes al pie. `SIDEBAR_WIDTH = 56dp`.
+- **`Tab.kt`**: el enum lleva icono y el orden del menú (Buscar, Inicio,
+  Películas, Series, Colecciones, TV en vivo). `TopNav.kt` borrado;
+  `onLogOut` desaparece de las pantallas (vive en Ajustes).
+- **Hero (`HeroInfo`)**: los botones Play/Detalles viven FUERA del
+  `AnimatedContent` del slide. Antes cada auto-rotación (8 s) recreaba
+  el botón enfocado y el foco caía al menú lateral, que se abría solo.
+  `←` en Play ya no rota el carousel (ahora abre el menú); `→` en
+  "Ver detalles" pasa de slide. `HomeViewModel.buildHeroSlots` excluye
+  temporadas (salía "Season 1" como título).
+- **`MediaCard`**: título SIEMPRE bajo el artwork (2 líneas, primario al
+  enfocar) + placeholder con degradado e inicial cuando no hay imagen
+  (`CARD_CAPTION_HEIGHT`; `RailHeight` 190→228dp). Sin TMDb la
+  biblioteca era invisible (negro sobre negro).
+- **Catálogo**: foco inicial en la primera tarjeta (`FocusRequester` en
+  el índice 0). **Detalle**: sin "·" suelto delante de la duración.
+- **Login**: el campo URL ya no abre el teclado al ganar foco (el
+  `OutlinedTextField` clásico ignora `showKeyboardOnFocus`; se cierra
+  tras 60 ms salvo que el usuario pulse OK sobre él); `↓` va a
+  Continuar (`focusProperties.down`); Enter/Go del IME = Continuar. En
+  el paso de emparejamiento se retira el wordmark: con código + QR el
+  contenido no cabía en 540dp y el título salía cortado.
+- **`app/src/debug/AndroidManifest.xml`**: `usesCleartextTraffic=true`
+  SOLO en debug, para probar contra un servidor sin TLS (emulador →
+  `10.0.2.2`, TV box → IP LAN). Release sigue exigiendo HTTPS.
+- Commit del trabajo pendiente de junio: `imageCallFactory` (TMDb por
+  cliente plano, backend por `mainOkHttp`).
+
+### Verificación
+
+`:app:detekt` verde (baseline: firma nueva de `CatalogScreen`),
+`:app:testDebugUnitTest` verde, `assembleDebug` OK. Capturas en
+emulador: home con foco en Play que sobrevive la rotación, menú
+abierto con scrim, rejilla con títulos, login sin teclado, pairing
+completo, player reproduciendo HLS del backend.
+
+### Herramienta: probar en emulador desde la CLI
+
+```bash
+emulator -avd Television_4K -no-window -gpu swiftshader_indirect &
+adb -e install -r app/build/outputs/apk/debug/app-debug.apk
+adb -e shell monkey -p com.alex.hubplay.debug -c android.intent.category.LEANBACK_LAUNCHER 1
+adb -e shell input keyevent KEYCODE_DPAD_DOWN     # mando
+adb -e shell input text "http://10.0.2.2:8097"    # teclado
+adb -e exec-out screencap -p > shot.png           # captura
+```
+
+El emparejamiento se aprueba desde el backend con
+`POST /api/v1/auth/device/approve {"user_code": "XXXX-YYYY"}` (admin).
+JDK local: `~/.jdks/jbr-21.0.7` (el JBR de Android Studio no arranca
+desde Git Bash).
+
+### Pendiente (siguiente sesión)
+
+- `←` desde Play abre el menú pero enfoca la fila más cercana en
+  vertical (Películas), no la activa (Inicio): `focusProperties.left`
+  hacia un requester de la fila activa.
+- Detalle sin artwork: mucho vacío arriba; valorar backdrop de color
+  dominante o poster grande a la izquierda.
+- Revisar `CollectionDetailScreen` con las tarjetas más altas.
+- Probar en la TV box real (`adb connect <ip>`) y en móvil.
+> **Sesión anterior**: 2026-06-17 — rama `claude/tv-app-store-ready-xx73z0`.
 > Empuje hacia "store-ready": (1) **TV banner** generado y cableado en el
 > Manifest (`android:banner`, requisito Leanback que faltaba). (2) Assets de
 > ficha: **icono 512×512** + **feature graphic 1024×500** en

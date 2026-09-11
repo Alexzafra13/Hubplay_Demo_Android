@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -20,7 +19,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -38,15 +39,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -55,6 +70,10 @@ import com.alex.hubplay.R
 import com.alex.hubplay.data.DeviceCodeStatus
 import com.alex.hubplay.data.LanServer
 import com.alex.hubplay.ui.components.QrCode
+import kotlinx.coroutines.delay
+
+/** Margen para cerrar el IME que el TextField abre al ganar foco (ms). */
+private const val IME_SUPPRESS_DELAY_MS = 60L
 
 /**
  * Login surface — two stages share one composable so the user's typed
@@ -116,12 +135,18 @@ fun LoginScreen(
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Image(
-                        painter            = painterResource(R.drawable.brand_wordmark),
-                        contentDescription = stringResource(R.string.brand_hubplay),
-                        modifier           = Modifier.height(64.dp),
-                    )
-                    Spacer(Modifier.height(32.dp))
+                    // En el paso de emparejamiento el contenido (código + QR)
+                    // ya llena un canvas TV de 540dp; el wordmark se retira
+                    // para que nada quede cortado por arriba. El título
+                    // "Empareja este dispositivo" hace de cabecera.
+                    if (ui.stage != LoginStage.Pairing) {
+                        Image(
+                            painter            = painterResource(R.drawable.brand_wordmark),
+                            contentDescription = stringResource(R.string.brand_hubplay),
+                            modifier           = Modifier.height(64.dp),
+                        )
+                        Spacer(Modifier.height(32.dp))
+                    }
 
                     when {
                         // Single LAN server got auto-picked → render the
@@ -379,21 +404,62 @@ private fun LanNoResultsPill(onSearchAgain: () -> Unit) {
 
 @Composable
 private fun PrimaryUrlInput(ui: LoginUiState, viewModel: LoginViewModel) {
+    // Reglas de mando: el campo NO abre el teclado al recibir foco (en TV
+    // tapaba campo y botón nada más entrar); se abre al pulsar OK sobre
+    // él. Enter/Go del teclado y ↓ desde el campo llevan a "Continuar".
+    val continueRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // El TextField clásico ignora showKeyboardOnFocus: al ganar foco pide el
+    // IME por su cuenta. Lo cerramos justo después salvo que el usuario haya
+    // pulsado OK sobre el campo (wantKeyboard), que es cuando sí toca escribir.
+    var wantKeyboard by remember { mutableStateOf(false) }
+    var fieldFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(fieldFocused, wantKeyboard) {
+        if (fieldFocused && !wantKeyboard) {
+            delay(IME_SUPPRESS_DELAY_MS)
+            keyboard?.hide()
+        }
+    }
     OutlinedTextField(
         value           = ui.serverUrl,
         onValueChange   = viewModel::onServerUrlChange,
         label           = { Text(stringResource(R.string.login_server_label)) },
         placeholder     = { Text(stringResource(R.string.login_server_hint)) },
         singleLine      = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-        modifier        = Modifier.fillMaxWidth(),
+        keyboardOptions = KeyboardOptions(
+            keyboardType        = KeyboardType.Uri,
+            imeAction           = ImeAction.Go,
+            showKeyboardOnFocus = false,
+        ),
+        keyboardActions = KeyboardActions(onGo = {
+            wantKeyboard = false
+            keyboard?.hide()
+            if (ui.serverUrl.isNotBlank()) viewModel.onContinueClicked()
+        }),
+        modifier        = Modifier
+            .fillMaxWidth()
+            .onFocusChanged {
+                fieldFocused = it.isFocused
+                if (!it.isFocused) wantKeyboard = false
+            }
+            .focusProperties { down = continueRequester }
+            .onKeyEvent { ev ->
+                val isSelect = ev.key == Key.DirectionCenter || ev.key == Key.Enter
+                if (ev.type == KeyEventType.KeyUp && isSelect && !wantKeyboard) {
+                    wantKeyboard = true
+                    keyboard?.show()
+                    true
+                } else {
+                    false
+                }
+            },
         shape           = RoundedCornerShape(12.dp),
     )
     Spacer(Modifier.height(20.dp))
     Button(
         onClick        = viewModel::onContinueClicked,
         enabled        = !ui.isStarting && ui.serverUrl.isNotBlank(),
-        modifier       = Modifier.fillMaxWidth().height(52.dp),
+        modifier       = Modifier.fillMaxWidth().height(52.dp).focusRequester(continueRequester),
         shape          = RoundedCornerShape(12.dp),
         contentPadding = PaddingValues(horizontal = 24.dp),
     ) {
@@ -423,20 +489,41 @@ private fun SecondaryUrlInput(ui: LoginUiState, viewModel: LoginViewModel) {
         fontWeight = FontWeight.SemiBold,
     )
     Spacer(Modifier.height(10.dp))
+    val continueRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     OutlinedTextField(
         value           = ui.serverUrl,
         onValueChange   = viewModel::onServerUrlChange,
         placeholder     = { Text(stringResource(R.string.login_server_hint)) },
         singleLine      = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-        modifier        = Modifier.fillMaxWidth(),
+        keyboardOptions = KeyboardOptions(
+            keyboardType        = KeyboardType.Uri,
+            imeAction           = ImeAction.Go,
+            showKeyboardOnFocus = false,
+        ),
+        keyboardActions = KeyboardActions(onGo = {
+            keyboard?.hide()
+            if (ui.serverUrl.isNotBlank()) viewModel.onContinueClicked()
+        }),
+        modifier        = Modifier
+            .fillMaxWidth()
+            .focusProperties { down = continueRequester }
+            .onKeyEvent { ev ->
+                val isSelect = ev.key == Key.DirectionCenter || ev.key == Key.Enter
+                if (ev.type == KeyEventType.KeyUp && isSelect) {
+                    keyboard?.show()
+                    true
+                } else {
+                    false
+                }
+            },
         shape           = RoundedCornerShape(12.dp),
     )
     Spacer(Modifier.height(12.dp))
     TextButton(
         onClick  = viewModel::onContinueClicked,
         enabled  = !ui.isStarting && ui.serverUrl.isNotBlank(),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().focusRequester(continueRequester),
     ) {
         Text(stringResource(R.string.login_continue))
     }
@@ -520,11 +607,11 @@ private fun PairingForm(ui: LoginUiState, viewModel: LoginViewModel, isWide: Boo
             textAlign  = TextAlign.Center,
             fontWeight = FontWeight.SemiBold,
         )
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
 
         // ── Step 1: open this URL ─────────────────────────────────────
         UrlInstruction(verifyUrl = start.verifyUrl)
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(16.dp))
 
         // ── Step 2: code (hero) + QR (alternative) ────────────────────
         // The user code is the practical path on a TV remote — phones
@@ -538,7 +625,7 @@ private fun PairingForm(ui: LoginUiState, viewModel: LoginViewModel, isWide: Boo
                 verticalAlignment     = Alignment.CenterVertically,
             ) {
                 BigCodeBlock(userCode = start.userCode, modifier = Modifier.weight(1.4f))
-                OrDivider(orientation = OrOrientation.Vertical, height = 220.dp)
+                OrDivider(orientation = OrOrientation.Vertical, height = 200.dp)
                 CompactQrBlock(payload = start.verifyUrlComplete, modifier = Modifier.weight(1f))
             }
         } else {
@@ -550,7 +637,7 @@ private fun PairingForm(ui: LoginUiState, viewModel: LoginViewModel, isWide: Boo
         }
 
         // ── Poll status — sits with the code, not floating ─────────────
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(16.dp))
         PollStatusRow(ui.pollStatus)
         Spacer(Modifier.height(4.dp))
 
@@ -641,7 +728,7 @@ private fun CompactQrBlock(payload: String, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(12.dp))
         QrCode(
             payload = payload,
-            size    = 220.dp,
+            size    = 200.dp,
             fgColor = Color.Black,
             bgColor = Color.White,
         )

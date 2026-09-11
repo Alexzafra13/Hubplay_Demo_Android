@@ -26,7 +26,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,9 +45,8 @@ import androidx.compose.ui.unit.dp
 import com.alex.hubplay.R
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.catalog.PortraitCatalogCard
+import com.alex.hubplay.ui.components.TvShell
 import com.alex.hubplay.ui.home.components.Tab
-import com.alex.hubplay.ui.home.components.TopNav
-import com.alex.hubplay.ui.theme.BgBase
 
 /**
  * Search surface — TopNav + search input + result grid.
@@ -67,20 +65,16 @@ fun SearchScreen(
     viewModel:     SearchViewModel,
     onTabSelected: (Tab) -> Unit,
     onOpenItem:    (itemId: String, kind: MediaKind) -> Unit,
-    onLogOut:      () -> Unit,
     onSettings:    () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsState()
 
-    Surface(modifier = Modifier.fillMaxSize(), color = BgBase) {
+    TvShell(
+        selectedTab     = Tab.Search,
+        onNavigateToTab = onTabSelected,
+        onOpenSettings  = onSettings,
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            TopNav(
-                selectedTab   = Tab.Search,
-                onTabSelected = onTabSelected,
-                onLogOut      = onLogOut,
-                onSettings    = onSettings,
-            )
-
             SearchInputBar(
                 query       = ui.query,
                 onChange    = viewModel::onQueryChange,

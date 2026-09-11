@@ -1,17 +1,16 @@
 package com.alex.hubplay.ui.home.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,17 +42,37 @@ import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.ui.theme.Accent
+import com.alex.hubplay.ui.theme.BgCard
+import com.alex.hubplay.ui.theme.BgElevated
+import com.alex.hubplay.ui.theme.TextMuted
+import com.alex.hubplay.ui.theme.TextPrimary
+import com.alex.hubplay.ui.theme.TextSecondary
 
 enum class CardStyle(val aspect: Float, val defaultWidth: Dp) {
     Landscape(16f / 9f, 240.dp),
     Portrait(2f / 3f, 150.dp),
 }
 
-/** Escala de la card enfocada — el "pop" estilo Prime/Netflix que hace
- *  que la rejilla se sienta viva en D-pad. 1.07 da el realce sin invadir
- *  de más a las vecinas. */
+/** Escala del artwork enfocado — el "pop" que hace viva la rejilla en
+ *  D-pad. 1.07 realza sin invadir a las vecinas. */
 private const val FOCUSED_SCALE = 1.07f
 
+/** Alto reservado bajo el artwork para el título (2 líneas) + aire.
+ *  Constante pública para que los rails de Home dimensionen sus filas. */
+val CARD_CAPTION_HEIGHT = 40.dp
+
+/**
+ * Tarjeta de contenido (rails de Home, rejillas de catálogo, sagas).
+ *
+ * Diseño: artwork con esquinas suaves y, DEBAJO, el título siempre
+ * visible (apagado en reposo, primario al enfocar). Una biblioteca sin
+ * carátulas (TMDb aún sin configurar, ficheros sin identificar) sigue
+ * siendo navegable y legible — antes las tarjetas eran rectángulos
+ * negros sobre negro y solo la enfocada mostraba el nombre.
+ *
+ * Sin artwork, el hueco no queda vacío: degradado de superficie con la
+ * inicial del título en grande, el mismo recurso que usa la web.
+ */
 @Composable
 fun MediaCard(
     item:         Content,
@@ -61,10 +80,10 @@ fun MediaCard(
     onClick:      (Content) -> Unit,
     style:        CardStyle = CardStyle.Landscape,
     slotWidth:    Dp        = style.defaultWidth,
+    showCaption:  Boolean   = true,
     modifier:     Modifier  = Modifier,
 ) {
-    // Only Resumable variants (Movie + Episode) ever show a progress bar
-    // — series posters and live channels don't carry per-user progress.
+    // Solo Movie + Episode (Resumable) llevan progreso; series y canales no.
     val progressPct = (item as? Content.Resumable)?.progressPct ?: 0f
 
     var focused by remember { mutableStateOf(false) }
@@ -73,7 +92,6 @@ fun MediaCard(
         CardStyle.Portrait  -> style.defaultWidth * 1.5f
         CardStyle.Landscape -> style.defaultWidth * (9f / 16f)
     }
-
     val imageUrl = when (style) {
         CardStyle.Portrait  -> item.posterUrl ?: item.backdropUrl
         CardStyle.Landscape -> item.backdropUrl ?: item.posterUrl
@@ -82,9 +100,8 @@ fun MediaCard(
     val interactionSource = remember { MutableInteractionSource() }
     val shape = RoundedCornerShape(8.dp)
 
-    // Spring NoBouncy: realce inmediato y limpio, sin rebote (que en TV
-    // se siente "barato"). La card crece y proyecta una sombra para
-    // separarse del fondo y de las vecinas.
+    // Spring sin rebote: realce inmediato y limpio (el rebote en TV se
+    // siente barato). La card crece y proyecta sombra para separarse.
     val scale by animateFloatAsState(
         targetValue   = if (focused) FOCUSED_SCALE else 1f,
         animationSpec = spring(
@@ -98,16 +115,11 @@ fun MediaCard(
         label       = "card-elevation",
     )
 
-    Box(
+    Column(
         modifier = modifier
-            // zIndex > vecinas para que el realce + sombra se dibuje
-            // ENCIMA de las cards adyacentes, no por debajo.
+            // zIndex > vecinas para que realce + sombra pinten ENCIMA.
             .zIndex(if (focused) 1f else 0f)
-            .scale(scale)
             .width(slotWidth)
-            .height(cardHeight)
-            .shadow(elevation = elevation.dp, shape = shape, clip = false)
-            .clip(shape)
             .onFocusChanged { state ->
                 focused = state.isFocused
                 if (state.isFocused) onFocused(item)
@@ -116,63 +128,81 @@ fun MediaCard(
                 interactionSource = interactionSource,
                 indication        = null,
                 onClick           = { onClick(item) },
-            )
-            .then(
-                if (focused) Modifier.border(
-                    width = 3.dp,
-                    color = Color.White,
-                    shape = shape,
-                ) else Modifier,
             ),
-    ) {
-        AsyncImage(
-            model              = imageUrl,
-            contentDescription = item.title,
-            contentScale       = ContentScale.Crop,
-            modifier           = Modifier.fillMaxSize(),
-        )
-
-        FocusTitleOverlay(title = item.title, visible = focused)
-
-        if (progressPct > 0f) ProgressStripe(progressPct = progressPct)
-    }
-}
-
-/**
- * Scrim + título que aparecen sólo al enfocar (estilo Prime Video). El
- * degradado oscuro de abajo garantiza legibilidad del título sobre
- * cualquier artwork claro y da el acabado "editorial".
- */
-@Composable
-private fun BoxScope.FocusTitleOverlay(title: String, visible: Boolean) {
-    AnimatedVisibility(
-        visible  = visible,
-        enter    = fadeIn(),
-        exit     = fadeOut(),
-        modifier = Modifier.align(Alignment.BottomStart),
     ) {
         Box(
             modifier = Modifier
+                .scale(scale)
                 .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.85f),
-                    ),
+                .height(cardHeight)
+                .shadow(elevation = elevation.dp, shape = shape, clip = false)
+                .clip(shape)
+                .then(
+                    if (focused) Modifier.border(
+                        width = 3.dp,
+                        color = Color.White,
+                        shape = shape,
+                    ) else Modifier,
                 ),
         ) {
-            Text(
-                text       = title,
-                color      = Color.White,
-                style      = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                maxLines   = 1,
-                overflow   = TextOverflow.Ellipsis,
-                modifier   = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-            )
+            ArtworkPlaceholder(title = item.title)
+            if (imageUrl != null) {
+                AsyncImage(
+                    model              = imageUrl,
+                    contentDescription = item.title,
+                    contentScale       = ContentScale.Crop,
+                    modifier           = Modifier.fillMaxSize(),
+                )
+            }
+            if (progressPct > 0f) ProgressStripe(progressPct = progressPct)
         }
+
+        if (showCaption) CardCaption(title = item.title, focused = focused)
+    }
+}
+
+/** Título bajo el artwork: apagado en reposo, primario y SemiBold al enfocar. */
+@Composable
+private fun CardCaption(title: String, focused: Boolean) {
+    Spacer(Modifier.height(8.dp))
+    Text(
+        text       = title,
+        color      = if (focused) TextPrimary else TextSecondary,
+        style      = MaterialTheme.typography.labelLarge,
+        fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Medium,
+        maxLines   = 2,
+        overflow   = TextOverflow.Ellipsis,
+        modifier   = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp),
+    )
+}
+
+/**
+ * Fondo para tarjetas sin artwork: degradado de superficie + inicial
+ * del título. Se pinta siempre debajo de la imagen, así también cubre
+ * el instante de carga y los fallos de red sin parpadeo a negro.
+ */
+@Composable
+private fun BoxScope.ArtworkPlaceholder(title: String) {
+    val initial = title.trim().firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "·"
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .background(
+                Brush.verticalGradient(
+                    0f to BgElevated,
+                    1f to BgCard,
+                ),
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text       = initial,
+            color      = TextMuted,
+            style      = MaterialTheme.typography.displayMedium,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 

@@ -8,7 +8,6 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.BringIntoViewSpec
@@ -54,11 +53,9 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
 import com.alex.hubplay.data.AuthState
@@ -70,13 +67,12 @@ import com.alex.hubplay.data.IdleController
 import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.LocalTrailerHost
 import com.alex.hubplay.data.MediaKind
+import com.alex.hubplay.ui.components.SIDEBAR_WIDTH
+import com.alex.hubplay.ui.components.TvShell
 import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.HeroInfo
 import com.alex.hubplay.ui.home.components.HomeRail
-import com.alex.hubplay.ui.home.components.HomeSidebar
 import com.alex.hubplay.ui.home.components.LiveNowRail
-import com.alex.hubplay.ui.home.components.LocalVisibleTabs
-import com.alex.hubplay.ui.home.components.SIDEBAR_WIDTH
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.livetv.ChannelPreviewPlayer
 import com.alex.hubplay.ui.theme.BgBase
@@ -89,13 +85,6 @@ import kotlinx.coroutines.flow.first
  */
 private const val HERO_AUTOROTATE_MS = 8000L
 
-/**
- * zIndex con el que el HomeSidebar se dibuja encima del rail vecino
- * cuando se expande. Cualquier valor > 1 sirve mientras no sea menor
- * que el del TrailerHostOverlay (que va más alto a nivel de app).
- */
-private const val SidebarZIndex = 5f
-
 /** Altura FIJA de cada rail (título + tira de cards + padding inferior).
  *  Calculado para landscape cards (240×135dp) + título ~24dp + paddings:
  *  46 (header) + 135 (card) + 9 (gap) ≈ 190dp. Una constante fija evita
@@ -105,7 +94,7 @@ private const val SidebarZIndex = 5f
  *  Nota: rails con cards Portrait (poster 150×225) overflowan
  *  verticalmente sobre el siguiente rail. Lo aceptamos para no inflar
  *  todos los rails. Si se vuelve molesto, ramificar por CardStyle. */
-private val RailHeight = 190.dp
+private val RailHeight = 228.dp
 
 /** Fracción del alto de pantalla que ocupa el hero cuando el foco está
  *  en los rails — Netflix / Prime: ~50% hero, ~50% rails para que
@@ -343,7 +332,12 @@ fun HomeScreen(
                     }
                 }
 
-                Box(modifier = Modifier.fillMaxSize()) {
+                TvShell(
+                    selectedTab     = Tab.Home,
+                    onNavigateToTab = onNavigateToTab,
+                    onOpenSettings  = onOpenSettings,
+                    padContent      = false,
+                ) {
 
                     // ── Layer 0: Full-screen backdrop ──────────────────
                     Crossfade(
@@ -428,13 +422,10 @@ fun HomeScreen(
                     )
 
                     // ── Layer 2: Content ────────────────────────────────
-                    // Sidebar overlay: el sidebar se ancla a CenterStart
-                    // por encima del contenido. El contenido reserva
-                    // SIDEBAR_WIDTH dp con padding-start para no quedar
-                    // tapado en estado colapsado; al expandirse, el
-                    // sidebar monta sobre el contenido (no lo desplaza).
-                    val visibleTabs = LocalVisibleTabs.current
-
+                    // El menú lateral lo pinta TvShell por encima de todo;
+                    // el contenido reserva SIDEBAR_WIDTH con padding-start
+                    // para no quedar tapado en estado colapsado (el backdrop
+                    // de la capa 0 sí llega hasta el borde).
                     BoxWithConstraints(
                         modifier = Modifier
                             .fillMaxSize()
@@ -554,41 +545,9 @@ fun HomeScreen(
                                 }
                             }
                         }
-
-                    // ── Brand wordmark — overlay top-left ───────────────
-                    // Anclado a la esquina arriba-izquierda como header
-                    // discreto. zIndex justo debajo del sidebar (que se
-                    // expande sobre todo). Lo dejamos a la derecha del
-                    // sidebar colapsado para que no compitan visualmente
-                    // por el mismo área de 52dp.
-                    Image(
-                        painter            = painterResource(R.drawable.brand_wordmark),
-                        contentDescription = stringResource(R.string.brand_hubplay),
-                        modifier           = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(start = SIDEBAR_WIDTH + 20.dp, top = 18.dp)
-                            .height(24.dp)
-                            .zIndex(SidebarZIndex - 1f),
-                    )
-
-                    // ── Sidebar overlay — encima del contenido ──────────
-                    // Anclado a CenterStart con zIndex alto. En estado
-                    // colapsado ocupa SIDEBAR_WIDTH (que el Column de arriba
-                    // reservó con padding-start). Al recibir foco se
-                    // expande a SidebarExpandedWidth y monta por encima
-                    // del rail vecino sin desplazar nada.
-                    HomeSidebar(
-                        onNavigateToTab = onNavigateToTab,
-                        onOpenSearch    = { onNavigateToTab(Tab.Search) },
-                        onOpenSettings  = onOpenSettings,
-                        visibleTabs     = visibleTabs,
-                        modifier        = Modifier
-                            .align(Alignment.CenterStart)
-                            .zIndex(SidebarZIndex),
-                    )
+                    }
                 }
             }
-        }
         }
     }
 }

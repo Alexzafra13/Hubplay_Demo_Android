@@ -12,11 +12,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,6 +25,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -33,11 +34,10 @@ import androidx.compose.ui.unit.dp
 import com.alex.hubplay.R
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.MediaKind
+import com.alex.hubplay.ui.components.TvShell
 import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.MediaCard
 import com.alex.hubplay.ui.home.components.Tab
-import com.alex.hubplay.ui.home.components.TopNav
-import com.alex.hubplay.ui.theme.BgBase
 
 @Composable
 fun CatalogScreen(
@@ -51,24 +51,21 @@ fun CatalogScreen(
     onRetry:       () -> Unit,
     onLoadMore:    () -> Unit     = {},
     onTabSelected: (Tab) -> Unit,
-    onLogOut:      () -> Unit,
     onSettings:    () -> Unit     = {},
     cardContent:   @Composable (Content) -> Unit,
 ) {
-    Surface(modifier = Modifier.fillMaxSize(), color = BgBase) {
+    TvShell(
+        selectedTab     = selectedTab,
+        onNavigateToTab = onTabSelected,
+        onOpenSettings  = onSettings,
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            TopNav(
-                selectedTab   = selectedTab,
-                onTabSelected = onTabSelected,
-                onLogOut      = onLogOut,
-                onSettings    = onSettings,
-            )
             Text(
                 text       = title,
                 style      = MaterialTheme.typography.headlineMedium,
                 color      = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Bold,
-                modifier   = Modifier.padding(horizontal = 32.dp, vertical = 12.dp),
+                modifier   = Modifier.padding(start = 32.dp, end = 32.dp, top = 28.dp, bottom = 12.dp),
             )
             when {
                 isLoading && items.isEmpty() -> CenteredSpinner()
@@ -87,6 +84,10 @@ fun CatalogScreen(
                     LaunchedEffect(nearBottom) {
                         if (nearBottom && canLoadMore) onLoadMore()
                     }
+                    val firstCardRequester = remember { FocusRequester() }
+                    LaunchedEffect(Unit) {
+                        runCatching { firstCardRequester.requestFocus() }
+                    }
 
                     LazyVerticalGrid(
                         columns               = GridCells.Adaptive(minSize = 160.dp),
@@ -96,8 +97,17 @@ fun CatalogScreen(
                         verticalArrangement   = Arrangement.spacedBy(14.dp),
                         modifier              = Modifier.fillMaxSize(),
                     ) {
-                        items(items, key = { it.id }) { item ->
-                            cardContent(item)
+                        itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
+                            // Foco inicial en la primera tarjeta: sin esto el
+                            // sistema lo deja en el menú lateral y la rejilla
+                            // parece muerta hasta que el usuario pulsa →.
+                            if (index == 0) {
+                                Box(modifier = Modifier.focusRequester(firstCardRequester)) {
+                                    cardContent(item)
+                                }
+                            } else {
+                                cardContent(item)
+                            }
                         }
                         if (isLoadingMore) {
                             item(span = { GridItemSpan(maxLineSpan) }) {

@@ -106,156 +106,156 @@ fun HeroInfo(
         modifier = modifier.padding(bottom = 4.dp),
         contentAlignment = Alignment.BottomStart,
     ) {
-        AnimatedContent(
-            targetState = item,
-            label = "hero-info",
-            transitionSpec = {
-                (fadeIn(tween(400)) togetherWith fadeOut(tween(250)))
-            },
-        ) { displayItem ->
-            Column(
-                modifier = Modifier
-                    .widthIn(max = 560.dp)
-                    .padding(start = 24.dp, end = 32.dp, bottom = 4.dp),
-            ) {
-                // Title — large and bold like Prime Video
-                if (!displayItem.logoUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = displayItem.logoUrl,
-                        contentDescription = displayItem.title,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .heightIn(min = 48.dp, max = 90.dp)
-                            .widthIn(max = 400.dp),
-                    )
-                } else {
-                    Text(
-                        text = displayItem.title,
-                        style = MaterialTheme.typography.displayLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 52.sp,
-                    )
+        Column(
+            modifier = Modifier
+                .widthIn(max = 560.dp)
+                .padding(start = 24.dp, end = 32.dp, bottom = 4.dp),
+        ) {
+            // Solo título + meta cambian con el slide. Los botones viven
+            // FUERA del AnimatedContent a propósito: si se recrearan con
+            // cada slide, el botón enfocado desaparecería en cada
+            // auto-rotación (8 s) y el foco caería al primer focusable de
+            // la pantalla — el menú lateral, que se abría solo.
+            AnimatedContent(
+                targetState = item,
+                label = "hero-info",
+                transitionSpec = {
+                    (fadeIn(tween(400)) togetherWith fadeOut(tween(250)))
+                },
+            ) { displayItem ->
+                Column {
+                    // Title — large and bold like Prime Video
+                    if (!displayItem.logoUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = displayItem.logoUrl,
+                            contentDescription = displayItem.title,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .heightIn(min = 48.dp, max = 90.dp)
+                                .widthIn(max = 400.dp),
+                        )
+                    } else {
+                        Text(
+                            text = displayItem.title,
+                            style = MaterialTheme.typography.displayLarge,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            lineHeight = 52.sp,
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+
+                    // Meta row: genre · duration · year · rating
+                    HeroMetaRow(displayItem)
                 }
-                Spacer(Modifier.height(10.dp))
+            }
 
-                // Meta row: genre · duration · year · rating
-                HeroMetaRow(displayItem)
+            // El Home hero es minimalista — solo logo + meta + CTAs.
+            // La descripción larga vive en Detail screen (donde el
+            // usuario explícitamente pide "más info"). Esto reduce
+            // ruido visual y deja respirar el backdrop / trailer.
 
-                // El Home hero es minimalista — solo logo + meta + CTAs.
-                // La descripción larga vive en Detail screen (donde el
-                // usuario explícitamente pide "más info"). Esto reduce
-                // ruido visual y deja respirar el backdrop / trailer.
-
-                // CTA buttons
-                if (showControls) {
-                    Spacer(Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        var playFocused by remember { mutableStateOf(false) }
-                        var detailsFocused by remember { mutableStateOf(false) }
-                        val playScale by animateFloatAsState(
-                            targetValue = if (playFocused) 1.06f else 1.0f,
-                            animationSpec = tween(180),
-                            label = "hero-play-scale",
-                        )
-                        val detailsScale by animateFloatAsState(
-                            targetValue = if (detailsFocused) 1.06f else 1.0f,
-                            animationSpec = tween(180),
-                            label = "hero-details-scale",
-                        )
-                        Button(
-                            onClick = { onPlay(displayItem) },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White,
-                                contentColor = OnAccent,
+            // CTA buttons
+            if (showControls) {
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    var playFocused by remember { mutableStateOf(false) }
+                    var detailsFocused by remember { mutableStateOf(false) }
+                    val playScale by animateFloatAsState(
+                        targetValue = if (playFocused) 1.06f else 1.0f,
+                        animationSpec = tween(180),
+                        label = "hero-play-scale",
+                    )
+                    val detailsScale by animateFloatAsState(
+                        targetValue = if (detailsFocused) 1.06f else 1.0f,
+                        animationSpec = tween(180),
+                        label = "hero-details-scale",
+                    )
+                    Button(
+                        onClick = { onPlay(item) },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = OnAccent,
+                        ),
+                        modifier = Modifier
+                            .focusRequester(playRequester)
+                            .onFocusChanged {
+                                playFocused = it.isFocused
+                                if (it.isFocused) {
+                                    onHeroFocusedChange(true)
+                                } else if (!detailsFocused) {
+                                    onHeroFocusedChange(false)
+                                }
+                            }
+                            .scale(playScale)
+                            // ← desde Reproducir NO se captura: es el camino
+                            // natural al menú lateral (antes rotaba el
+                            // carousel y el menú era inalcanzable desde el
+                            // hero). El cambio manual de slide vive en →
+                            // desde "Ver detalles" (último botón de la fila).
+                            .then(
+                                if (playFocused) {
+                                    Modifier.border(2.dp, Color.White, RoundedCornerShape(10.dp))
+                                } else {
+                                    Modifier
+                                },
                             ),
-                            modifier = Modifier
-                                .focusRequester(playRequester)
-                                .onFocusChanged {
-                                    playFocused = it.isFocused
-                                    if (it.isFocused) {
-                                        onHeroFocusedChange(true)
-                                    } else if (!detailsFocused) {
-                                        onHeroFocusedChange(false)
-                                    }
-                                }
-                                .scale(playScale)
-                                // Capturamos ←/→ ANTES de que llegue al focus
-                                // engine para que el carousel del hero rote
-                                // sin mover el foco lateralmente (a ningún
-                                // sitio, porque el Play es el primer botón).
-                                // El usuario percibe: foco en Play, ←→ cambia
-                                // de slide y los datos del hero se refrescan.
-                                .onPreviewKeyEvent { ev ->
-                                    if (ev.type != KeyEventType.KeyDown || carouselSize <= 1) {
-                                        false
-                                    } else {
-                                        when (ev.key) {
-                                            Key.DirectionLeft -> {
-                                                onShiftSlide(-1)
-                                                true
-                                            }
-                                            Key.DirectionRight -> {
-                                                onShiftSlide(+1)
-                                                true
-                                            }
-                                            else -> false
-                                        }
-                                    }
-                                }
-                                .then(
-                                    if (playFocused) {
-                                        Modifier.border(2.dp, Color.White, RoundedCornerShape(10.dp))
-                                    } else {
-                                        Modifier
-                                    },
-                                ),
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.home_play), fontWeight = FontWeight.SemiBold)
-                        }
-                        OutlinedButton(
-                            onClick = { onDetails(displayItem) },
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier
-                                .onFocusChanged {
-                                    detailsFocused = it.isFocused
-                                    if (it.isFocused) {
-                                        onHeroFocusedChange(true)
-                                    } else if (!playFocused) {
-                                        onHeroFocusedChange(false)
-                                    }
-                                }
-                                .scale(detailsScale)
-                                .then(
-                                    if (detailsFocused) {
-                                        Modifier.border(2.dp, Color.White, RoundedCornerShape(10.dp))
-                                    } else {
-                                        Modifier
-                                    },
-                                ),
-                        ) {
-                            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.height(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.home_view_details))
-                        }
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.home_play), fontWeight = FontWeight.SemiBold)
                     }
+                    OutlinedButton(
+                        onClick = { onDetails(item) },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .onFocusChanged {
+                                detailsFocused = it.isFocused
+                                if (it.isFocused) {
+                                    onHeroFocusedChange(true)
+                                } else if (!playFocused) {
+                                    onHeroFocusedChange(false)
+                                }
+                            }
+                            .scale(detailsScale)
+                            // → en el último botón del hero no tiene destino
+                            // de foco; lo usamos para pasar al siguiente
+                            // slide del carousel (con ↑ desde el rail se
+                            // vuelve al hero y se puede seguir pasando).
+                            .onPreviewKeyEvent { ev ->
+                                val next = ev.type == KeyEventType.KeyDown &&
+                                    ev.key == Key.DirectionRight &&
+                                    carouselSize > 1
+                                if (next) onShiftSlide(+1)
+                                next
+                            }
+                            .then(
+                                if (detailsFocused) {
+                                    Modifier.border(2.dp, Color.White, RoundedCornerShape(10.dp))
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.height(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.home_view_details))
+                    }
+                }
 
-                    // Dots indicator del carousel (solo se rinde si el hero
-                    // está realmente en modo carousel — i.e. carouselSize >0).
-                    // Inspirado en Prime Video: pequeños círculos discretos
-                    // que indican posición sin robar atención al backdrop.
-                    if (carouselSize > 1) {
-                        Spacer(Modifier.height(12.dp))
-                        HeroDots(
-                            count = carouselSize,
-                            activeIndex = carouselIndex.coerceIn(0, carouselSize - 1),
-                        )
-                    }
+                // Dots indicator del carousel (solo se rinde si el hero
+                // está realmente en modo carousel — i.e. carouselSize >0).
+                // Inspirado en Prime Video: pequeños círculos discretos
+                // que indican posición sin robar atención al backdrop.
+                if (carouselSize > 1) {
+                    Spacer(Modifier.height(12.dp))
+                    HeroDots(
+                        count = carouselSize,
+                        activeIndex = carouselIndex.coerceIn(0, carouselSize - 1),
+                    )
                 }
             }
         }

@@ -205,7 +205,6 @@ fun HubplayNavGraph(
                 onRetry       = vm::load,
                 onLoadMore    = vm::loadMore,
                 onTabSelected = navigateToTab,
-                onLogOut      = logOut,
                 onSettings    = openSettings,
                 cardContent   = { item -> PortraitCatalogCard(item, openItem) },
             )
@@ -228,7 +227,6 @@ fun HubplayNavGraph(
                 onRetry       = vm::load,
                 onLoadMore    = vm::loadMore,
                 onTabSelected = navigateToTab,
-                onLogOut      = logOut,
                 onSettings    = openSettings,
                 cardContent   = { item -> PortraitCatalogCard(item, openItem) },
             )
@@ -249,7 +247,6 @@ fun HubplayNavGraph(
                 okHttpClient    = container.mainOkHttp,
                 onPlayChannel   = { channelId -> playItem(channelId, 0L) },
                 onTabSelected   = navigateToTab,
-                onLogOut        = logOut,
                 onSettings      = openSettings,
                 onReorderChannels = openChannelOrder,
             )
@@ -279,7 +276,6 @@ fun HubplayNavGraph(
                 viewModel     = vm,
                 onTabSelected = navigateToTab,
                 onOpenItem    = openItem,
-                onLogOut      = logOut,
                 onSettings    = openSettings,
             )
         }
@@ -404,7 +400,6 @@ fun HubplayNavGraph(
                 viewModel     = vm,
                 onOpen        = openCollection,
                 onTabSelected = navigateToTab,
-                onLogOut      = logOut,
                 onSettings    = openSettings,
             )
         }

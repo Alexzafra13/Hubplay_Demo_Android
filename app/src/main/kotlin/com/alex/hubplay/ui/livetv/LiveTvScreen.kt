@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,8 +39,8 @@ import androidx.compose.ui.unit.sp
 import com.alex.hubplay.R
 import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.data.LiveChannel
+import com.alex.hubplay.ui.components.TvShell
 import com.alex.hubplay.ui.home.components.Tab
-import com.alex.hubplay.ui.home.components.TopNav
 import com.alex.hubplay.ui.theme.BgBase
 import java.time.Instant
 
@@ -82,22 +81,18 @@ fun LiveTvScreen(
     okHttpClient:      okhttp3.OkHttpClient,
     onPlayChannel:     (String) -> Unit,
     onTabSelected:     (Tab) -> Unit,
-    onLogOut:          () -> Unit,
     onSettings:        () -> Unit = {},
     onReorderChannels: () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsState()
     val now = Instant.ofEpochMilli(ui.nowEpoch)
 
-    Surface(modifier = Modifier.fillMaxSize(), color = BgBase) {
+    TvShell(
+        selectedTab     = Tab.LiveTv,
+        onNavigateToTab = onTabSelected,
+        onOpenSettings  = onSettings,
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            TopNav(
-                selectedTab   = Tab.LiveTv,
-                onTabSelected = onTabSelected,
-                onLogOut      = onLogOut,
-                onSettings    = onSettings,
-            )
-
             when {
                 ui.isLoading && ui.channels.isEmpty() -> SkeletonState()
                 ui.error != null && ui.channels.isEmpty() ->

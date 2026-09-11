@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,10 +43,9 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
 import com.alex.hubplay.data.CollectionSummary
+import com.alex.hubplay.ui.components.TvShell
 import com.alex.hubplay.ui.home.components.Tab
-import com.alex.hubplay.ui.home.components.TopNav
 import com.alex.hubplay.ui.theme.Accent
-import com.alex.hubplay.ui.theme.BgBase
 
 /**
  * Collections tab — grid of TMDb sagas matched against the user's movie
@@ -61,19 +59,16 @@ fun CollectionsScreen(
     viewModel:     CollectionsViewModel,
     onOpen:        (collectionId: String) -> Unit,
     onTabSelected: (Tab) -> Unit,
-    onLogOut:      () -> Unit,
     onSettings:    () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsState()
 
-    Surface(modifier = Modifier.fillMaxSize(), color = BgBase) {
+    TvShell(
+        selectedTab     = Tab.Collections,
+        onNavigateToTab = onTabSelected,
+        onOpenSettings  = onSettings,
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            TopNav(
-                selectedTab   = Tab.Collections,
-                onTabSelected = onTabSelected,
-                onLogOut      = onLogOut,
-                onSettings    = onSettings,
-            )
             Text(
                 text       = stringResource(R.string.collections_title),
                 style      = MaterialTheme.typography.headlineMedium,

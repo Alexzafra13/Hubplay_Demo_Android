@@ -517,8 +517,12 @@ private fun MetaRow(item: Content) {
             )
         }
         if (durationSec > 0) {
-            Text("·", style = MaterialTheme.typography.bodyMedium,
-                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // Separador solo si hay algo delante (sin año ni nota, la
+            // duración es el primer dato y un "· 140 min" suelto queda mal).
+            if (item.year != null || item.rating != null) {
+                Text("·", style = MaterialTheme.typography.bodyMedium,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Text(
                 text     = stringResource(R.string.detail_duration_minutes, durationSec / 60),
                 style    = MaterialTheme.typography.bodyMedium,
