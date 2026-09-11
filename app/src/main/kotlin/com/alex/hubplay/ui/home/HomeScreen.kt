@@ -1,6 +1,5 @@
 package com.alex.hubplay.ui.home
 
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -47,16 +47,14 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.alex.hubplay.R
 import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.data.Content
@@ -71,6 +69,7 @@ import com.alex.hubplay.ui.components.SIDEBAR_WIDTH
 import com.alex.hubplay.ui.components.TvShell
 import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.HeroInfo
+import com.alex.hubplay.ui.home.components.HomeBackdrop
 import com.alex.hubplay.ui.home.components.HomeRail
 import com.alex.hubplay.ui.home.components.LiveNowRail
 import com.alex.hubplay.ui.home.components.Tab
@@ -85,21 +84,34 @@ import kotlinx.coroutines.flow.first
  */
 private const val HERO_AUTOROTATE_MS = 8000L
 
-/** Altura FIJA de cada rail (título + tira de cards + padding inferior).
- *  Calculado para landscape cards (240×135dp) + título ~24dp + paddings:
- *  46 (header) + 135 (card) + 9 (gap) ≈ 190dp. Una constante fija evita
- *  los "cards aplastados" que producía `fillParentMaxHeight(0.70)`
- *  durante la animación del peso del padre.
+/** Altura FIJA de cada rail (título + tira de cards + caption). Una
+ *  constante por estilo evita los "cards aplastados" que producía
+ *  `fillParentMaxHeight(0.70)` durante la animación del peso del padre.
  *
- *  Nota: rails con cards Portrait (poster 150×225) overflowan
- *  verticalmente sobre el siguiente rail. Lo aceptamos para no inflar
- *  todos los rails. Si se vuelve molesto, ramificar por CardStyle. */
-private val RailHeight = 228.dp
+ *  - Landscape (240×135 + caption 40): 46 (header) + 135 + 40 + 7 ≈ 228dp.
+ *    Para "Continuar viendo" / "Siguiente": el fotograma del episodio
+ *    con la barra de progreso es lo que Netflix/Plex enseñan ahí.
+ *  - Portrait (130×195 + caption 40): 46 + 195 + 40 + 4 ≈ 285dp. Para
+ *    "Recientes" / "Tendencias": la CARÁTULA es lo que identifica una
+ *    peli o serie; el poster va más estrecho que en el catálogo para
+ *    que quepan hero reducido + rail entero en 540dp. */
+private val RailHeightLandscape = 228.dp
+private val RailHeightPortrait  = 285.dp
+
+private fun railStyle(type: HomeRailType?): CardStyle = when (type) {
+    HomeRailType.Trending, HomeRailType.LatestInLibrary -> CardStyle.PosterCompact
+    else -> CardStyle.Landscape
+}
+
+private fun railHeightFor(type: HomeRailType?): Dp = when {
+    railStyle(type).isPortrait -> RailHeightPortrait
+    else                       -> RailHeightLandscape
+}
 
 /** Fracción del alto de pantalla que ocupa el hero cuando el foco está
- *  en los rails — Netflix / Prime: ~50% hero, ~50% rails para que
- *  caben 2 rails y peek del 3º. */
-private const val HERO_REDUCED_FRACTION = 0.50f
+ *  en los rails. 0.46 deja 292dp bajo el hero: cabe un rail de posters
+ *  entero (285) sin que asome el anterior. */
+private const val HERO_REDUCED_FRACTION = 0.46f
 
 @OptIn(ExperimentalFoundationApi::class)
 private val SuppressVerticalBringIntoView = object : BringIntoViewSpec {
@@ -343,33 +355,17 @@ fun HomeScreen(
                     // Un canal en vivo NO usa su logo como backdrop: a
                     // pantalla completa sale pixelado y estirado. Queda el
                     // fondo base y, cuando arranca, la preview del canal.
-                    Crossfade(
-                        targetState = heroItem
+                    // El fundido entre backdrops y el alpha del revelado
+                    // del tráiler van SIN graphicsLayer (ver HomeBackdrop):
+                    // las capas a pantalla completa eran la mitad del
+                    // tirón al mover el foco en TV boxes.
+                    HomeBackdrop(
+                        url      = heroItem
                             ?.takeUnless { it is Content.LiveChannel }
                             ?.let { it.backdropUrl ?: it.posterUrl },
-                        animationSpec = tween(durationMillis = 300),
-                        label = "home-backdrop",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            // ORDEN CRÍTICO: alpha PRIMERO, background DESPUÉS.
-                            // alpha crea un graphics layer que envuelve a TODO
-                            // lo que viene después (incluyendo el background).
-                            // Si fuese .background().alpha() el BgBase quedaría
-                            // FUERA del layer y se dibujaría siempre a full
-                            // opacity, cubriendo la WebView del trailer aunque
-                            // alpha=0. Audio sonaría pero video no se vería.
-                            .alpha(backdropAlpha)
-                            .background(BgBase),
-                    ) { url ->
-                        if (url != null) {
-                            AsyncImage(
-                                model = url,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    }
+                        alpha    = { backdropAlpha },
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
                     val liveChannelItem = heroItem as? Content.LiveChannel
                     if (liveChannelItem != null && authState != null && okHttpClient != null) {
@@ -443,8 +439,15 @@ fun HomeScreen(
                         // como peek), y rails con altura fija evita
                         // cards aplastados durante la animación.
                         val available        = maxHeight
-                        val heroFullHeight    = available - RailHeight
+                        val heroFullHeight    = available - railHeightFor(rails.firstOrNull()?.type)
                         val heroReducedHeight = available * HERO_REDUCED_FRACTION
+                        // El último rail también debe poder subir hasta el
+                        // borde del hero: sin este padding inferior el
+                        // LazyColumn se queda sin recorrido y el rail
+                        // anterior asomaba (sus captions "en medio").
+                        val railsViewport  = available - heroReducedHeight
+                        val lastRailHeight = railHeightFor(rails.lastOrNull()?.type)
+                        val railsBottomPad = (railsViewport - lastRailHeight).coerceAtLeast(0.dp)
                         val heroHeight by animateDpAsState(
                             targetValue = if (isLanding) heroFullHeight else heroReducedHeight,
                             animationSpec = spring(
@@ -496,6 +499,7 @@ fun HomeScreen(
                             ) {
                                 LazyColumn(
                                     state = listState,
+                                    contentPadding = PaddingValues(bottom = railsBottomPad),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .weight(1f),
@@ -508,7 +512,7 @@ fun HomeScreen(
                                             .getOrPut(config.id) { FocusRequester() }
                                         Box(
                                             modifier = Modifier
-                                                .height(RailHeight)
+                                                .height(railHeightFor(config.type))
                                                 .fillMaxWidth()
                                                 .focusGroup()
                                                 // Quitamos `focusRestorer()` exterior: tener dos
@@ -589,7 +593,7 @@ private fun RenderRail(
         HomeRailType.Trending -> HomeRail(
             title = config.title,
             items = data.trending,
-            style = CardStyle.Landscape,
+            style = CardStyle.PosterCompact,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
             initialFocusedItemId = initialFocusedItemId,
@@ -598,7 +602,7 @@ private fun RenderRail(
         HomeRailType.LatestInLibrary -> HomeRail(
             title = config.title,
             items = data.latestByRailId[config.id].orEmpty(),
-            style = CardStyle.Landscape,
+            style = CardStyle.PosterCompact,
             onFocused = onCardFocused,
             onClick = { onOpenItem(it.id, it.kind) },
             initialFocusedItemId = initialFocusedItemId,

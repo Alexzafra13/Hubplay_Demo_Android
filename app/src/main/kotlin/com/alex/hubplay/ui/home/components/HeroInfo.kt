@@ -2,6 +2,7 @@ package com.alex.hubplay.ui.home.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -60,6 +61,9 @@ import com.alex.hubplay.data.Content
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.OnAccent
 import com.alex.hubplay.ui.theme.TextSecondary
+
+/** Fundido de entrada del título/meta del hero al cambiar de item. */
+private const val HERO_FADE_IN_MS = 260
 
 @Composable
 fun HeroInfo(
@@ -120,7 +124,11 @@ fun HeroInfo(
                 targetState = item,
                 label = "hero-info",
                 transitionSpec = {
-                    (fadeIn(tween(400)) togetherWith fadeOut(tween(250)))
+                    // Solo entra con fundido; lo saliente desaparece al
+                    // instante. Cada contenido en fundido es una capa fuera
+                    // de pantalla del tamaño del hero: con dos a la vez el
+                    // GPU del TV box no llegaba a 60fps al cambiar de card.
+                    (fadeIn(tween(HERO_FADE_IN_MS)) togetherWith fadeOut(snap()))
                 },
             ) { displayItem ->
                 Column {

@@ -118,8 +118,50 @@ Xiaomi Mi TV (`MiTV-AFKR0`, Android 11, 1080p@320dpi) por
   splash) y el intro espera a ella (tope 2,5 s). Verificado en la Mi TV
   con capturas seguidas: splash → mando → wordmark → Home.
 
+### Ronda 4 — Inicio: carátulas, tráiler en negro, último rail, fluidez
+
+- **Carátulas en Inicio**: "Tendencias" y "Lo último en…" pasan a
+  `CardStyle.PosterCompact` (130×195, nuevo estilo con `isPortrait`);
+  "Continuar viendo" / "Siguiente" siguen Landscape (fotograma +
+  progreso). Alturas por estilo (`RailHeightLandscape` 228 /
+  `RailHeightPortrait` 285) y `HERO_REDUCED_FRACTION` 0.46 para que
+  hero reducido + rail de posters quepan en 540dp. `MediaCard` deriva
+  el alto de `slotWidth / aspect`.
+- **Tráiler en negro en Home**: `TvShell` pintaba `BgBase` a pantalla
+  completa por encima del `TrailerHostOverlay` (que vive bajo el
+  NavHost). Ahora solo pinta fondo con `padContent = true`.
+- **Captions del rail anterior al llegar al último**: el LazyColumn no
+  tenía recorrido para subir el último rail; `contentPadding(bottom =
+  viewport − alto del último rail)`.
+- **Fluidez** (medido con `dumpsys gfxinfo` + `atrace gfx view` en la
+  Mi TV): el cuello es la GPU (RenderThread espera ~15 ms/frame, "waiting
+  for GPU completion") por capas a pantalla completa, más picos en el
+  hilo UI en el frame de la pulsación. Aplicado:
+  - `HomeBackdrop` (nuevo): fundido entre backdrops con Coil
+    (`crossfade` + `placeholderMemoryCacheKey`) y alpha con
+    `CompositingStrategy.ModulateAlpha` / `drawRect` → cero
+    graphicsLayers a pantalla completa (antes `Crossfade` + `alpha`
+    = hasta 3 capas 1920×1080). Rectángulo de fondo solo si no hay
+    imagen o durante el revelado del tráiler.
+  - `HeroInfo`: `fadeIn(260) togetherWith fadeOut(snap())` — una sola
+    capa en transición en vez de dos.
+  - `MediaCard`: sin `shadow` animada; placeholder solo hasta que
+    carga la imagen (media pantalla de overdraw menos).
+  - Cifras (8 pulsaciones → en el rail de posters): antes 64 % jank /
+    p50 19 ms; **pendiente re-medir con el build final** (la TV se
+    apagó a mitad; los últimos cambios solo están probados en emulador).
+  El WebView del tráiler (`LAYER_TYPE_HARDWARE`, 1920×1080) cuesta
+  5-40 ms/frame mientras se revela; no afecta a la navegación.
+
 ### Pendiente (siguiente sesión)
 
+- Re-medir jank en la Mi TV con el build de la ronda 4 y, si sigue
+  alto, siguientes candidatos: quitar `LAYER_TYPE_HARDWARE` del WebView
+  del tráiler, recortar el backdrop al 70 % superior, aligerar la
+  composición de `MediaCard` (LazyRow compone cards nuevas dentro del
+  frame de scroll: hasta 28 ms de `measureAndLayout`).
+- El hero con un canal en directo enfocado queda vacío (solo la
+  preview cuando arranca); valorar nombre + programa en el hero.
 - Detalle sin artwork: mucho vacío arriba; valorar backdrop de color
   dominante o poster grande a la izquierda.
 - Revisar `CollectionDetailScreen` con las tarjetas más altas.

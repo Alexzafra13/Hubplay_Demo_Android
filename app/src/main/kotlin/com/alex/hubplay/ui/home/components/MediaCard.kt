@@ -29,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -48,9 +47,17 @@ import com.alex.hubplay.ui.theme.TextMuted
 import com.alex.hubplay.ui.theme.TextPrimary
 import com.alex.hubplay.ui.theme.TextSecondary
 
+/** Estilos de tarjeta. `aspect` es ancho/alto; el alto se deriva del ancho
+ *  del slot, así el mismo estilo sirve con anchos distintos.
+ *  - [PosterCompact]: carátula estrecha para los rails de Inicio, donde
+ *    hero reducido + rail entero deben caber en 540dp. */
 enum class CardStyle(val aspect: Float, val defaultWidth: Dp) {
     Landscape(16f / 9f, 240.dp),
     Portrait(2f / 3f, 150.dp),
+    PosterCompact(2f / 3f, 130.dp),
+    ;
+
+    val isPortrait: Boolean get() = aspect < 1f
 }
 
 /** Escala del artwork enfocado — el "pop" que hace viva la rejilla en
@@ -88,13 +95,11 @@ fun MediaCard(
 
     var focused by remember { mutableStateOf(false) }
 
-    val cardHeight = when (style) {
-        CardStyle.Portrait  -> style.defaultWidth * 1.5f
-        CardStyle.Landscape -> style.defaultWidth * (9f / 16f)
-    }
-    val imageUrl = when (style) {
-        CardStyle.Portrait  -> item.posterUrl ?: item.backdropUrl
-        CardStyle.Landscape -> item.backdropUrl ?: item.posterUrl
+    val cardHeight = slotWidth / style.aspect
+    val imageUrl = if (style.isPortrait) {
+        item.posterUrl ?: item.backdropUrl
+    } else {
+        item.backdropUrl ?: item.posterUrl
     }
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -110,10 +115,10 @@ fun MediaCard(
         ),
         label = "card-scale",
     )
-    val elevation by animateFloatAsState(
-        targetValue = if (focused) 16f else 0f,
-        label       = "card-elevation",
-    )
+    // Sin sombra animada: `shadow(elevation)` re-rasteriza la sombra en
+    // cada frame del scale y en GPUs de TV box (Mali) se notaba como
+    // tirones al mover el foco por el rail. El borde blanco + scale ya
+    // separan la tarjeta enfocada de sus vecinas.
 
     Column(
         modifier = modifier
@@ -135,7 +140,6 @@ fun MediaCard(
                 .scale(scale)
                 .fillMaxWidth()
                 .height(cardHeight)
-                .shadow(elevation = elevation.dp, shape = shape, clip = false)
                 .clip(shape)
                 .then(
                     if (focused) Modifier.border(
@@ -145,12 +149,17 @@ fun MediaCard(
                     ) else Modifier,
                 ),
         ) {
-            ArtworkPlaceholder(title = item.title)
+            // El placeholder solo mientras no hay imagen: con 8-10 cards
+            // por rail, pintar degradado + inicial DEBAJO de cada imagen
+            // opaca era media pantalla de overdraw en cada frame.
+            var loaded by remember(imageUrl) { mutableStateOf(false) }
+            if (!loaded) ArtworkPlaceholder(title = item.title)
             if (imageUrl != null) {
                 AsyncImage(
                     model              = imageUrl,
                     contentDescription = item.title,
                     contentScale       = ContentScale.Crop,
+                    onSuccess          = { loaded = true },
                     modifier           = Modifier.fillMaxSize(),
                 )
             }

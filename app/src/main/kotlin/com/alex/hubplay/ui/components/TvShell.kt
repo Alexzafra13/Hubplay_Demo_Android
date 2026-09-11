@@ -68,7 +68,15 @@ fun TvShell(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(BgBase)) {
+    // Fondo opaco SOLO cuando el contenido va con padding (catálogo, TV,
+    // buscar…). Inicio pasa padContent=false y necesita el armazón
+    // transparente: el WebView del tráiler vive DEBAJO del NavHost y con
+    // un fondo aquí el hero se quedaba en negro al reproducirlo.
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(if (padContent) Modifier.background(BgBase) else Modifier),
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
