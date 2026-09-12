@@ -19,7 +19,7 @@ import org.junit.Test
  *  - different videoKey resets state
  *  - hide debounce (500ms) and its cancellation
  *  - hideNow bypasses debounce
- *  - reportPlaying / reportEnded / reportTime
+ *  - reportPlaying / reportEnded (graceful o no) / reportTime
  *  - embeddability cache
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -162,6 +162,52 @@ class TrailerHostTest {
         host.reportEnded()
 
         assertThat(host.revealed.value).isFalse()
+    }
+
+    @Test
+    fun `graceful reportEnded asks screens to fade back to the backdrop`() = runTest {
+        val host = TrailerHost(this)
+        host.activate("item1", "key1", "YouTube")
+        host.reportPlaying()
+
+        host.reportEnded(graceful = true)
+
+        assertThat(host.revealed.value).isFalse()
+        assertThat(host.fadeOutOnHide.value).isTrue()
+        // El claim sigue vivo: la pantalla no ha cambiado, solo acabó el vídeo.
+        assertThat(host.current.value?.itemId).isEqualTo("item1")
+    }
+
+    @Test
+    fun `non graceful reportEnded keeps the snap hide`() = runTest {
+        val host = TrailerHost(this)
+        host.reportPlaying()
+
+        host.reportEnded()
+
+        assertThat(host.revealed.value).isFalse()
+        assertThat(host.fadeOutOnHide.value).isFalse()
+    }
+
+    @Test
+    fun `fadeOutOnHide resets on new key, hideNow and next reveal`() = runTest {
+        val host = TrailerHost(this)
+        host.activate("item1", "key1", "YouTube")
+        host.reportPlaying()
+        host.reportEnded(graceful = true)
+
+        host.activate("item2", "key2", "YouTube")
+        assertThat(host.fadeOutOnHide.value).isFalse()
+
+        host.reportPlaying()
+        host.reportEnded(graceful = true)
+        host.hideNow()
+        assertThat(host.fadeOutOnHide.value).isFalse()
+
+        host.reportEnded(graceful = true)
+        host.reportPlaying()
+        assertThat(host.fadeOutOnHide.value).isFalse()
+        assertThat(host.revealed.value).isTrue()
     }
 
     @Test

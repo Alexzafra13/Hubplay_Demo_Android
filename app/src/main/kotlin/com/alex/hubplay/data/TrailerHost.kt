@@ -48,6 +48,17 @@ class TrailerHost(private val scope: CoroutineScope) {
     private val _currentTimeSec = mutableStateOf(0L)
     val currentTimeSec: State<Long> = _currentTimeSec
 
+    /**
+     * `true` cuando el último ocultado fue el tráiler acabando por sí solo
+     * (o a punto de acabar). Las pantallas lo usan para elegir la animación
+     * de vuelta al backdrop: fundido suave si el vídeo terminó (todavía se
+     * está viendo su último segundo, no hay nada feo que tapar) y snap en
+     * el resto de casos (cambio de card, navegación, error), donde la
+     * WebView de debajo puede estar pintando la end-screen de YouTube.
+     */
+    private val _fadeOutOnHide = mutableStateOf(false)
+    val fadeOutOnHide: State<Boolean> = _fadeOutOnHide
+
     // Cache de `isEmbeddable` por videoKey. Sin esto, cada cambio de card
     // dispara un GET HTTPS a youtube.com/oembed (~300-800 ms en wifi
     // doméstica + CPU lento). Un trailer no se vuelve no-embeddable
@@ -78,13 +89,25 @@ class TrailerHost(private val scope: CoroutineScope) {
         recompute(seedTimeSec = 0L)
     }
 
-    /** Llamado desde el JS bridge cuando YouTube reporta state=PLAYING. */
-    fun reportPlaying() { _revealed.value = true }
+    /** Llamado desde el JS bridge cuando YouTube reporta progreso real. */
+    fun reportPlaying() {
+        _fadeOutOnHide.value = false
+        _revealed.value = true
+    }
 
-    /** Llamado cuando el vídeo termina o falla. Oculta el alpha pero NO
-     *  toca el claim — la pantalla sigue activa, simplemente el trailer
-     *  no se ve hasta que se mueva el foco a otro item (key distinta). */
-    fun reportEnded() { _revealed.value = false }
+    /**
+     * Llamado cuando el vídeo termina o falla. Oculta el alpha pero NO
+     * toca el claim — la pantalla sigue activa, simplemente el trailer
+     * no se ve hasta que se mueva el foco a otro item (key distinta).
+     *
+     * [graceful] = el tráiler llegó (o está llegando) a su fin de forma
+     * natural: las pantallas hacen un fundido de vuelta al backdrop en vez
+     * de un corte. `false` para fallos y watchdogs.
+     */
+    fun reportEnded(graceful: Boolean = false) {
+        _fadeOutOnHide.value = graceful
+        _revealed.value = false
+    }
 
     /** Llamado periódicamente con la posición del vídeo (en segundos). */
     fun reportTime(sec: Long) { _currentTimeSec.value = sec }
@@ -103,6 +126,7 @@ class TrailerHost(private val scope: CoroutineScope) {
         hideJob = null
         _current.value = null
         _revealed.value = false
+        _fadeOutOnHide.value = false
         _currentTimeSec.value = 0L
     }
 
@@ -118,6 +142,7 @@ class TrailerHost(private val scope: CoroutineScope) {
                 // seedTimeSec del caller (Detail con resume, normal=0)
                 // sobreescribe el reset por defecto.
                 _revealed.value = false
+                _fadeOutOnHide.value = false
                 _currentTimeSec.value = seedTimeSec
             }
             _current.value = newCurrent
@@ -127,6 +152,7 @@ class TrailerHost(private val scope: CoroutineScope) {
                 delay(HIDE_DEBOUNCE_MS)
                 _current.value = null
                 _revealed.value = false
+                _fadeOutOnHide.value = false
                 _currentTimeSec.value = 0L
             }
         }

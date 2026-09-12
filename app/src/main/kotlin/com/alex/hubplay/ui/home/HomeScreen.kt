@@ -3,9 +3,7 @@ package com.alex.hubplay.ui.home
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -67,6 +65,7 @@ import com.alex.hubplay.data.LocalTrailerHost
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.components.SIDEBAR_WIDTH
 import com.alex.hubplay.ui.components.TvShell
+import com.alex.hubplay.ui.components.trailerBackdropAlphaSpec
 import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.HeroInfo
 import com.alex.hubplay.ui.home.components.HomeBackdrop
@@ -206,17 +205,13 @@ fun HomeScreen(
         if (activeTrailer == null) trailerHost.hideNow()
     }
 
-    // Backdrop alpha asimétrica:
-    //  - Trailer REVELANDO (false→true): fade out suave 700ms (al usuario
-    //    le gusta ver cómo desaparece el backdrop dejando paso al trailer).
-    //  - Trailer OCULTÁNDOSE (true→false): snap inmediato a 1. El backdrop
-    //    de la nueva card aparece YA, cubriendo cualquier resto visual
-    //    del WebView anterior. Si animáramos los 700ms aquí también, la
-    //    WebView del trailer viejo (end-screen gris con play) se vería
-    //    a través de la transparencia durante todo ese tiempo.
+    // Backdrop alpha asimétrica (ver trailerBackdropAlphaSpec): fundido al
+    // revelar el trailer y al acabar éste por sí solo; snap a opaco en el
+    // resto de ocultados para que el backdrop de la nueva card tape YA
+    // cualquier resto visual del WebView anterior.
     val backdropAlpha by animateFloatAsState(
         targetValue = if (trailerRevealed) 0f else 1f,
-        animationSpec = if (trailerRevealed) tween(durationMillis = 700) else snap(),
+        animationSpec = trailerBackdropAlphaSpec(trailerRevealed, trailerHost.fadeOutOnHide.value),
         label = "backdrop-fade",
     )
 

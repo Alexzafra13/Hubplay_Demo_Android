@@ -1,5 +1,7 @@
 package com.alex.hubplay.ui.nav
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -54,9 +56,20 @@ fun HubplayNavGraph(
 ) {
     val authState by container.authStateFlow.collectAsState()
 
+    // Sin transiciones entre pantallas. El crossfade por defecto de
+    // NavHost (700 ms de fadeIn/fadeOut) obliga a HWUI a componer las DOS
+    // pantallas en capas a pantalla completa con alpha durante ~40 frames,
+    // sobre el WebView del tráiler que sigue pintando vídeo debajo: en la
+    // GPU del TV box eso era un 35 % de frames con tirón al abrir Detalle
+    // desde Inicio. Un corte seco es lo que hacen las apps de TV grandes y,
+    // con el tráiler continuando, se lee como "la ficha se abre encima".
     NavHost(
-        navController     = navController,
-        startDestination  = startRoute.path,
+        navController      = navController,
+        startDestination   = startRoute.path,
+        enterTransition    = { EnterTransition.None },
+        exitTransition     = { ExitTransition.None },
+        popEnterTransition = { EnterTransition.None },
+        popExitTransition  = { ExitTransition.None },
     ) {
         // ── Login ────────────────────────────────────────────────────
         composable(Route.Login.path) {

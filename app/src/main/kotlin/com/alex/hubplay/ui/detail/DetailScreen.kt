@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalComposeUiApi::class)
+
 package com.alex.hubplay.ui.detail
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -6,8 +8,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -27,8 +27,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
@@ -39,10 +41,10 @@ import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,11 +58,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -71,19 +77,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
 import com.alex.hubplay.data.Content
+import com.alex.hubplay.data.LocalTrailerHost
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.data.Person
 import com.alex.hubplay.ui.catalog.PortraitCatalogCard
 import com.alex.hubplay.ui.components.BackPill
 import com.alex.hubplay.ui.components.HeroCtaButton
 import com.alex.hubplay.ui.components.HeroIconButton
-import com.alex.hubplay.data.LocalTrailerHost
+import com.alex.hubplay.ui.components.trailerBackdropAlphaSpec
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.BgBase
 import com.alex.hubplay.ui.theme.BgElevated
@@ -140,6 +146,23 @@ fun DetailScreen(
                 LaunchedEffect(scrolledIntoRails) {
                     if (scrolledIntoRails) trailerHost.hideNow()
                 }
+                // Los rails de reparto y relacionados entran DOS frames
+                // después que el hero. Dos razones:
+                //  1. Foco inicial determinista: mientras solo existe el
+                //     hero, el sistema no puede aterrizar en una card de
+                //     reparto antes de que `playFocus.requestFocus()` corra.
+                //     Cuando pasaba, el `bringIntoView` de esa card dejaba
+                //     la página desplazada hasta la frontera hero/reparto
+                //     aunque el foco acabara en Reproducir.
+                //  2. Coste del primer frame: componer 8-16 cards con
+                //     imagen a la vez que el hero, con el tráiler pintando
+                //     vídeo debajo, era parte del tirón al abrir la ficha.
+                var railsReady by remember(item.id) { mutableStateOf(false) }
+                LaunchedEffect(item.id) {
+                    withFrameNanos { }
+                    withFrameNanos { }
+                    railsReady = true
+                }
 
                 Column(modifier = Modifier.verticalScroll(scrollState)) {
                     Box(modifier = Modifier.height(heroHeight)) {
@@ -155,13 +178,19 @@ fun DetailScreen(
                         )
                     }
                     val people = peopleOf(item)
-                    if (people.isNotEmpty()) {
+                    if (railsReady && people.isNotEmpty()) {
                         CastCrewRail(people = people, onOpenPerson = onOpenPerson)
                     }
-                    if (ui.related.isNotEmpty()) {
+                    if (railsReady && ui.related.isNotEmpty()) {
                         RelatedRail(items = ui.related, onOpenItem = onOpenItem)
                     }
-                    Spacer(Modifier.height(32.dp))
+                    // Aire bajo el último rail — SOLO si hay rails. Sin ellos el
+                    // contenido mide exactamente el viewport: cualquier píxel
+                    // de más era recorrido que el foco inicial de Reproducir
+                    // convertía en un desplazamiento (la ficha entraba "bajada").
+                    if (railsReady && (people.isNotEmpty() || ui.related.isNotEmpty())) {
+                        Spacer(Modifier.height(32.dp))
+                    }
                 }
             }
         }
@@ -234,11 +263,24 @@ private fun HeroFull(
 
     val backdropAlpha by animateFloatAsState(
         targetValue   = if (trailerRevealed) 0f else 1f,
-        animationSpec = tween(durationMillis = 700),
+        animationSpec = trailerBackdropAlphaSpec(trailerRevealed, trailerHost.fadeOutOnHide.value),
         label         = "backdrop-fade",
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // El foco que ENTRA en el hero (foco inicial de la pantalla, o
+    // volver desde los rails) va siempre a Reproducir. Declarativo y
+    // síncrono al layout: sin esto el primer foco lo decidía el orden del
+    // árbol (a veces la píldora de volver, a veces una card de reparto).
+    val playFocus = remember { FocusRequester() }
+    LaunchedEffect(item.id) {
+        runCatching { playFocus.requestFocus() }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusProperties { enter = { playFocus } },
+    ) {
         // ── Fullscreen backdrop ────────────────────────────────────────────
         AsyncImage(
             model              = item.backdropUrl ?: item.posterUrl,
@@ -339,7 +381,7 @@ private fun HeroFull(
             horizontalArrangement = Arrangement.spacedBy(32.dp),
         ) {
             // ── Left column: poster + Play button right under it ─────────
-            PosterAndPlayColumn(item = item, onPlay = onPlay)
+            PosterAndPlayColumn(item = item, onPlay = onPlay, playFocus = playFocus)
 
             // ── Right column: logo/title, meta, overview, secondary CTAs
             InfoColumn(
@@ -352,18 +394,17 @@ private fun HeroFull(
 }
 
 @Composable
-private fun PosterAndPlayColumn(item: Content, onPlay: (String, Long) -> Unit) {
+private fun PosterAndPlayColumn(
+    item:      Content,
+    onPlay:    (String, Long) -> Unit,
+    playFocus: FocusRequester,
+) {
     val resumePosSec = (item as? Content.Resumable)?.resumePosSec ?: 0L
     val playLabel = if (resumePosSec > 0) {
         val mins = resumePosSec / 60
         val secs = resumePosSec % 60
         stringResource(R.string.detail_resume_format, mins, secs)
     } else stringResource(R.string.detail_play)
-
-    val playFocus = remember { FocusRequester() }
-    LaunchedEffect(item.id) {
-        runCatching { playFocus.requestFocus() }
-    }
 
     Column(
         horizontalAlignment = Alignment.Start,

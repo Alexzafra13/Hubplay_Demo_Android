@@ -9,6 +9,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -54,12 +55,9 @@ fun TrailerHostOverlay(modifier: Modifier = Modifier) {
     val host           = LocalTrailerHost.current
     val current        = host.current.value
     val revealed       = host.revealed.value
+    val fadeOutOnHide  = host.fadeOutOnHide.value
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // hasTickedForCurrentKey: se resetea al cambiar `current?.videoKey` gracias
-    // al key del remember. El watchdog lo lee para detectar si el player no
-    // arrancó (vídeo restringido, error 153) tras 6s.
-    var hasTickedForCurrentKey by remember(current?.videoKey) { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var embeddable by remember(current?.videoKey) { mutableStateOf<Boolean?>(null) }
 
@@ -67,10 +65,14 @@ fun TrailerHostOverlay(modifier: Modifier = Modifier) {
 
     val alpha by animateFloatAsState(
         targetValue   = if (revealed) 1f else 0f,
-        // Al ocultar, snap: el backdrop de Home ya vuelve opaco al instante
-        // (ver HomeScreen), así que desvanecer la WebView debajo era pintar
-        // una capa 1920×1080 durante 24 frames sin que se viera.
-        animationSpec = if (revealed) tween(durationMillis = 400) else snap(),
+        // Al ocultar por cambio de card/navegación, snap: el backdrop de la
+        // pantalla vuelve opaco al instante (ver trailerBackdropAlphaSpec),
+        // así que desvanecer la WebView debajo era pintar una capa 1920×1080
+        // durante 24 frames sin que se viera. Si el tráiler ACABA por sí
+        // solo, fundido: el vídeo sigue pintando su último segundo mientras
+        // el backdrop vuelve por encima, y el usuario ve un crossfade limpio
+        // en vez de un corte a la carátula.
+        animationSpec = trailerOverlayAlphaSpec(revealed, fadeOutOnHide),
         label         = "trailer-host-alpha",
     )
 
@@ -123,12 +125,20 @@ fun TrailerHostOverlay(modifier: Modifier = Modifier) {
         )
     }
 
-    // Watchdog: si tras 6s de carga seguimos sin tick, asumimos fallo
-    // silencioso (YouTube pintó error overlay) y avisamos al host.
+    // Watchdog: si tras 6s de carga el host sigue sin revelar (ningún
+    // reportTime → reportPlaying), asumimos fallo silencioso (YouTube pintó
+    // su overlay de error) y avisamos al host. Se lee `host.revealed`, que
+    // el propio host resetea al cambiar de key, y NO un `remember(key)`
+    // local: el bridge JS se crea una sola vez en `factory` y capturaba el
+    // MutableState de la PRIMERA composición, así que a partir del segundo
+    // tráiler el flag nuevo nunca se ponía a true y este watchdog ocultaba
+    // el tráiler a los 6 s de cargar (el "backdrop vuelve y luego otra vez
+    // el tráiler" que se veía ~2 s después de arrancar).
     LaunchedEffect(current?.videoKey) {
         val key = current?.videoKey ?: return@LaunchedEffect
-        delay(6_000)
-        if (!hasTickedForCurrentKey && current.videoKey == key) {
+        delay(WATCHDOG_MS)
+        if (!host.revealed.value && current.videoKey == key) {
+            Log.d(TAG, "trailer watchdog: no playback after ${WATCHDOG_MS}ms for $key")
             host.reportEnded()
         }
     }
@@ -182,20 +192,22 @@ fun TrailerHostOverlay(modifier: Modifier = Modifier) {
                     android.webkit.CookieManager.getInstance()
                         .setAcceptThirdPartyCookies(this, true)
 
-                    addJavascriptInterface(object {
+                    val bridge = object {
                         @JavascriptInterface
-                        fun onEnded() {
-                            mainHandler.post { host.reportEnded() }
+                        fun onEnded(graceful: Boolean) {
+                            Log.d(TAG, "trailer ended (graceful=$graceful)")
+                            mainHandler.post { host.reportEnded(graceful) }
                         }
+
                         @JavascriptInterface
                         fun reportTime(seconds: Double) {
                             mainHandler.post {
-                                hasTickedForCurrentKey = true
                                 host.reportPlaying()
                                 host.reportTime(seconds.toLong())
                             }
                         }
-                    }, "TrailerBridge")
+                    }
+                    addJavascriptInterface(bridge, "TrailerBridge")
 
                     webChromeClient = WebChromeClient()
                     webViewClient = object : WebViewClient() {
@@ -245,7 +257,43 @@ private suspend fun isEmbeddable(videoKey: String): Boolean {
     }
 }
 
+/**
+ * Animación del alpha del backdrop de una pantalla con tráiler (Home /
+ * Detail / Series), simétrica a la del overlay:
+ *  - Revelando el tráiler (`revealed` = true): fundido de 700 ms — al
+ *    usuario le gusta ver cómo el backdrop deja paso al vídeo.
+ *  - El tráiler terminó solo (`fadeOutOnHide`): fundido de vuelta, el
+ *    vídeo aún se ve debajo mientras el backdrop reaparece.
+ *  - Cualquier otro ocultado (cambio de card, navegación, error): snap a
+ *    opaco. La WebView de debajo puede estar pintando la end-screen de
+ *    YouTube o el tráiler anterior; animar aquí lo dejaría ver.
+ */
+fun trailerBackdropAlphaSpec(revealed: Boolean, fadeOutOnHide: Boolean): AnimationSpec<Float> = when {
+    revealed      -> tween(durationMillis = BACKDROP_FADE_MS)
+    fadeOutOnHide -> tween(durationMillis = ENDED_FADE_MS)
+    else          -> snap()
+}
+
+/** Alpha del WebView: misma lógica que [trailerBackdropAlphaSpec], en espejo. */
+private fun trailerOverlayAlphaSpec(revealed: Boolean, fadeOutOnHide: Boolean): AnimationSpec<Float> = when {
+    revealed      -> tween(durationMillis = REVEAL_FADE_MS)
+    fadeOutOnHide -> tween(durationMillis = ENDED_FADE_MS)
+    else          -> snap()
+}
+
 private const val TAG = "TrailerHostOverlay"
+
+/** Tiempo máximo de carga sin progreso antes de dar el tráiler por fallido. */
+private const val WATCHDOG_MS = 6_000L
+
+/** Fundido de entrada del WebView al revelar el tráiler. */
+private const val REVEAL_FADE_MS = 400
+
+/** Fundido del backdrop de las pantallas al revelar el tráiler. */
+private const val BACKDROP_FADE_MS = 700
+
+/** Crossfade de vuelta al backdrop cuando el tráiler termina solo. */
+private const val ENDED_FADE_MS = 700
 private const val TRAILER_BASE_URL = "https://hubplay.app"
 private const val DESKTOP_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
@@ -278,99 +326,78 @@ private fun buildIframeHtml(videoKey: String, startAtSec: Long): String {
           <script>
             (function(){
               var f = document.getElementById('yt');
-              var polling = null;
-              // Estado para detección fiable del fin del trailer. YouTube
-              // no siempre dispara state=0 (ENDED); a veces va
-              // PLAYING → PAUSED → silencio y se queda en la end-screen
-              // con sugerencias (la "pantalla gris con play" que el usuario
-              // ve si no la cazamos a tiempo).
-              var lastTime   = -1;
-              var stallCount = 0;
-              var duration   = 0;
-              var ended      = false;
+              // Protocolo real del IFrame API (verificado en la Mi TV con
+              // logcat, 2026-09-12): tras `listening`, YouTube manda
+              // `infoDelivery` cada ~270 ms con `info.currentTime` y la
+              // duración en `info.progressState.duration`; los cambios de
+              // estado llegan como `infoDelivery` con `info.playerState`
+              // (y ahí sí `info.duration`). No hay evento `onStateChange`
+              // separado ni respuestas numéricas a getCurrentTime/getDuration.
+              //
+              // Fin del tráiler: fundido ANTICIPADO a END_LEAD_SEC del final
+              // (graceful: el vídeo sigue pintando su último segundo mientras
+              // el backdrop vuelve). Redes de seguridad: playerState=0 (ENDED)
+              // y atasco por reloj de pared. Tras `ended` se ignora TODO:
+              // el mensaje de ENDED trae currentTime=duration y antes volvía
+              // a revelar el WebView justo con la end-screen de YouTube
+              // (el "frame con el botón de replay").
+              var END_LEAD_SEC = 1.5;
+              var STALL_MS     = 6000;
+              var duration      = 0;
+              var lastTime      = -1;
+              var lastAdvanceAt = 0;
+              var ended         = false;
+              var primed        = false;
+              var lastState     = -1;
               function parse(d){ try { return (typeof d==='string')?JSON.parse(d):d; } catch(e){ return null; } }
-              function send(cmd){
+              function send(cmd, args){
                 if (f.contentWindow) {
-                  f.contentWindow.postMessage(JSON.stringify({event:'command',func:cmd,args:''}), '*');
+                  f.contentWindow.postMessage(JSON.stringify({event:'command',func:cmd,args:args||''}), '*');
                 }
               }
-              function fireEnded(){
+              function fireEnded(graceful){
                 if (ended) return;
                 ended = true;
-                if (polling) { clearInterval(polling); polling = null; }
-                TrailerBridge.onEnded();
+                TrailerBridge.onEnded(!!graceful);
               }
               window.addEventListener('message', function(e){
-                var d = parse(e.data); if (!d) return;
-                var state = (d.event === 'onStateChange') ? d.info :
-                            (d.info && typeof d.info.playerState !== 'undefined') ? d.info.playerState : null;
-                if (state === 1) {
-                  // Si ya disparamos fireEnded (fade-out anticipado, stall
-                  // o state=0), NO re-arrancamos el ciclo. Sin esto, tras
-                  // fade-out anticipado YouTube seguía emitiendo state=1
-                  // → polling restart → reportTime → reveal otra vez →
-                  // backdrop flickea.
-                  if (ended) return;
-                  // Audio: iframe arranca muted (mute=1 obligatorio para
-                  // autoplay en WebView). Al entrar PLAYING, unmute +
-                  // volumen 80% como hace YouTube TV.
-                  if (f.contentWindow) {
-                    f.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}', '*');
-                    f.contentWindow.postMessage('{"event":"command","func":"setVolume","args":[80]}', '*');
-                    // Sin subtítulos automáticos: el trailer es fondo
-                    // ambiental, no un vídeo que se lee. unloadModule es
-                    // la única vía fiable del IFrame API (cc_load_policy
-                    // solo sabe forzarlos a ON).
-                    f.contentWindow.postMessage('{"event":"command","func":"unloadModule","args":["captions"]}', '*');
-                    f.contentWindow.postMessage('{"event":"command","func":"unloadModule","args":["cc"]}', '*');
-                  }
-                  if (duration === 0) send('getDuration');
-                  if (!polling) polling = setInterval(function(){ send('getCurrentTime'); }, 300);
+                if (ended) return;
+                var d = parse(e.data); if (!d || d.event !== 'infoDelivery' || !d.info) return;
+                var info  = d.info;
+                var state = (typeof info.playerState === 'number') ? info.playerState : null;
+                if (state !== null) lastState = state;
+                if (state === 0) { fireEnded(false); return; }
+                if (state === 1 && !primed) {
+                  primed = true;
+                  // Audio: el iframe arranca muted (mute=1 obligatorio para
+                  // autoplay en WebView). Al primer PLAYING, unmute + 80 %.
+                  send('unMute');
+                  send('setVolume', [80]);
+                  // Sin subtítulos automáticos: el trailer es fondo
+                  // ambiental. unloadModule es la única vía fiable
+                  // (cc_load_policy solo sabe forzarlos a ON).
+                  send('unloadModule', ['captions']);
+                  send('unloadModule', ['cc']);
                 }
-                if (state === 0) {
-                  // SOLO state=0 (ENDED) como señal directa. Antes incluía
-                  // state=2 (PAUSED), pero YouTube dispara PAUSED brevemente
-                  // mid-play (buffer interno, cambio de calidad) y producía
-                  // un flicker de ~1s del backdrop a los 2-3s de empezar.
-                  // El fade-out anticipado por duration y el stall detection
-                  // siguen siendo las redes de seguridad.
-                  fireEnded();
+                if (typeof info.duration === 'number' && info.duration > 0) {
+                  duration = info.duration;
+                } else if (info.progressState && info.progressState.duration > 0) {
+                  duration = info.progressState.duration;
                 }
-                if (d.event === 'infoDelivery' && d.info != null) {
-                  var info = d.info;
-                  if (typeof info === 'number') {
-                    if (duration === 0 && info > 30) {
-                      duration = info;
-                    } else {
-                      // GATE del reveal: solo reportTime cuando currentTime>0.1.
-                      // Antes de eso, state=1 ya disparó PERO el frame aún
-                      // no se ha pintado (decode+GPU pending en Mi Box S).
-                      // Esperar a que YouTube reporte progreso real garantiza
-                      // que la transición backdrop→trailer descubre video,
-                      // no una WebView negra.
-                      if (info > 0.1) {
-                        TrailerBridge.reportTime(info);
-                      }
-                      if (duration > 0 && info >= duration - 1.5) {
-                        fireEnded();
-                        return;
-                      }
-                      if (info > 5 && info <= lastTime + 0.1) {
-                        stallCount++;
-                        if (stallCount >= 3) { fireEnded(); return; }
-                      } else {
-                        stallCount = 0;
-                      }
-                      lastTime = info;
-                    }
-                  } else if (typeof info.currentTime === 'number') {
-                    if (info.currentTime > 0.1) {
-                      TrailerBridge.reportTime(info.currentTime);
-                    }
-                    if (typeof info.duration === 'number' && info.duration > 0) {
-                      duration = info.duration;
-                    }
-                  }
+                if (typeof info.currentTime !== 'number') return;
+                var t = info.currentTime;
+                if (duration > 0 && t >= duration - END_LEAD_SEC) { fireEnded(true); return; }
+                // GATE del reveal: solo reportTime con currentTime>0.1. Con
+                // PLAYING el primer frame aún no está pintado (decode+GPU en
+                // el TV box); esperar progreso real garantiza que la
+                // transición backdrop→trailer descubre vídeo, no negro.
+                if (t > 0.1) TrailerBridge.reportTime(t);
+                var now = Date.now();
+                if (t > lastTime + 0.05) {
+                  lastTime = t;
+                  lastAdvanceAt = now;
+                } else if (lastState === 1 && t > 5 && lastAdvanceAt > 0 && now - lastAdvanceAt > STALL_MS) {
+                  fireEnded(false);
                 }
               });
               f.addEventListener('load', function(){

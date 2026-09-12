@@ -821,6 +821,20 @@ class HomeRepositoryImpl(
 private const val IMG_W_CARD     = 400   // portrait cards / logos / people
 private const val IMG_W_BACKDROP = 1280  // full-bleed hero / backdrop
 
+/**
+ * Ancho para el salvapantallas: 1080p nativo. Ahí no hay navegación que
+ * proteger (la textura grande solo se decodifica una vez por slide) y el
+ * Ken-Burns amplía la imagen ~1.1×, así que un 1280 se veía blando.
+ */
+const val IMG_W_SCREENSAVER = 1920
+
+/**
+ * Cambia el `w=` de una URL de imagen del servidor ya absolutizada. Las
+ * URLs remotas (TMDb, logos IPTV) o sin `w=` se devuelven tal cual.
+ */
+fun withImageWidth(url: String, width: Int): String =
+    url.replace(Regex("([?&])w=[0-9]+")) { "${it.groupValues[1]}w=$width" }
+
 // ─── Domain types ────────────────────────────────────────────────────────────
 //
 // MediaKind + sealed Content hierarchy live in Content.kt. This file keeps

@@ -43,7 +43,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.alex.hubplay.data.LocalTrailerHost
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -66,9 +65,11 @@ import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
 import com.alex.hubplay.data.Content
+import com.alex.hubplay.data.LocalTrailerHost
 import com.alex.hubplay.ui.components.BackPill
 import com.alex.hubplay.ui.components.HeroCtaButton
 import com.alex.hubplay.ui.components.HeroIconButton
+import com.alex.hubplay.ui.components.trailerBackdropAlphaSpec
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.AccentSoft
 import com.alex.hubplay.ui.theme.BgBase
@@ -153,7 +154,7 @@ private fun SeriesHeroFull(
 
     val backdropAlpha by animateFloatAsState(
         targetValue   = if (trailerRevealed) 0f else 1f,
-        animationSpec = tween(durationMillis = 700),
+        animationSpec = trailerBackdropAlphaSpec(trailerRevealed, trailerHost.fadeOutOnHide.value),
         label         = "backdrop-fade",
     )
 

@@ -2,7 +2,7 @@
 
 > Entrypoint de cada sesión. Corto a propósito: lo que hace falta para
 > retomar sin releer código. Histórico de sesiones en `archive/`.
-> Última actualización: **2026-09-11** (noche).
+> Última actualización: **2026-09-12**.
 
 ---
 
@@ -95,9 +95,48 @@ adb -s $D shell pm clear com.alex.hubplay.debug        # volver al login
   rail suba entero. Backdrop en `HomeBackdrop` (fundido de Coil +
   `ModulateAlpha`, cero graphicsLayers a pantalla completa). Foco de
   card → `focusBus` (150 ms para hero, 500 ms para tráiler).
-- **Tráiler**: `TrailerHost` (claim por item, `revealed`, `hideNow`);
-  el backdrop de Home baja a alpha 0 con 700 ms cuando se revela y vuelve
-  a 1 con snap al ocultarse (y el WebView se oculta con snap: nadie lo ve).
+- **Tráiler**: `TrailerHost` (claim por item, `revealed`, `fadeOutOnHide`,
+  `hideNow`); el backdrop de Home/Detail/Series baja a alpha 0 con 700 ms
+  cuando se revela. Al ocultarse: **snap** si es por cambio de card/
+  navegación/error (la WebView de debajo puede estar pintando la
+  end-screen de YouTube) y **fundido de 700 ms** si el tráiler acabó solo
+  (`trailerBackdropAlphaSpec` en `TrailerHostOverlay.kt`).
+- **Protocolo real del IFrame API** (medido en la Mi TV, 2026-09-12):
+  YouTube manda `infoDelivery` cada ~270 ms con `info.currentTime` y la
+  duración en `info.progressState.duration`; los cambios de estado son
+  otro `infoDelivery` con `info.playerState` (+ `info.duration`). **No**
+  hay `onStateChange` separado ni respuestas numéricas a
+  `getCurrentTime`/`getDuration`. El fin se detecta 1,5 s antes por
+  tiempo (graceful) con `playerState=0` y atasco por reloj como redes;
+  tras `ended` el JS ignora todo (el mensaje de ENDED trae
+  `currentTime=duration` y antes volvía a revelar la end-screen: era el
+  "frame con botón de replay").
+- **Watchdog del tráiler**: lee `host.revealed`, nunca un `remember(key)`
+  local. El bridge JS se crea una vez en `factory` del `AndroidView` y
+  captura el estado de la PRIMERA composición: un flag `remember(key)`
+  recreado por key nunca lo veía el bridge → a partir del 2.º tráiler el
+  watchdog lo ocultaba a los 6 s ("el backdrop vuelve y luego otra vez el
+  tráiler"). Regla general: **lo que capture el bridge JS tiene que ser un
+  objeto estable** (host, handler), no estado recreado por key.
+- **Navegación sin crossfade**: `NavHost` con `EnterTransition.None` /
+  `ExitTransition.None` (y pop). El fade de 700 ms por defecto componía
+  dos pantallas en capas con alpha sobre el vídeo del tráiler: 36 % de
+  frames con tirón al abrir Detalle desde Inicio → ~21 % sin él. Lo que
+  queda es el primer frame de Detalle (250-450 ms de measure/layout/draw
+  en el box) — siguiente candidato de rendimiento.
+- **Detalle (película)**: los rails de reparto/relacionados se componen 2
+  frames después del hero (`railsReady`), el hero rutea el foco entrante a
+  Reproducir (`focusProperties { enter }`) y el `Spacer` final solo existe
+  si hay rails. Sin esto la ficha entraba desplazada: el foco inicial de
+  Reproducir hacía `scrollTo(max)` con cualquier recorrido disponible
+  (64 px del Spacer, o ~460 px con el rail de reparto ya compuesto).
+- **Imágenes**: el backend redimensionaba `?w=N` con vecino más cercano
+  (`internal/imaging/thumbnail.go`) → backdrops "pixelados". Ahora
+  Catmull-Rom (`x/image/draw`), JPEG 85, miniaturas versionadas
+  (`_r2` en fichero y ETag). El salvapantallas pide `w=1920`
+  (`withImageWidth`); Home/Detail siguen a 1280 por coste de textura.
+  Tras desplegar el backend, la caché de Coil de la TV sigue sirviendo
+  las viejas hasta 24 h (`max-age=86400`): borrar datos de la app o esperar.
 - **Descubrimiento LAN** (`data/LanDiscovery.kt` + `LanProbe.kt`):
   mDNS (`_http._tcp`, filtra "hubplay") ‖ UDP broadcast `HUBPLAY-DISCOVER/1`
   a 41860 (respuesta `{product,name,port,url?}`; URL = IP origen + port,
@@ -143,6 +182,9 @@ el backdrop al 70 % superior, aligerar `MediaCard`, probar Baseline Profile.
    debe deduplicar** o Compose aborta el proceso entero.
 2. Hero con canal en directo enfocado: queda vacío hasta que arranca la
    preview; mostrar nombre + programa.
+2b. Primer frame de Detalle: 250-450 ms de measure/layout/draw al abrir
+   la ficha (framestats). Ver qué pesa (texto de sinopsis, AsyncImages,
+   logo) y trocear o diferir como los rails.
 3. Un host con dos IPs sale dos veces en "Servidores en tu red" (dedupe
    es por URL).
 4. Detalle sin artwork (mucho vacío), `CollectionDetailScreen` con

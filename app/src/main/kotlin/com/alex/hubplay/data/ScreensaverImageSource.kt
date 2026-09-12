@@ -56,12 +56,14 @@ class ScreensaverImageSource(
             .filter { !it.backdropUrl.isNullOrBlank() }
             // De-dup on item id — Trending + Latest overlap heavily.
             .distinctBy { it.id }
-            .map { ScreensaverSlide(
-                id          = it.id,
-                backdropUrl = it.backdropUrl!!,
-                title       = it.title,
-                year        = it.year,
-            ) }
+            .map {
+                ScreensaverSlide(
+                    id          = it.id,
+                    backdropUrl = withImageWidth(it.backdropUrl!!, IMG_W_SCREENSAVER),
+                    title       = it.title,
+                    year        = it.year,
+                )
+            }
             .toMutableList()
             .also { it.shuffle() }
 
