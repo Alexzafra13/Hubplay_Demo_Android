@@ -374,7 +374,7 @@ fun HubplayNavGraph(
             ),
         ) { entry ->
             val rawId = entry.arguments?.getString(Route.Person.ARG_PERSON_ID) ?: return@composable
-            val personId = java.net.URLDecoder.decode(rawId, Charsets.UTF_8)
+            val personId = java.net.URLDecoder.decode(rawId, "UTF-8")
             val vm = viewModel<PersonDetailViewModel>(
                 factory = PersonDetailViewModel.factory(container.homeRepository, personId),
             )
@@ -393,7 +393,7 @@ fun HubplayNavGraph(
             ),
         ) { entry ->
             val rawSlug = entry.arguments?.getString(Route.Studio.ARG_STUDIO_SLUG) ?: return@composable
-            val slug = java.net.URLDecoder.decode(rawSlug, Charsets.UTF_8)
+            val slug = java.net.URLDecoder.decode(rawSlug, "UTF-8")
             val vm = viewModel<StudioDetailViewModel>(
                 factory = StudioDetailViewModel.factory(container.homeRepository, slug),
             )
@@ -425,7 +425,7 @@ fun HubplayNavGraph(
             ),
         ) { entry ->
             val rawId = entry.arguments?.getString(Route.CollectionDetail.ARG_COLLECTION_ID) ?: return@composable
-            val collectionId = java.net.URLDecoder.decode(rawId, Charsets.UTF_8)
+            val collectionId = java.net.URLDecoder.decode(rawId, "UTF-8")
             val vm = viewModel<CollectionDetailViewModel>(
                 factory = CollectionDetailViewModel.factory(container.homeRepository, collectionId),
             )

@@ -3,6 +3,7 @@ package com.alex.hubplay.ui.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.alex.hubplay.data.CollectionDetail
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.IdentifyCandidate
@@ -45,6 +46,7 @@ class DetailViewModel(
                 .onSuccess { item ->
                     _ui.update { it.copy(isLoading = false, item = item, error = null) }
                     loadRelated()
+                    loadCollection(item)
                 }
                 .onFailure { err ->
                     _ui.update {
@@ -76,7 +78,25 @@ class DetailViewModel(
                 .onSuccess { item ->
                     _ui.update { it.copy(item = item) }
                     loadRelated()
+                    loadCollection(item)
                 }
+        }
+    }
+
+    /**
+     * Saga (TMDb collection) de una película, para el rail "Forma parte de
+     * la colección". Best-effort como [loadRelated]: sin saga o con error,
+     * el rail simplemente no aparece.
+     */
+    private fun loadCollection(item: Content) {
+        val collectionId = (item as? Content.Movie)?.collectionId
+        if (collectionId == null) {
+            _ui.update { it.copy(collection = null) }
+            return
+        }
+        viewModelScope.launch {
+            runCatching { repository.fetchCollectionDetail(collectionId) }
+                .onSuccess { c -> _ui.update { it.copy(collection = c) } }
         }
     }
 
@@ -240,6 +260,8 @@ data class DetailUiState(
     val isLoading:       Boolean        = false,
     val item:            Content?       = null,
     val related:         List<Content>  = emptyList(),
+    /** Saga de la película (rail bajo el reparto). `null` si no pertenece a ninguna. */
+    val collection:      CollectionDetail? = null,
     val error:           String?        = null,
     /** El usuario puede editar metadatos (admin o `can_edit_metadata`). */
     val canEditMetadata: Boolean        = false,

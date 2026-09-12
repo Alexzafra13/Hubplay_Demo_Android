@@ -127,13 +127,22 @@ adb -s $D shell pm clear com.alex.hubplay.debug        # volver al login
 - **Detalle (película)** (`ui/detail/DetailScreen.kt`, rediseño 2026-09-12):
   backdrop + tráiler FIJOS detrás (`DetailBackdrop`) y encima una columna
   con scroll: hero de un viewport + `RailsSection` (franja de fundido
-  transparente→BgBase y rails sobre fondo sólido). El tráiler NO se para
-  al bajar: queda tapado por los rails. Acciones bajo la sinopsis
-  (`ActionRow`, patrón Plex/Jellyfin): Mi lista, Visto, Información y, con
-  `can_edit_metadata` de `GET /me` (cache en `MetadataTools`), Actualizar
-  metadatos e Identificar (diálogo con candidatos TMDb, foco en el primer
-  resultado para que no se abra el teclado). Ya no hay corazón ni kebab
-  arriba a la derecha.
+  transparente→BgBase y rails sobre fondo sólido: reparto, "Forma parte de
+  la colección X" con tarjeta "Ver colección", "Más como esto"). El tráiler
+  NO se para al bajar: queda tapado por los rails. El usuario quiso la
+  ficha ligera: un solo botón con texto (Reproducir) y debajo iconos
+  redondos (`QuickActions`: favorito, visto y — con `can_edit_metadata` de
+  `GET /me`, cache en `MetadataTools` — un lápiz que abre Identificar, que
+  incluye "Actualizar metadatos"); una línea pequeña dice qué hace el icono
+  enfocado. Sinopsis con "Ver más" inline (`ExpandableOverview`), sin
+  diálogo de Información. Solo queda el chip de Estudio (la colección va
+  al rail). En el diálogo Identificar los campos están deshabilitados
+  mientras carga (si no, el foco inicial del Dialog caía en Título y el
+  TV abría el teclado) y `usePlatformDefaultWidth = false`.
+- **Crash en API < 33**: `URLEncoder.encode(x, Charset)` /
+  `URLDecoder.decode(x, Charset)` no existen en Android 11 (la Mi TV):
+  Estudio, Persona y Colecciones reventaban al abrirse. Usar siempre la
+  sobrecarga con nombre de charset (`"UTF-8"`). minSdk es 26.
 - **Foco/scroll en Detalle — LECCIÓN**: el `LocalBringIntoViewSpec` por
   defecto de Compose en Android TV **pivota cada foco al 30 % del
   viewport**; en una columna con scroll eso desplaza la página al mover el
@@ -146,7 +155,10 @@ adb -s $D shell pm clear com.alex.hubplay.debug        # volver al login
   frames y `Spacer` final solo con rails, para que el foco inicial no
   encuentre recorrido que desplazar.
 - **Pendiente en Series**: `SeriesScreen` sigue con corazón arriba a la
-  derecha y sin fila de acciones ni Identificar; aplicar el mismo patrón.
+  derecha y sin iconos ni Identificar; aplicar el mismo patrón que Detalle.
+- **Estudio**: `GET /studios/lucasfilm-ltd` devuelve 0 títulos aunque hay
+  Star Wars en la biblioteca (backend), y el logo negro de Lucasfilm no se
+  ve sobre fondo oscuro (poner fondo claro o tinte al logo del estudio).
 - **Imágenes**: el backend redimensionaba `?w=N` con vecino más cercano
   (`internal/imaging/thumbnail.go`) → backdrops "pixelados". Ahora
   Catmull-Rom (`x/image/draw`), JPEG 85, miniaturas versionadas

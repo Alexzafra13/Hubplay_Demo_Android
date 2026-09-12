@@ -233,12 +233,14 @@
     <string name="trusted_added_at">Added on %1$s</string>
     <string name="trusted_action_forget">Forget</string>
     <!-- Detail: action row + Identify -->
-    <string name="detail_action_my_list">My list</string>
-    <string name="detail_action_in_my_list">In my list</string>
-    <string name="detail_action_watched">Watched</string>
-    <string name="detail_action_mark_watched_short">Mark watched</string>
+    <string name="detail_action_favorite_add">Add to favourites</string>
+    <string name="detail_action_favorite_remove">Remove from favourites</string>
+    <string name="detail_action_metadata">Identify / metadata</string>
     <string name="detail_action_refresh_metadata">Refresh metadata</string>
-    <string name="detail_action_identify">Identify</string>
+    <string name="detail_overview_more">See more</string>
+    <string name="detail_overview_less">See less</string>
+    <string name="detail_section_collection">Part of the %1$s collection</string>
+    <string name="detail_collection_open">See collection</string>
     <string name="identify_title">Identify on TMDb</string>
     <string name="identify_hint">Pick the right match: title, overview, cast and artwork will be overwritten.</string>
     <string name="identify_query_label">Title</string>

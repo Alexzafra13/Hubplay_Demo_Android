@@ -25,7 +25,7 @@ sealed class Route(val path: String) {
     data object CollectionDetail : Route("collections/{collectionId}") {
         const val ARG_COLLECTION_ID = "collectionId"
         fun route(collectionId: String): String =
-            "collections/${java.net.URLEncoder.encode(collectionId, Charsets.UTF_8)}"
+            "collections/${java.net.URLEncoder.encode(collectionId, "UTF-8")}"
     }
 
     /** Item detail / browse-then-play surface (movies). */
@@ -46,14 +46,14 @@ sealed class Route(val path: String) {
     data object Person : Route("person/{personId}") {
         const val ARG_PERSON_ID = "personId"
         fun route(personId: String): String =
-            "person/${java.net.URLEncoder.encode(personId, Charsets.UTF_8)}"
+            "person/${java.net.URLEncoder.encode(personId, "UTF-8")}"
     }
 
     /** Studio / network detail — profile + catalogue (tap-through from chip). */
     data object Studio : Route("studio/{studioSlug}") {
         const val ARG_STUDIO_SLUG = "studioSlug"
         fun route(slug: String): String =
-            "studio/${java.net.URLEncoder.encode(slug, Charsets.UTF_8)}"
+            "studio/${java.net.URLEncoder.encode(slug, "UTF-8")}"
     }
 
     data object Player : Route("player/{itemId}?resume={resumePosSec}") {

@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalComposeUiApi::class, ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 
 package com.alex.hubplay.ui.detail
 
@@ -17,8 +17,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -51,7 +49,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.Collections
-import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -82,6 +80,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -89,6 +88,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -98,9 +98,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
+import com.alex.hubplay.data.CollectionDetail
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.IdentifyCandidate
 import com.alex.hubplay.data.LocalTrailerHost
@@ -109,11 +111,13 @@ import com.alex.hubplay.data.Person
 import com.alex.hubplay.ui.catalog.PortraitCatalogCard
 import com.alex.hubplay.ui.components.BackPill
 import com.alex.hubplay.ui.components.HeroCtaButton
+import com.alex.hubplay.ui.components.HeroIconButton
 import com.alex.hubplay.ui.components.trailerBackdropAlphaSpec
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.BgBase
 import com.alex.hubplay.ui.theme.BgElevated
 import com.alex.hubplay.ui.theme.Border
+import kotlinx.coroutines.delay
 
 /**
  * Movie detail surface — same cinematic Netflix-style hero pattern as
@@ -190,6 +194,10 @@ fun DetailScreen(
                         state     = state,
                         onSearch  = viewModel::searchCandidates,
                         onPick    = viewModel::applyIdentify,
+                        onRefresh = {
+                            viewModel.closeIdentify()
+                            viewModel.refreshMetadata()
+                        },
                         onDismiss = viewModel::closeIdentify,
                     )
                 }
@@ -262,7 +270,7 @@ private fun DetailContent(
         }
 
         val people   = peopleOf(item)
-        val hasRails = people.isNotEmpty() || ui.related.isNotEmpty()
+        val hasRails = people.isNotEmpty() || ui.related.isNotEmpty() || ui.collection != null
 
         DetailBackdrop(item = item, trailerResumeSec = trailerResumeSec)
 
@@ -288,7 +296,14 @@ private fun DetailContent(
                     )
                 }
                 if (railsReady && hasRails) {
-                    RailsSection(people = people, related = ui.related, nav = nav, playFocus = playFocus)
+                    RailsSection(
+                        people     = people,
+                        collection = ui.collection,
+                        related    = ui.related,
+                        currentId  = item.id,
+                        nav        = nav,
+                        playFocus  = playFocus,
+                    )
                 }
             }
         }
@@ -322,10 +337,12 @@ private val DetailBringIntoViewSpec = object : BringIntoViewSpec {
  */
 @Composable
 private fun RailsSection(
-    people:    List<Person>,
-    related:   List<Content>,
-    nav:       DetailNav,
-    playFocus: FocusRequester,
+    people:     List<Person>,
+    collection: CollectionDetail?,
+    related:    List<Content>,
+    currentId:  String,
+    nav:        DetailNav,
+    playFocus:  FocusRequester,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
@@ -348,20 +365,47 @@ private fun RailsSection(
                     false
                 }
             }
+            var first = true
+            fun railModifier(): Modifier {
+                if (!first) return Modifier
+                first = false
+                return upToPlay
+            }
             if (people.isNotEmpty()) {
-                CastCrewRail(people = people, onOpenPerson = nav.onOpenPerson, modifier = upToPlay)
+                CastCrewRail(people = people, onOpenPerson = nav.onOpenPerson, modifier = railModifier())
+            }
+            // Saga: sus otras películas + una tarjeta final que abre la
+            // colección entera. La actual se omite (ya estás en ella).
+            if (collection != null) {
+                PosterRail(
+                    title      = stringResource(R.string.detail_section_collection, collectionDisplayName(collection.name)),
+                    items      = collection.items.filter { it.id != currentId },
+                    onOpenItem = nav.onOpenItem,
+                    modifier   = railModifier(),
+                    trailing   = { OpenCollectionCard(onClick = { nav.onOpenCollection(collection.id) }) },
+                )
             }
             if (related.isNotEmpty()) {
-                RelatedRail(
+                PosterRail(
+                    title      = stringResource(R.string.detail_section_related),
                     items      = related,
                     onOpenItem = nav.onOpenItem,
-                    modifier   = if (people.isEmpty()) upToPlay else Modifier,
+                    modifier   = railModifier(),
                 )
             }
             Spacer(Modifier.height(32.dp))
         }
     }
 }
+
+/**
+ * TMDb llama a las sagas "X - Colección" / "X Collection"; en el título del
+ * rail ya decimos "Forma parte de la colección", así que se quita el sufijo.
+ */
+private fun collectionDisplayName(name: String): String =
+    name.replace(COLLECTION_SUFFIX, "").trim().ifEmpty { name }
+
+private val COLLECTION_SUFFIX = Regex("""\s*[-–:]?\s*(colecci[oó]n|collection)\s*$""", RegexOption.IGNORE_CASE)
 
 /** Cast + crew of the variants that carry it; empty for everything else. */
 private fun peopleOf(item: Content): List<Person> = when (item) {
@@ -460,9 +504,6 @@ private fun HeroFull(
     nav:             DetailNav,
     playFocus:       FocusRequester,
 ) {
-    // Drives the Plex-style full-info dialog raised from "Información".
-    var showInfo by remember { mutableStateOf(false) }
-
     Box(modifier = Modifier.fillMaxSize()) {
         // ── Back + brand row, top-left ─────────────────────────────────────
         Row(
@@ -481,36 +522,34 @@ private fun HeroFull(
             )
         }
 
-        if (showInfo) {
-            InfoDialog(item = item, onDismiss = { showInfo = false })
-        }
-
-        // ── Two-column layout: poster + Play left, info + actions right ────
+        // ── Two-column layout: poster + Play + iconos | info ───────────────
         Row(
             modifier              = Modifier
                 .align(Alignment.CenterStart)
                 .fillMaxWidth(0.8f)
-                .padding(start = 48.dp, end = 24.dp),
+                // top: reserva la fila de volver + marca; con póster, Play e
+                // iconos la columna izquierda ya no cabe centrada sin pisarla.
+                .padding(start = 48.dp, end = 24.dp, top = HERO_HEADER_HEIGHT),
             verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(32.dp),
         ) {
-            PosterAndPlayColumn(item = item, onPlay = actions.onPlay, playFocus = playFocus)
-            InfoColumn(
+            PosterAndPlayColumn(
                 item            = item,
-                canEditMetadata = canEditMetadata,
                 actions         = actions,
-                nav             = nav,
-                onShowInfo      = { showInfo = true },
+                canEditMetadata = canEditMetadata,
+                playFocus       = playFocus,
             )
+            InfoColumn(item = item, nav = nav)
         }
     }
 }
 
 @Composable
 private fun PosterAndPlayColumn(
-    item:      Content,
-    onPlay:    (String, Long) -> Unit,
-    playFocus: FocusRequester,
+    item:            Content,
+    actions:         DetailActions,
+    canEditMetadata: Boolean,
+    playFocus:       FocusRequester,
 ) {
     val resumePosSec = (item as? Content.Resumable)?.resumePosSec ?: 0L
     val playLabel = if (resumePosSec > 0) {
@@ -527,7 +566,7 @@ private fun PosterAndPlayColumn(
         if (item.posterUrl != null) {
             Box(
                 modifier = Modifier
-                    .width(190.dp)
+                    .width(POSTER_WIDTH)
                     .aspectRatio(2f / 3f)
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
@@ -541,28 +580,23 @@ private fun PosterAndPlayColumn(
             }
         }
         // Play takes the full poster width — clean, unambiguous, and
-        // the label never gets truncated on smaller viewports. The
-        // 3-dots overflow lives in the top-right of the hero so it
-        // doesn't fight Play for space.
+        // the label never gets truncated on smaller viewports. Debajo,
+        // las acciones secundarias como iconos redondos (Netflix/Plex TV):
+        // sin texto salvo una línea pequeña con el nombre del enfocado.
         HeroCtaButton(
             label          = playLabel,
             icon           = Icons.Default.PlayArrow,
             primary        = true,
             focusRequester = playFocus,
-            onClick        = { onPlay(item.id, resumePosSec) },
-            modifier       = Modifier.width(190.dp),
+            onClick        = { actions.onPlay(item.id, resumePosSec) },
+            modifier       = Modifier.width(POSTER_WIDTH),
         )
+        QuickActions(item = item, actions = actions, canEditMetadata = canEditMetadata)
     }
 }
 
 @Composable
-private fun InfoColumn(
-    item:            Content,
-    canEditMetadata: Boolean,
-    actions:         DetailActions,
-    nav:             DetailNav,
-    onShowInfo:      () -> Unit,
-) {
+private fun InfoColumn(item: Content, nav: DetailNav) {
     Column(
         modifier            = Modifier.fillMaxHeight(),
         verticalArrangement = Arrangement.Center,
@@ -608,39 +642,59 @@ private fun InfoColumn(
 
         item.overview?.takeIf { it.isNotBlank() }?.let { ov ->
             Spacer(Modifier.height(14.dp))
-            Text(
-                text     = ov,
-                style    = MaterialTheme.typography.bodyMedium,
-                color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = OVERVIEW_MAX_LINES,
-                overflow = TextOverflow.Ellipsis,
-            )
+            ExpandableOverview(text = ov)
         }
 
-        MetaChips(item = item, onOpenCollection = nav.onOpenCollection, onOpenStudio = nav.onOpenStudio)
+        MetaChips(item = item, onOpenStudio = nav.onOpenStudio)
+    }
+}
 
-        Spacer(Modifier.height(18.dp))
-        ActionRow(
-            item            = item,
-            canEditMetadata = canEditMetadata,
-            actions         = actions,
-            onShowInfo      = onShowInfo,
+/**
+ * Sinopsis recortada a [OVERVIEW_MAX_LINES] con un "Ver más" enfocable
+ * que la despliega ahí mismo (sustituye al diálogo de Información). El
+ * enlace solo aparece si el texto realmente se recorta.
+ */
+@Composable
+private fun ExpandableOverview(text: String) {
+    var expanded  by remember(text) { mutableStateOf(false) }
+    var truncated by remember(text) { mutableStateOf(false) }
+    var focused   by remember { mutableStateOf(false) }
+    Text(
+        text             = text,
+        style            = MaterialTheme.typography.bodyMedium,
+        color            = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines         = if (expanded) OVERVIEW_MAX_LINES_EXPANDED else OVERVIEW_MAX_LINES,
+        overflow         = TextOverflow.Ellipsis,
+        onTextLayout     = { if (!expanded) truncated = it.hasVisualOverflow },
+    )
+    if (truncated || expanded) {
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text       = stringResource(if (expanded) R.string.detail_overview_less else R.string.detail_overview_more),
+            style      = MaterialTheme.typography.bodyMedium,
+            color      = if (focused) Accent else MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.SemiBold,
+            modifier   = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .onFocusChanged { focused = it.isFocused }
+                .then(if (focused) Modifier.border(2.dp, Accent, RoundedCornerShape(6.dp)) else Modifier)
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 8.dp, vertical = 4.dp),
         )
     }
 }
 
 /**
- * Acciones secundarias bajo la sinopsis, como la fila de Plex/Jellyfin:
- * Mi lista, Visto, Información y — solo con permiso de metadatos y en
- * películas/series — Actualizar metadatos e Identificar. `FlowRow` para
- * que con las cinco píldoras pase a dos líneas en vez de recortarse.
+ * Fila de iconos bajo Reproducir: favorito, visto y — solo con permiso de
+ * metadatos en películas/series — el lápiz que abre Identificar (que
+ * también ofrece "Actualizar metadatos"). Sin etiquetas fijas: una línea
+ * pequeña bajo los iconos dice qué hace el que tiene el foco.
  */
 @Composable
-private fun ActionRow(
+private fun QuickActions(
     item:            Content,
-    canEditMetadata: Boolean,
     actions:         DetailActions,
-    onShowInfo:      () -> Unit,
+    canEditMetadata: Boolean,
 ) {
     val isFavorite = (item as? Content.Movie)?.isFavorite
         ?: (item as? Content.Series)?.isFavorite
@@ -652,45 +706,58 @@ private fun ActionRow(
         ?: (item as? Content.Episode)?.watched
     val canIdentify = item is Content.Movie || item is Content.Series
 
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement   = Arrangement.spacedBy(10.dp),
-    ) {
-        HeroCtaButton(
-            label   = stringResource(if (isFavorite) R.string.detail_action_in_my_list else R.string.detail_action_my_list),
-            icon    = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-            primary = false,
-            onClick = actions.onToggleFavorite,
-        )
-        if (watched != null) {
-            HeroCtaButton(
-                label   = stringResource(if (watched) R.string.detail_action_watched else R.string.detail_action_mark_watched_short),
-                icon    = if (watched) Icons.Default.Check else Icons.Outlined.VisibilityOff,
-                primary = false,
-                onClick = actions.onToggleWatched,
+    var focusedLabel by remember { mutableStateOf<Int?>(null) }
+    val favoriteLabel = if (isFavorite) R.string.detail_action_favorite_remove else R.string.detail_action_favorite_add
+    val watchedLabel  = if (watched == true) R.string.detail_action_mark_unwatched else R.string.detail_action_mark_watched
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            QuickActionIcon(
+                icon    = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                label   = favoriteLabel,
+                onClick = actions.onToggleFavorite,
+                onFocus = { focusedLabel = if (it) favoriteLabel else null },
             )
+            if (watched != null) {
+                QuickActionIcon(
+                    icon    = if (watched) Icons.Default.Check else Icons.Outlined.VisibilityOff,
+                    label   = watchedLabel,
+                    onClick = actions.onToggleWatched,
+                    onFocus = { focusedLabel = if (it) watchedLabel else null },
+                )
+            }
+            if (canEditMetadata && canIdentify) {
+                QuickActionIcon(
+                    icon    = Icons.Outlined.Edit,
+                    label   = R.string.detail_action_metadata,
+                    onClick = actions.onIdentify,
+                    onFocus = { focusedLabel = if (it) R.string.detail_action_metadata else null },
+                )
+            }
         }
-        HeroCtaButton(
-            label   = stringResource(R.string.detail_action_info),
-            icon    = Icons.Outlined.Info,
-            primary = false,
-            onClick = onShowInfo,
+        Text(
+            text     = focusedLabel?.let { stringResource(it) }.orEmpty(),
+            style    = MaterialTheme.typography.bodySmall,
+            color    = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier.width(POSTER_WIDTH).height(QUICK_ACTION_CAPTION_HEIGHT),
         )
-        if (canEditMetadata && canIdentify) {
-            HeroCtaButton(
-                label   = stringResource(R.string.detail_action_refresh_metadata),
-                icon    = Icons.Default.Refresh,
-                primary = false,
-                onClick = actions.onRefreshMetadata,
-            )
-            HeroCtaButton(
-                label   = stringResource(R.string.detail_action_identify),
-                icon    = Icons.Default.Search,
-                primary = false,
-                onClick = actions.onIdentify,
-            )
-        }
     }
+}
+
+@Composable
+private fun QuickActionIcon(
+    icon:    ImageVector,
+    label:   Int,
+    onClick: () -> Unit,
+    onFocus: (Boolean) -> Unit,
+) {
+    HeroIconButton(
+        icon               = icon,
+        contentDescription = stringResource(label),
+        onClick            = onClick,
+        modifier           = Modifier.onFocusChanged { onFocus(it.isFocused) },
+    )
 }
 
 /**
@@ -700,18 +767,9 @@ private fun ActionRow(
  */
 @Composable
 private fun ColumnScope.MetaChips(
-    item:             Content,
-    onOpenCollection: (String) -> Unit,
-    onOpenStudio:     (String) -> Unit,
+    item:         Content,
+    onOpenStudio: (String) -> Unit,
 ) {
-    val movie = item as? Content.Movie
-    val collectionId = movie?.collectionId
-    val collectionName = movie?.collectionName
-    if (collectionId != null && !collectionName.isNullOrBlank()) {
-        Spacer(Modifier.height(14.dp))
-        PartOfChip(name = collectionName, onClick = { onOpenCollection(collectionId) })
-    }
-
     val studioName = (item as? Content.Movie)?.studioName ?: (item as? Content.Series)?.studioName
     val studioSlug = (item as? Content.Movie)?.studioSlug ?: (item as? Content.Series)?.studioSlug
     if (!studioSlug.isNullOrBlank() && !studioName.isNullOrBlank()) {
@@ -772,41 +830,6 @@ private fun MetaRow(item: Content) {
     }
 }
 
-/**
- * Pill that says "Parte de [Saga]" and jumps to the collection detail
- * screen when tapped. Kept compact and inline with the meta column —
- * it's a secondary navigation, not a primary action, so it shouldn't
- * compete with Play.
- */
-@Composable
-private fun PartOfChip(name: String, onClick: () -> Unit) {
-    Surface(
-        color    = MaterialTheme.colorScheme.surface,
-        shape    = RoundedCornerShape(999.dp),
-        tonalElevation = 2.dp,
-        modifier = Modifier.clickable(onClick = onClick),
-    ) {
-        Row(
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier              = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-        ) {
-            Icon(
-                imageVector        = Icons.Outlined.Collections,
-                contentDescription = null,
-                tint               = Accent,
-                modifier           = Modifier.size(16.dp),
-            )
-            Text(
-                text       = stringResource(R.string.collections_part_of, name),
-                style      = MaterialTheme.typography.labelLarge,
-                color      = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Medium,
-            )
-        }
-    }
-}
-
 /** "Estudio: X" pill — jumps to the studio's catalogue. Sibling of [PartOfChip]. */
 @Composable
 private fun StudioChip(name: String, onClick: () -> Unit) {
@@ -840,30 +863,51 @@ private fun StudioChip(name: String, onClick: () -> Unit) {
 /** Focus "pop" of a cast avatar — matches the MediaCard feel on TV. */
 private const val CAST_FOCUS_SCALE = 1.08f
 
-/** Scroll offset (px) past which the hero trailer is force-hidden. */
 /** Franja de fundido backdrop → fondo sólido al bajar a los rails. */
 private val RAILS_FADE_HEIGHT = 140.dp
 
-/** Líneas de sinopsis en el hero; el resto va al diálogo de Información. */
+/** Líneas de sinopsis en el hero; "Ver más" la despliega hasta [OVERVIEW_MAX_LINES_EXPANDED]. */
 private const val OVERVIEW_MAX_LINES = 4
+private const val OVERVIEW_MAX_LINES_EXPANDED = 12
+
+/** Alto reservado arriba del hero para la píldora de volver y la marca. */
+private val HERO_HEADER_HEIGHT = 72.dp
+
+/** Ancho de la tarjeta "Ver colección" (igual que un póster del catálogo). */
+private val OPEN_COLLECTION_CARD_WIDTH = 120.dp
+
+/** Ancho del póster y de la columna de Reproducir + iconos. */
+private val POSTER_WIDTH = 190.dp
+
+/** Línea reservada bajo los iconos para el nombre de la acción enfocada. */
+private val QUICK_ACTION_CAPTION_HEIGHT = 18.dp
 
 /** Alto máximo de la lista de candidatos del diálogo Identificar. */
 private val IDENTIFY_LIST_MAX_HEIGHT = 330.dp
 
+/** Ancho del diálogo Identificar (el Dialog no usa el ancho por defecto de la plataforma). */
+private val IDENTIFY_DIALOG_WIDTH = 760.dp
+
 private const val YEAR_DIGITS = 4
+
+/** Reintento del cierre del teclado del TV al abrir Identificar. */
+private const val KEYBOARD_HIDE_RETRY_MS = 150L
 
 /** Al traer un rail a la vista, su borde superior queda a este alto del viewport. */
 private const val RAIL_PIVOT_FRACTION = 0.3f
 
 /**
- * "Más como esto" — TMDb recommendations the user owns, as a poster rail.
- * Reuses the catalogue card so a tap opens the real Detail / Series.
+ * Rail de pósters con título ("Forma parte de la colección X", "Más como
+ * esto"). Reutiliza la card del catálogo, así que abrir una lleva al
+ * Detalle real. [trailing] permite cerrar el rail con una tarjeta extra.
  */
 @Composable
-private fun RelatedRail(
+private fun PosterRail(
+    title:      String,
     items:      List<Content>,
     onOpenItem: (String, MediaKind) -> Unit,
     modifier:   Modifier = Modifier,
+    trailing:   (@Composable () -> Unit)? = null,
 ) {
     Column(
         modifier            = modifier
@@ -872,16 +916,52 @@ private fun RelatedRail(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
-            text       = stringResource(R.string.detail_section_related),
+            text       = title,
             style      = MaterialTheme.typography.titleMedium,
             color      = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.SemiBold,
         )
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(items, key = { it.id }) { related ->
-                PortraitCatalogCard(related, onOpenItem)
+            items(items, key = { it.id }) { entry ->
+                PortraitCatalogCard(entry, onOpenItem)
+            }
+            if (trailing != null) {
+                item(key = "trailing") { trailing() }
             }
         }
+    }
+}
+
+/** Última tarjeta del rail de saga: abre la pantalla de la colección. */
+@Composable
+private fun OpenCollectionCard(onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Column(
+        modifier            = Modifier
+            .width(OPEN_COLLECTION_CARD_WIDTH)
+            .aspectRatio(2f / 3f)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (focused) 0.9f else 0.5f))
+            .then(if (focused) Modifier.border(2.dp, Accent, RoundedCornerShape(10.dp)) else Modifier)
+            .onFocusChanged { focused = it.isFocused }
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            imageVector        = Icons.Outlined.Collections,
+            contentDescription = null,
+            tint               = MaterialTheme.colorScheme.onBackground,
+            modifier           = Modifier.size(36.dp),
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text      = stringResource(R.string.detail_collection_open),
+            style     = MaterialTheme.typography.titleSmall,
+            color     = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -1011,19 +1091,35 @@ private fun IdentifyDialog(
     state:     IdentifyState,
     onSearch:  (String, Int?) -> Unit,
     onPick:    (String) -> Unit,
+    onRefresh: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val firstResultFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(state.candidates) {
-        if (state.candidates.isNotEmpty()) runCatching { firstResultFocus.requestFocus() }
+        if (state.candidates.isEmpty()) return@LaunchedEffect
+        runCatching { firstResultFocus.requestFocus() }
+        // El foco inicial del Dialog cae un instante en el campo de texto y
+        // el TV abre su teclado; al mover el foco a la lista no se cierra
+        // solo. Cerrar con reintento, como hace Login (el IME a veces
+        // ignora la primera petición mientras aún se está mostrando).
+        keyboard?.hide()
+        delay(KEYBOARD_HIDE_RETRY_MS)
+        keyboard?.hide()
+        delay(KEYBOARD_HIDE_RETRY_MS * 2)
+        keyboard?.hide()
     }
-    Dialog(onDismissRequest = onDismiss) {
+    // usePlatformDefaultWidth = false: el ancho por defecto del Dialog en
+    // TV (~440 dp) dejaba el campo de título en 120 dp.
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties       = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
         Surface(
             shape    = RoundedCornerShape(16.dp),
             color    = BgElevated,
             modifier = Modifier
-                .widthIn(max = 760.dp)
-                .fillMaxWidth()
+                .width(IDENTIFY_DIALOG_WIDTH)
                 .border(1.dp, Border, RoundedCornerShape(16.dp)),
         ) {
             Column(
@@ -1056,12 +1152,21 @@ private fun IdentifyDialog(
                         )
                     }
                 }
-                HeroCtaButton(
-                    label   = stringResource(R.string.identify_close),
-                    icon    = Icons.Default.Close,
-                    primary = false,
-                    onClick = onDismiss,
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HeroCtaButton(
+                        label   = stringResource(R.string.detail_action_refresh_metadata),
+                        icon    = Icons.Default.Refresh,
+                        primary = false,
+                        enabled = !state.applying,
+                        onClick = onRefresh,
+                    )
+                    HeroCtaButton(
+                        label   = stringResource(R.string.identify_close),
+                        icon    = Icons.Default.Close,
+                        primary = false,
+                        onClick = onDismiss,
+                    )
+                }
             }
         }
     }
@@ -1072,6 +1177,10 @@ private fun IdentifySearchRow(state: IdentifyState, onSearch: (String, Int?) -> 
     var query    by remember(state.query) { mutableStateOf(state.query) }
     var yearText by remember(state.year) { mutableStateOf(state.year?.toString().orEmpty()) }
     val search = { onSearch(query, yearText.toIntOrNull()) }
+    // Mientras se busca, los campos no son enfocables: el foco inicial del
+    // Dialog caía en Título y el TV abría el teclado antes de que la lista
+    // existiera para llevárselo. Al llegar resultados, el foco va al primero.
+    val fieldsEnabled = !state.loading && !state.applying
     Row(
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1081,6 +1190,7 @@ private fun IdentifySearchRow(state: IdentifyState, onSearch: (String, Int?) -> 
             onValueChange   = { query = it },
             label           = { Text(stringResource(R.string.identify_query_label)) },
             singleLine      = true,
+            enabled         = fieldsEnabled,
             modifier        = Modifier.weight(1f),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { search() }),
@@ -1090,6 +1200,7 @@ private fun IdentifySearchRow(state: IdentifyState, onSearch: (String, Int?) -> 
             onValueChange   = { yearText = it.filter(Char::isDigit).take(YEAR_DIGITS) },
             label           = { Text(stringResource(R.string.identify_year_label)) },
             singleLine      = true,
+            enabled         = fieldsEnabled,
             modifier        = Modifier.width(120.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { search() }),
@@ -1176,62 +1287,6 @@ private fun CandidateRow(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-            }
-        }
-    }
-}
-
-/**
- * Plex-style "full info" sheet. The hero only shows a 6-line overview to
- * keep the cinematic layout breathing; this dialog gives the complete
- * synopsis plus the full meta block (rating, year, runtime, every genre)
- * for the user who actually wants to read it. Scrollable so a long
- * synopsis never gets clipped on a 720p panel.
- */
-@Composable
-private fun InfoDialog(item: Content, onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape    = RoundedCornerShape(16.dp),
-            color    = BgElevated,
-            modifier = Modifier
-                .widthIn(max = 720.dp)
-                .fillMaxWidth()
-                .border(1.dp, Border, RoundedCornerShape(16.dp)),
-        ) {
-            Column(
-                modifier            = Modifier
-                    .heightIn(max = 480.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(28.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Text(
-                    text       = item.title,
-                    style      = MaterialTheme.typography.headlineSmall,
-                    color      = MaterialTheme.colorScheme.onBackground,
-                    fontWeight = FontWeight.Bold,
-                )
-                item.subtitle?.takeIf { it.isNotBlank() }?.let { sub ->
-                    Text(
-                        text  = sub,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                MetaRow(item)
-                item.overview?.takeIf { it.isNotBlank() }?.let { ov ->
-                    Text(
-                        text  = ov,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) {
-                        Text(stringResource(R.string.action_close))
-                    }
-                }
             }
         }
     }
