@@ -1,5 +1,6 @@
 package com.alex.hubplay.ui.series
 
+import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -25,8 +26,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,7 +35,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,12 +46,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -65,11 +61,19 @@ import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
 import com.alex.hubplay.data.Content
-import com.alex.hubplay.data.LocalTrailerHost
+import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.components.BackPill
-import com.alex.hubplay.ui.components.HeroCtaButton
-import com.alex.hubplay.ui.components.HeroIconButton
-import com.alex.hubplay.ui.components.trailerBackdropAlphaSpec
+import com.alex.hubplay.ui.components.HeroActions
+import com.alex.hubplay.ui.components.HeroCta
+import com.alex.hubplay.ui.components.HeroCtas
+import com.alex.hubplay.ui.components.HeroDetailConfig
+import com.alex.hubplay.ui.components.HeroDetailScaffold
+import com.alex.hubplay.ui.components.HeroHeader
+import com.alex.hubplay.ui.components.HeroNav
+import com.alex.hubplay.ui.components.HeroRails
+import com.alex.hubplay.ui.components.HeroToggles
+import com.alex.hubplay.ui.components.IdentifyDialog
+import com.alex.hubplay.ui.metadata.MetadataToolsState
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.AccentSoft
 import com.alex.hubplay.ui.theme.BgBase
@@ -93,32 +97,69 @@ fun SeriesScreen(
     viewModel:     SeriesViewModel,
     onPlayEpisode: (itemId: String, resumePosSec: Long) -> Unit,
     onBack:        () -> Unit,
+    onOpenPerson:  (personId: String) -> Unit = {},
+    onOpenItem:    (itemId: String, kind: MediaKind) -> Unit = { _, _ -> },
+    onOpenStudio:  (studioSlug: String) -> Unit = {},
+    onOpenCollection: (collectionId: String) -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsState()
+    val tools by viewModel.toolsState.collectAsState()
     var showEpisodes by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    LaunchedEffect(tools.notice) {
+        val notice = tools.notice ?: return@LaunchedEffect
+        Toast.makeText(context, notice, Toast.LENGTH_SHORT).show()
+        viewModel.tools.clearNotice()
+    }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
+        val data = ui.data
         when {
-            ui.isLoading && ui.data == null -> CenteredSpinner()
-            ui.error != null                -> ErrorBanner(
+            ui.isLoading && data == null -> CenteredSpinner()
+            ui.error != null             -> ErrorBanner(
                 message = ui.error!!,
                 onRetry = viewModel::load,
             )
-            ui.data != null                 -> {
+            data != null                 -> {
                 if (showEpisodes) {
                     SeriesEpisodesPanel(
-                        data           = ui.data!!,
+                        data           = data,
                         onSelectSeason = viewModel::selectSeason,
                         onPlayEpisode  = onPlayEpisode,
                         onBack         = { showEpisodes = false },
                     )
                 } else {
-                    SeriesHeroFull(
-                        data             = ui.data!!,
-                        onPlay           = { id, resume -> onPlayEpisode(id, resume) },
-                        onShowEpisodes   = { showEpisodes = true },
-                        onBack           = onBack,
-                        onToggleFavorite = viewModel::toggleFavorite,
+                    SeriesHero(
+                        data      = data,
+                        related   = ui.related,
+                        tools     = tools,
+                        viewModel = viewModel,
+                        callbacks = SeriesHeroCallbacks(
+                            onPlayEpisode  = onPlayEpisode,
+                            onShowEpisodes = { showEpisodes = true },
+                            onBack         = onBack,
+                        ),
+                        nav       = remember(onOpenCollection, onOpenStudio, onOpenPerson, onOpenItem) {
+                            HeroNav(
+                                onOpenCollection = onOpenCollection,
+                                onOpenStudio     = onOpenStudio,
+                                onOpenPerson     = onOpenPerson,
+                                onOpenItem       = onOpenItem,
+                            )
+                        },
+                    )
+                }
+                tools.identify?.let { state ->
+                    IdentifyDialog(
+                        state     = state,
+                        onSearch  = viewModel.tools::searchCandidates,
+                        onPick    = viewModel.tools::applyIdentify,
+                        onRefresh = {
+                            viewModel.tools.closeIdentify()
+                            viewModel.tools.refreshMetadata()
+                        },
+                        onDismiss = viewModel.tools::closeIdentify,
                     )
                 }
             }
@@ -126,177 +167,70 @@ fun SeriesScreen(
     }
 }
 
-// ─── Hero (cinematic landing) ───────────────────────────────────────────────
+/**
+ * Hero de serie sobre la ficha compartida ([HeroDetailScaffold]): mismo
+ * póster + Reproducir + Episodios + iconos, sinopsis con "Ver más",
+ * reparto y "más como esto", vista previa con el tráiler. Sin toggle de
+ * visto (marcar una serie entera no tiene endpoint dedicado).
+ */
+/** Callbacks del hero de serie que no son navegación a otra ficha. */
+@androidx.compose.runtime.Immutable
+private class SeriesHeroCallbacks(
+    val onPlayEpisode:  (String, Long) -> Unit,
+    val onShowEpisodes: () -> Unit,
+    val onBack:         () -> Unit,
+)
 
 @Composable
-private fun SeriesHeroFull(
-    data:             SeriesData,
-    onPlay:           (itemId: String, resumePosSec: Long) -> Unit,
-    onShowEpisodes:   () -> Unit,
-    onBack:           () -> Unit,
-    onToggleFavorite: () -> Unit,
+private fun SeriesHero(
+    data:      SeriesData,
+    related:   List<Content>,
+    tools:     MetadataToolsState,
+    viewModel: SeriesViewModel,
+    callbacks: SeriesHeroCallbacks,
+    nav:       HeroNav,
 ) {
-    val series = data.series
-
-    // Backdrop ↔ trailer crossfade. El trailer vive en TrailerHostOverlay
-    // (root) — esta pantalla solo activa un claim para su serie. Si venimos
-    // de Home con la misma key, el WebView no se recarga y el vídeo sigue.
-    val trailerHost = LocalTrailerHost.current
-    val trailerRevealed = trailerHost.revealed.value &&
-        trailerHost.current.value?.itemId == series?.id
-
-    DisposableEffect(series?.id, series?.trailerKey, series?.trailerSite) {
-        val token = if (series?.trailerKey != null && series.trailerSite != null) {
-            trailerHost.activate(series.id, series.trailerKey, series.trailerSite)
-        } else null
-        onDispose { token?.let { trailerHost.deactivate(it) } }
-    }
-
-    val backdropAlpha by animateFloatAsState(
-        targetValue   = if (trailerRevealed) 0f else 1f,
-        animationSpec = trailerBackdropAlphaSpec(trailerRevealed, trailerHost.fadeOutOnHide.value),
-        label         = "backdrop-fade",
+    val series = data.series ?: return
+    val resume = data.resume
+    val config = HeroDetailConfig(
+        item    = series,
+        header  = HeroHeader(
+            sectionLabel = stringResource(R.string.series_section_label),
+            meta         = {
+                MetaRow(
+                    item         = series,
+                    seasonsCount = data.seasons.size,
+                    episodeCount = data.episodesBySeasonId.values.sumOf { it.size },
+                )
+            },
+        ),
+        ctas    = HeroCtas(
+            play = HeroCta(
+                label   = resume.playLabel ?: stringResource(R.string.series_play_empty),
+                icon    = Icons.Default.PlayArrow,
+                enabled = resume.episodeId != null,
+                onClick = { resume.episodeId?.let { callbacks.onPlayEpisode(it, resume.resumeSec) } },
+            ),
+            secondary = HeroCta(
+                label   = stringResource(R.string.series_episodes_action),
+                icon    = Icons.Default.VideoLibrary,
+                onClick = callbacks.onShowEpisodes,
+            ),
+        ),
+        toggles = HeroToggles(showWatched = false, canEditMetadata = tools.canEditMetadata),
+        actions = HeroActions(
+            onBack           = callbacks.onBack,
+            onToggleFavorite = viewModel::toggleFavorite,
+            onToggleWatched  = null,
+            onIdentify       = { viewModel.tools.openIdentify(series.title, series.year) },
+        ),
+        nav     = nav,
     )
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        // ── Fullscreen backdrop (fades out when the trailer reveals) ──────
-        AsyncImage(
-            model              = series?.backdropUrl ?: series?.posterUrl,
-            contentDescription = series?.title,
-            contentScale       = ContentScale.Crop,
-            modifier           = Modifier
-                .fillMaxSize()
-                .alpha(backdropAlpha),
-        )
-        // El trailer ya no se monta aquí — vive en TrailerHostOverlay (root).
-        // El DisposableEffect de arriba registra el claim; el backdropAlpha
-        // reacciona a `trailerHost.revealed.value` para este item.
-        // Left side fade — left half is fully BgBase tone for legibility,
-        // right half preserves the backdrop for atmosphere. Netflix /
-        // Plex pattern: text always on the dark side, hero art on the
-        // light side.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        0f   to BgBase.copy(alpha = 0.92f),
-                        0.55f to BgBase.copy(alpha = 0.40f),
-                        1f   to Color.Transparent,
-                    ),
-                ),
-        )
-        // Subtle vertical fade at bottom so the controls aren't fighting
-        // the backdrop edge.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        1f to BgBase.copy(alpha = 0.55f),
-                    ),
-                ),
-        )
-
-        // ── Back button + brand wordmark, top-left ────────────────────────
-        // Back is the first element so D-pad up lands on it; the brand is
-        // decorative right next to it (same idea as Netflix logo + back).
-        Row(
-            modifier             = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 24.dp, top = 20.dp)
-                .zIndex(10f),
-            verticalAlignment    = Alignment.CenterVertically,
-        ) {
-            BackPill(onBack = onBack)
-            Spacer(Modifier.width(16.dp))
-            Image(
-                painter            = painterResource(R.drawable.brand_wordmark),
-                contentDescription = stringResource(R.string.brand_hubplay),
-                modifier           = Modifier.height(28.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text          = stringResource(R.string.series_section_label),
-                style         = MaterialTheme.typography.labelMedium,
-                color         = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
-                fontWeight    = FontWeight.SemiBold,
-                letterSpacing = 2.sp,
-            )
-        }
-
-        // ── Favourite heart, top-right ─────────────────────────────────────
-        // Series-level toggle — same item id the backend stores user_data
-        // against, so a heart here matches what the user sees from the web.
-        HeroIconButton(
-            icon               = if (series?.isFavorite == true) Icons.Default.Favorite
-                                 else                            Icons.Default.FavoriteBorder,
-            contentDescription = if (series?.isFavorite == true) stringResource(R.string.cd_remove_favorite)
-                                 else                            stringResource(R.string.cd_add_favorite),
-            onClick            = onToggleFavorite,
-            modifier           = Modifier
-                .align(Alignment.TopEnd)
-                .padding(end = 24.dp, top = 20.dp)
-                .zIndex(10f),
-        )
-
-        // ── Info column on the left half ──────────────────────────────────
-        Column(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .fillMaxWidth(0.55f)
-                .padding(start = 48.dp, end = 24.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            // Logo art if the server has one for this series; otherwise
-            // fall back to a big bold title.
-            if (!series?.logoUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model              = series.logoUrl,
-                    contentDescription = series.title,
-                    contentScale       = ContentScale.Fit,
-                    modifier           = Modifier
-                        .heightIn(min = 80.dp, max = 140.dp)
-                        .widthIn(max = 460.dp),
-                )
-            } else {
-                Text(
-                    text       = series?.title.orEmpty(),
-                    style      = MaterialTheme.typography.displayLarge,
-                    color      = MaterialTheme.colorScheme.onBackground,
-                    fontWeight = FontWeight.Bold,
-                    maxLines   = 2,
-                    overflow   = TextOverflow.Ellipsis,
-                )
-            }
-
-            Spacer(Modifier.height(14.dp))
-            MetaRow(
-                item         = series,
-                seasonsCount = data.seasons.size,
-                episodeCount = data.episodesBySeasonId.values.sumOf { it.size },
-            )
-
-            series?.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                Spacer(Modifier.height(18.dp))
-                Text(
-                    text     = overview,
-                    style    = MaterialTheme.typography.bodyLarge,
-                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            Spacer(Modifier.height(28.dp))
-            HeroCtaColumn(
-                resume         = data.resume,
-                onPlay         = onPlay,
-                onShowEpisodes = onShowEpisodes,
-            )
-        }
-    }
+    HeroDetailScaffold(
+        config     = config,
+        rails      = HeroRails(people = series.people, related = related),
+        dialogOpen = tools.identify != null,
+    )
 }
 
 /**
@@ -370,41 +304,6 @@ private fun MetaRow(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun HeroCtaColumn(
-    resume:         SeriesResumeTarget,
-    onPlay:         (String, Long) -> Unit,
-    onShowEpisodes: () -> Unit,
-) {
-    val playFocus = remember { FocusRequester() }
-    LaunchedEffect(resume.episodeId) {
-        if (resume.episodeId != null) {
-            runCatching { playFocus.requestFocus() }
-        }
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        HeroCtaButton(
-            label    = resume.playLabel ?: stringResource(R.string.series_play_empty),
-            icon     = Icons.Default.PlayArrow,
-            primary  = true,
-            enabled  = resume.episodeId != null,
-            focusRequester = playFocus,
-            onClick  = {
-                resume.episodeId?.let { onPlay(it, resume.resumeSec) }
-            },
-            modifier = Modifier.fillMaxWidth(0.62f),
-        )
-        HeroCtaButton(
-            label    = stringResource(R.string.series_episodes_action),
-            icon     = Icons.Default.VideoLibrary,
-            primary  = false,
-            onClick  = onShowEpisodes,
-            modifier = Modifier.fillMaxWidth(0.62f),
-        )
     }
 }
 

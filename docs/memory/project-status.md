@@ -154,8 +154,22 @@ adb -s $D shell pm clear com.alex.hubplay.debug        # volver al login
   en el contenedor no llega a las cards del LazyRow). Rails diferidos 2
   frames y `Spacer` final solo con rails, para que el foco inicial no
   encuentre recorrido que desplazar.
-- **Pendiente en Series**: `SeriesScreen` sigue con corazón arriba a la
-  derecha y sin iconos ni Identificar; aplicar el mismo patrón que Detalle.
+- **Ficha compartida** (`ui/components/HeroDetail.kt`, 2026-09-12 tarde):
+  `HeroDetailScaffold(config, rails)` es la ficha de Detalle Y de Series
+  (`HeroDetailConfig`: item, header con etiqueta "SERIES" y meta, CTAs
+  Reproducir + secundaria "Episodios", toggles, actions, nav). Series usa
+  póster compacto (170 dp) para que quepan los tres botones y los iconos;
+  etiquetas cortas del resolver ("Seguir S1·E3", "Ver S1·E1"). Series no
+  tiene toggle de visto. `ItemMetadataController` (ui/metadata) da permiso,
+  refresh e identify a `SeriesViewModel`; `DetailViewModel` aún tiene su
+  copia (migrar cuando se toque). Los rails van con `contentPadding` dentro
+  del LazyRow (la card enfocada crece un 8 % y se recortaba) y sobre un
+  velo al 72 % para que el tráiler/backdrop siga viéndose al bajar.
+- **Vista previa** (idea del usuario): tráiler sonando + página arriba +
+  sin diálogo + 5 s sin mando → todo se desvanece y la carátula viaja a la
+  esquina inferior izquierda (una capa con escala/desplazamiento leída en
+  `graphicsLayer`, sin recomponer). La primera tecla solo despierta (se
+  consume, salvo Back). `rememberPreviewMode` en HeroDetail.kt.
 - **Estudio**: `GET /studios/lucasfilm-ltd` devuelve 0 títulos aunque hay
   Star Wars en la biblioteca (backend), y el logo negro de Lucasfilm no se
   ve sobre fondo oscuro (poner fondo claro o tinte al logo del estudio).

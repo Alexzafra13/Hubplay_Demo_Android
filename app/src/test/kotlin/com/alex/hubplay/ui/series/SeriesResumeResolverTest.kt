@@ -34,7 +34,7 @@ class SeriesResumeResolverTest {
         assertThat(target.mode).isEqualTo(SeriesResumeMode.RESUME)
         assertThat(target.episodeId).isEqualTo("ep-s03e04")
         assertThat(target.resumeSec).isEqualTo(600L)
-        assertThat(target.playLabel).contains("S3 · E4")
+        assertThat(target.playLabel).contains("S3·E4")
     }
 
     @Test
@@ -71,8 +71,8 @@ class SeriesResumeResolverTest {
         assertThat(target.mode).isEqualTo(SeriesResumeMode.NEXT_UP)
         assertThat(target.episodeId).isEqualTo("ep-s03e05")
         assertThat(target.resumeSec).isEqualTo(0L)
-        assertThat(target.playLabel).contains("Reproducir")
-        assertThat(target.playLabel).contains("S3 · E5")
+        assertThat(target.playLabel).contains("Ver")
+        assertThat(target.playLabel).contains("S3·E5")
     }
 
     @Test

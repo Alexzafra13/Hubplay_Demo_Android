@@ -448,11 +448,15 @@ fun HubplayNavGraph(
                 factory = SeriesViewModel.factory(container.homeRepository, seriesId),
             )
             SeriesScreen(
-                viewModel     = viewModel,
-                onPlayEpisode = { id, resume ->
+                viewModel        = viewModel,
+                onPlayEpisode    = { id, resume ->
                     navController.navigate(Route.Player.route(id, resume))
                 },
-                onBack        = { navController.popBackStack() },
+                onBack           = { navController.popBackStack() },
+                onOpenPerson     = openPerson,
+                onOpenItem       = openItem,
+                onOpenStudio     = openStudio,
+                onOpenCollection = openCollection,
             )
         }
 

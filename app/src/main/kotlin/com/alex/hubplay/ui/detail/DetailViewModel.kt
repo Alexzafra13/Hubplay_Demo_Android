@@ -6,8 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.CollectionDetail
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRepository
-import com.alex.hubplay.data.IdentifyCandidate
 import com.alex.hubplay.ui.friendlyError
+import com.alex.hubplay.ui.metadata.IdentifyState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -269,14 +269,4 @@ data class DetailUiState(
     val identify:        IdentifyState? = null,
     /** Aviso transitorio (Toast). La pantalla lo limpia al mostrarlo. */
     val notice:          String?        = null,
-)
-
-@androidx.compose.runtime.Immutable
-data class IdentifyState(
-    val query:      String                  = "",
-    val year:       Int?                    = null,
-    val candidates: List<IdentifyCandidate> = emptyList(),
-    val loading:    Boolean                 = false,
-    val applying:   Boolean                 = false,
-    val error:      String?                 = null,
 )

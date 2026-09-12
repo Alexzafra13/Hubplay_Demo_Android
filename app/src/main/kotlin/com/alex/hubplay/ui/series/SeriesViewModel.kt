@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRepository
+import com.alex.hubplay.ui.metadata.ItemMetadataController
+import com.alex.hubplay.ui.metadata.MetadataToolsState
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +33,34 @@ class SeriesViewModel(
     private val _ui = MutableStateFlow(SeriesUiState(isLoading = true))
     val ui: StateFlow<SeriesUiState> = _ui.asStateFlow()
 
-    init { load() }
+    /** Permiso + Actualizar metadatos + Identificar (mismo flujo que Detalle). */
+    val tools = ItemMetadataController(viewModelScope, repository, seriesId) { reloadSeries() }
+    val toolsState: StateFlow<MetadataToolsState> get() = tools.state
+
+    init {
+        load()
+        tools.loadPermissions()
+    }
+
+    /** Recarga silenciosa de la serie tras cambiar sus metadatos. */
+    private fun reloadSeries() {
+        viewModelScope.launch {
+            runCatching { repository.fetchItemDetail(seriesId) }
+                .onSuccess { item ->
+                    val series = item as? Content.Series ?: return@onSuccess
+                    val data = _ui.value.data ?: return@onSuccess
+                    _ui.value = _ui.value.copy(data = data.copy(series = series))
+                }
+        }
+    }
+
+    /** "Más como esto" — best-effort; sin recomendaciones el rail no aparece. */
+    private fun loadRelated() {
+        viewModelScope.launch {
+            runCatching { repository.fetchRecommendations(seriesId) }
+                .onSuccess { related -> _ui.value = _ui.value.copy(related = related) }
+        }
+    }
 
     fun load() {
         _ui.value = _ui.value.copy(isLoading = true, error = null)
@@ -87,7 +116,8 @@ class SeriesViewModel(
                     resume             = resume,
                 )
             }
-            _ui.value = SeriesUiState(isLoading = false, data = data)
+            _ui.value = _ui.value.copy(isLoading = false, data = data, error = null)
+            loadRelated()
 
             // Phase 3 — background pre-fetch of every OTHER season's
             // episodes so the SeasonRow can show "Y episodios" next to
@@ -201,9 +231,11 @@ class SeriesViewModel(
 
 @androidx.compose.runtime.Immutable
 data class SeriesUiState(
-    val isLoading: Boolean      = false,
-    val data:      SeriesData?  = null,
-    val error:     String?      = null,
+    val isLoading: Boolean       = false,
+    val data:      SeriesData?   = null,
+    val error:     String?       = null,
+    /** Recomendaciones ("Más como esto"), rail bajo el reparto. */
+    val related:   List<Content> = emptyList(),
 )
 
 @androidx.compose.runtime.Immutable

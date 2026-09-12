@@ -58,7 +58,7 @@ object SeriesResumeResolver {
                 mode      = SeriesResumeMode.RESUME,
                 episodeId = inProgress.id,
                 resumeSec = inProgress.resumePosSec,
-                playLabel = "Reanudar ${epLabel(inProgress)}",
+                playLabel = "Seguir ${epLabel(inProgress)}".trim(),
             )
         }
 
@@ -69,7 +69,7 @@ object SeriesResumeResolver {
                 mode      = SeriesResumeMode.NEXT_UP,
                 episodeId = queued.id,
                 resumeSec = 0L,
-                playLabel = "Reproducir ${epLabel(queued)}",
+                playLabel = "Ver ${epLabel(queued)}".trim(),
             )
         }
 
@@ -82,7 +82,7 @@ object SeriesResumeResolver {
                 mode      = SeriesResumeMode.START,
                 episodeId = firstEp.id,
                 resumeSec = 0L,
-                playLabel = "Reproducir ${epLabel(firstEp)}",
+                playLabel = "Ver ${epLabel(firstEp)}".trim(),
             )
         }
 
@@ -92,9 +92,9 @@ object SeriesResumeResolver {
     private fun epLabel(item: Content.Episode): String {
         val s = item.seasonNumber; val e = item.episodeNumber
         return when {
-            s != null && e != null -> "S$s · E$e"
+            s != null && e != null -> "S$s·E$e"
             e != null               -> "E$e"
-            else                    -> "el siguiente"
+            else                    -> ""
         }
     }
 }
