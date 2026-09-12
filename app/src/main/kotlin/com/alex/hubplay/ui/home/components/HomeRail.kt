@@ -100,6 +100,13 @@ private fun <T : Content> BaseRail(
     railFocusRequester:   FocusRequester? = null,
     card: @Composable (item: T, onItemFocused: (T) -> Unit, modifier: Modifier) -> Unit,
 ) {
+    // El LazyRow usa `id` como key y Compose ABORTA el proceso si se
+    // repite ("Key … was already used"). El backend puede devolver el
+    // mismo canal dos veces en "En directo ahora" (mismo canal en dos
+    // listas M3U): crasheaba al volver a entrar en el rail. Dedupe aquí,
+    // que es donde vive la key.
+    @Suppress("NAME_SHADOWING")
+    val items = remember(items) { items.distinctBy { it.id } }
     if (items.isEmpty()) return
 
     val restoreRequester = remember { FocusRequester() }

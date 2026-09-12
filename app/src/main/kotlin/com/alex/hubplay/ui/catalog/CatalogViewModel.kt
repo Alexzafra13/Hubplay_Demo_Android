@@ -73,7 +73,10 @@ class CatalogViewModel(
                 hasMore = newItems.size >= PAGE_SIZE
                 _ui.update {
                     it.copy(
-                        items = it.items + newItems,
+                        // La rejilla usa `id` como key: un duplicado entre
+                        // páginas (ítem que cambia de posición mientras
+                        // paginamos) abortaría el proceso.
+                        items = (it.items + newItems).distinctBy { item -> item.id },
                         isLoadingMore = false,
                         canLoadMore = hasMore,
                     )
