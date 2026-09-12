@@ -134,12 +134,13 @@ el backdrop al 70 % superior, aligerar `MediaCard`, probar Baseline Profile.
 
 ## 5. Pendiente (orden sugerido)
 
-1. **Crash al navegar el rail "En directo ahora" de Inicio** (reportado
-   por el usuario el 2026-09-11, no reproducido aún: la TV se apagó).
-   Primer paso: `run-as … cat files/crash-log.txt` y logcat mientras se
-   navega. Sospechosos: `ChannelPreviewPlayer` en el hero (ExoPlayer que
-   se crea/libera al entrar y salir del rail) y la petición de tráiler
-   para un `LiveChannel` (`fetchItemDetail` de un id de canal).
+1. ~~Crash al navegar el rail "En directo ahora"~~ **resuelto 2026-09-12**:
+   era `IllegalArgumentException: Key … was already used` del LazyRow al
+   volver a entrar en el rail (`scrollToItem`): el backend repetía un
+   canal con dos programas de EPG solapados. Arreglado en los dos lados
+   (backend `sqlLiveNow` elige un programa por canal; `BaseRail` y el
+   catálogo deduplican por id). Lección: **toda lista con `key = { it.id }`
+   debe deduplicar** o Compose aborta el proceso entero.
 2. Hero con canal en directo enfocado: queda vacío hasta que arranca la
    preview; mostrar nombre + programa.
 3. Un host con dos IPs sale dos veces en "Servidores en tu red" (dedupe
