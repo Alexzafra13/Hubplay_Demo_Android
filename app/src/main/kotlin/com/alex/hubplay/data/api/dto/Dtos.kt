@@ -661,3 +661,46 @@ data class StudioDetailDto(
 data class StudioDetailResponse(
     val data: StudioDetailDto? = null,
 )
+
+// ─── Current user (/me) ──────────────────────────────────────────────────────
+
+@JsonClass(generateAdapter = true)
+data class MeResponse(
+    val data: MeDto? = null,
+)
+
+/**
+ * Subconjunto de GET /me que necesita la app: el rol y el flag de permiso
+ * de metadatos (migración 055 del backend). El resto de flags del panel
+ * admin no se mapean hasta que la TV tenga pantallas que los usen.
+ */
+@JsonClass(generateAdapter = true)
+data class MeDto(
+    val id:                                              String? = null,
+    val role:                                            String? = null,
+    @Json(name = "can_edit_metadata") val canEditMetadata: Boolean? = null,
+)
+
+// ─── Identify (rematch contra TMDb) ─────────────────────────────────────────
+
+@JsonClass(generateAdapter = true)
+data class IdentifyCandidatesResponse(
+    val data: List<IdentifyCandidateDto>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class IdentifyCandidateDto(
+    @Json(name = "external_id") val externalId: String? = null,
+    val provider:                               String? = null,
+    val title:                                  String? = null,
+    val year:                                   Int?    = null,
+    val overview:                               String? = null,
+    @Json(name = "poster_url")  val posterUrl:  String? = null,
+    val score:                                  Double? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class IdentifyRequest(
+    val provider:                               String = "tmdb",
+    @Json(name = "external_id") val externalId: String,
+)

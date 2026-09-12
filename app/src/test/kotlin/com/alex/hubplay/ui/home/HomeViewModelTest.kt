@@ -5,6 +5,7 @@ import com.alex.hubplay.data.CollectionSummary
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRepository
+import com.alex.hubplay.data.IdentifyCandidate
 import com.alex.hubplay.data.MeEvent
 import com.alex.hubplay.data.PersonDetail
 import com.alex.hubplay.data.StudioDetail
@@ -236,6 +237,11 @@ class HomeViewModelTest {
         override suspend fun fetchCollectionDetail(id: String): CollectionDetail = throw RuntimeException("unused")
         override suspend fun toggleItemFavorite(itemId: String) = false
         override suspend fun setItemWatched(itemId: String, watched: Boolean) {}
+        override suspend fun fetchCanEditMetadata(): Boolean = false
+        override suspend fun refreshItemMetadata(itemId: String) {}
+        override suspend fun fetchIdentifyCandidates(itemId: String, query: String?, year: Int?) =
+            emptyList<IdentifyCandidate>()
+        override suspend fun identifyItem(itemId: String, externalId: String) {}
         override suspend fun fetchPerson(personId: String): PersonDetail = throw RuntimeException("unused")
         override suspend fun fetchStudio(slug: String): StudioDetail = throw RuntimeException("unused")
         override suspend fun fetchRecommendations(itemId: String) = emptyList<Content>()

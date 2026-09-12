@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRepository
+import com.alex.hubplay.data.IdentifyCandidate
 import com.alex.hubplay.ui.friendlyError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,14 +33,17 @@ class DetailViewModel(
     private val _ui = MutableStateFlow(DetailUiState(isLoading = true))
     val ui: StateFlow<DetailUiState> = _ui.asStateFlow()
 
-    init { load() }
+    init {
+        load()
+        loadPermissions()
+    }
 
     fun load() {
         _ui.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
             runCatching { repository.fetchItemDetail(itemId) }
                 .onSuccess { item ->
-                    _ui.update { DetailUiState(isLoading = false, item = item) }
+                    _ui.update { it.copy(isLoading = false, item = item, error = null) }
                     loadRelated()
                 }
                 .onFailure { err ->
@@ -51,6 +55,86 @@ class DetailViewModel(
                     }
                 }
         }
+    }
+
+    /**
+     * Permiso de metadatos (GET /me, cacheado en el repositorio). Falla en
+     * silencio: sin permiso confirmado, la fila de acciones simplemente no
+     * enseña "Actualizar metadatos" / "Identificar".
+     */
+    private fun loadPermissions() {
+        viewModelScope.launch {
+            runCatching { repository.fetchCanEditMetadata() }
+                .onSuccess { can -> _ui.update { it.copy(canEditMetadata = can) } }
+        }
+    }
+
+    /** Recarga silenciosa del item (sin spinner) tras cambiar sus metadatos. */
+    private fun reloadItem() {
+        viewModelScope.launch {
+            runCatching { repository.fetchItemDetail(itemId) }
+                .onSuccess { item ->
+                    _ui.update { it.copy(item = item) }
+                    loadRelated()
+                }
+        }
+    }
+
+    /** "Actualizar metadatos": re-corre el enrich del scanner sobre el item. */
+    fun refreshMetadata() {
+        viewModelScope.launch {
+            runCatching { repository.refreshItemMetadata(itemId) }
+                .onSuccess {
+                    _ui.update { it.copy(notice = "Metadatos actualizados") }
+                    reloadItem()
+                }
+                .onFailure { err ->
+                    _ui.update { it.copy(notice = friendlyError(err, "No se pudieron actualizar los metadatos")) }
+                }
+        }
+    }
+
+    /** Abre el diálogo de identificar sembrado con el título y año actuales. */
+    fun openIdentify() {
+        val item = _ui.value.item ?: return
+        searchCandidates(query = item.title, year = item.year)
+    }
+
+    fun searchCandidates(query: String, year: Int?) {
+        _ui.update {
+            it.copy(identify = IdentifyState(query = query, year = year, loading = true))
+        }
+        viewModelScope.launch {
+            runCatching { repository.fetchIdentifyCandidates(itemId, query, year) }
+                .onSuccess { list ->
+                    updateIdentify { it.copy(candidates = list, loading = false) }
+                }
+                .onFailure { err ->
+                    updateIdentify { it.copy(loading = false, error = friendlyError(err, "No se pudo buscar en TMDb")) }
+                }
+        }
+    }
+
+    fun applyIdentify(externalId: String) {
+        updateIdentify { it.copy(applying = true, error = null) }
+        viewModelScope.launch {
+            runCatching { repository.identifyItem(itemId, externalId) }
+                .onSuccess {
+                    _ui.update { it.copy(identify = null, notice = "Ficha actualizada") }
+                    reloadItem()
+                }
+                .onFailure { err ->
+                    updateIdentify { it.copy(applying = false, error = friendlyError(err, "No se pudo aplicar")) }
+                }
+        }
+    }
+
+    fun closeIdentify() { _ui.update { it.copy(identify = null) } }
+
+    fun clearNotice() { _ui.update { it.copy(notice = null) } }
+
+    private fun updateIdentify(transform: (IdentifyState) -> IdentifyState) {
+        _ui.update { st -> st.identify?.let { st.copy(identify = transform(it)) } ?: st }
     }
 
     /**
@@ -153,8 +237,24 @@ class DetailViewModel(
 
 @androidx.compose.runtime.Immutable
 data class DetailUiState(
-    val isLoading: Boolean        = false,
-    val item:      Content?       = null,
-    val related:   List<Content>  = emptyList(),
-    val error:     String?        = null,
+    val isLoading:       Boolean        = false,
+    val item:            Content?       = null,
+    val related:         List<Content>  = emptyList(),
+    val error:           String?        = null,
+    /** El usuario puede editar metadatos (admin o `can_edit_metadata`). */
+    val canEditMetadata: Boolean        = false,
+    /** Diálogo "Identificar" abierto, con su búsqueda. `null` = cerrado. */
+    val identify:        IdentifyState? = null,
+    /** Aviso transitorio (Toast). La pantalla lo limpia al mostrarlo. */
+    val notice:          String?        = null,
+)
+
+@androidx.compose.runtime.Immutable
+data class IdentifyState(
+    val query:      String                  = "",
+    val year:       Int?                    = null,
+    val candidates: List<IdentifyCandidate> = emptyList(),
+    val loading:    Boolean                 = false,
+    val applying:   Boolean                 = false,
+    val error:      String?                 = null,
 )

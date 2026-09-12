@@ -36,6 +36,12 @@ interface HomeRepository {
     suspend fun fetchRecommendations(itemId: String): List<Content>
     suspend fun toggleItemFavorite(itemId: String): Boolean
     suspend fun setItemWatched(itemId: String, watched: Boolean)
+
+    /** `true` si el usuario del token puede editar metadatos (admin o permiso explícito). */
+    suspend fun fetchCanEditMetadata(): Boolean
+    suspend fun refreshItemMetadata(itemId: String)
+    suspend fun fetchIdentifyCandidates(itemId: String, query: String?, year: Int?): List<IdentifyCandidate>
+    suspend fun identifyItem(itemId: String, externalId: String)
     suspend fun searchItems(query: String, limit: Int = 60, offset: Int = 0): List<Content>
 }
 
@@ -354,6 +360,18 @@ class HomeRepositoryImpl(
     override suspend fun setItemWatched(itemId: String, watched: Boolean) {
         if (watched) api.markPlayed(itemId) else api.markUnplayed(itemId)
     }
+
+    // Herramientas de metadatos (permiso, refresh, identify) en su propia
+    // clase: son otro dominio y HomeRepositoryImpl ya roza el límite de
+    // tamaño de detekt.
+    private val metadataTools = MetadataTools(api, tokenStore)
+
+    override suspend fun fetchCanEditMetadata(): Boolean = metadataTools.fetchCanEditMetadata()
+    override suspend fun refreshItemMetadata(itemId: String) = metadataTools.refreshItemMetadata(itemId)
+    override suspend fun fetchIdentifyCandidates(itemId: String, query: String?, year: Int?): List<IdentifyCandidate> =
+        metadataTools.fetchIdentifyCandidates(itemId, query, year)
+    override suspend fun identifyItem(itemId: String, externalId: String) =
+        metadataTools.identifyItem(itemId, externalId)
 
     /**
      * GET /people/{id} — profile + filmography. Image + poster paths come
@@ -834,6 +852,17 @@ const val IMG_W_SCREENSAVER = 1920
  */
 fun withImageWidth(url: String, width: Int): String =
     url.replace(Regex("([?&])w=[0-9]+")) { "${it.groupValues[1]}w=$width" }
+
+/** Un resultado de TMDb al re-identificar un item (Detalle → Identificar). */
+@androidx.compose.runtime.Immutable
+data class IdentifyCandidate(
+    val externalId: String,
+    val title:      String,
+    val year:       Int?,
+    val overview:   String,
+    val posterUrl:  String?,
+    val score:      Double,
+)
 
 // ─── Domain types ────────────────────────────────────────────────────────────
 //

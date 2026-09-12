@@ -5,6 +5,7 @@ import com.alex.hubplay.data.CollectionSummary
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRepository
+import com.alex.hubplay.data.IdentifyCandidate
 import com.alex.hubplay.data.PersonDetail
 import com.alex.hubplay.data.StudioDetail
 import com.google.common.truth.Truth.assertThat
@@ -161,6 +162,11 @@ class DetailViewModelTest {
             watchedCalls += itemId to watched
             if (failWatched) error("boom")
         }
+        override suspend fun fetchCanEditMetadata(): Boolean = false
+        override suspend fun refreshItemMetadata(itemId: String) {}
+        override suspend fun fetchIdentifyCandidates(itemId: String, query: String?, year: Int?) =
+            emptyList<IdentifyCandidate>()
+        override suspend fun identifyItem(itemId: String, externalId: String) {}
 
         override suspend fun fetchPerson(personId: String): PersonDetail = error("unused")
         override suspend fun fetchStudio(slug: String): StudioDetail = error("unused")

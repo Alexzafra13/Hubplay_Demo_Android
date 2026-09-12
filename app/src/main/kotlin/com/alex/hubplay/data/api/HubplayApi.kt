@@ -13,22 +13,25 @@ import com.alex.hubplay.data.api.dto.FavoriteIdsResponse
 import com.alex.hubplay.data.api.dto.FavoriteToggleResponse
 import com.alex.hubplay.data.api.dto.GroupsResponse
 import com.alex.hubplay.data.api.dto.HomeLayoutResponse
+import com.alex.hubplay.data.api.dto.IdentifyCandidatesResponse
+import com.alex.hubplay.data.api.dto.IdentifyRequest
 import com.alex.hubplay.data.api.dto.ItemDetailResponse
 import com.alex.hubplay.data.api.dto.ItemFavoriteToggleResponse
 import com.alex.hubplay.data.api.dto.ItemRecommendationsResponse
 import com.alex.hubplay.data.api.dto.LatestResponse
 import com.alex.hubplay.data.api.dto.LibrariesResponse
 import com.alex.hubplay.data.api.dto.LiveNowResponse
+import com.alex.hubplay.data.api.dto.MeResponse
 import com.alex.hubplay.data.api.dto.NextUpResponse
 import com.alex.hubplay.data.api.dto.PersonDetailResponse
 import com.alex.hubplay.data.api.dto.ProfilesResponse
 import com.alex.hubplay.data.api.dto.RecommendedResponse
 import com.alex.hubplay.data.api.dto.SearchResponse
-import com.alex.hubplay.data.api.dto.SwitchProfileRequest
-import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.StatusResponse
 import com.alex.hubplay.data.api.dto.StreamInfoResponse
 import com.alex.hubplay.data.api.dto.StudioDetailResponse
+import com.alex.hubplay.data.api.dto.SwitchProfileRequest
+import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
 import com.alex.hubplay.data.api.dto.UpdateProgressRequest
 import com.alex.hubplay.data.api.dto.WatchBeaconResponse
@@ -354,4 +357,34 @@ interface HubplayApi {
      */
     @GET("collections/{id}")
     suspend fun getCollection(@Path("id") id: String): CollectionDetailResponse
+
+    // ─── Current user + metadata tools (Detail) ────────────────────────────
+
+    /** GET /api/v1/me — rol y flags de permiso del usuario del token. */
+    @GET("me")
+    suspend fun getMe(): MeResponse
+
+    /**
+     * POST /api/v1/items/{id}/refresh-metadata — re-corre el enrich del
+     * scanner sobre un solo item (respeta el lock). Requiere
+     * `can_edit_metadata`; para el resto devuelve 403.
+     */
+    @POST("items/{id}/refresh-metadata")
+    suspend fun refreshItemMetadata(@Path("id") itemId: String)
+
+    /**
+     * GET /api/v1/items/{id}/identify/candidates — candidatos TMDb para
+     * re-identificar. Sin `query`/`year` el servidor usa el título y año
+     * actuales del item. Solo películas y series.
+     */
+    @GET("items/{id}/identify/candidates")
+    suspend fun identifyCandidates(
+        @Path("id") itemId: String,
+        @Query("query") query: String?,
+        @Query("year") year: Int?,
+    ): IdentifyCandidatesResponse
+
+    /** POST /api/v1/items/{id}/identify — aplica el match elegido. */
+    @POST("items/{id}/identify")
+    suspend fun identifyItem(@Path("id") itemId: String, @Body body: IdentifyRequest)
 }

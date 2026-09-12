@@ -232,4 +232,19 @@
     <string name="trusted_screen_empty">Todavía no has aceptado ningún certificado manualmente.</string>
     <string name="trusted_added_at">Añadido el %1$s</string>
     <string name="trusted_action_forget">Olvidar</string>
+    <!-- Detalle: fila de acciones + Identificar -->
+    <string name="detail_action_my_list">Mi lista</string>
+    <string name="detail_action_in_my_list">En mi lista</string>
+    <string name="detail_action_watched">Visto</string>
+    <string name="detail_action_mark_watched_short">Marcar visto</string>
+    <string name="detail_action_refresh_metadata">Actualizar metadatos</string>
+    <string name="detail_action_identify">Identificar</string>
+    <string name="identify_title">Identificar en TMDb</string>
+    <string name="identify_hint">Elige el resultado correcto: se sobrescribirán título, sinopsis, reparto e imágenes.</string>
+    <string name="identify_query_label">Título</string>
+    <string name="identify_year_label">Año</string>
+    <string name="identify_search">Buscar</string>
+    <string name="identify_empty">Sin resultados</string>
+    <string name="identify_applying">Aplicando…</string>
+    <string name="identify_close">Cerrar</string>
 </resources>

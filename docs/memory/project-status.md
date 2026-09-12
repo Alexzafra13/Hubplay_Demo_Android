@@ -124,12 +124,29 @@ adb -s $D shell pm clear com.alex.hubplay.debug        # volver al login
   frames con tirón al abrir Detalle desde Inicio → ~21 % sin él. Lo que
   queda es el primer frame de Detalle (250-450 ms de measure/layout/draw
   en el box) — siguiente candidato de rendimiento.
-- **Detalle (película)**: los rails de reparto/relacionados se componen 2
-  frames después del hero (`railsReady`), el hero rutea el foco entrante a
-  Reproducir (`focusProperties { enter }`) y el `Spacer` final solo existe
-  si hay rails. Sin esto la ficha entraba desplazada: el foco inicial de
-  Reproducir hacía `scrollTo(max)` con cualquier recorrido disponible
-  (64 px del Spacer, o ~460 px con el rail de reparto ya compuesto).
+- **Detalle (película)** (`ui/detail/DetailScreen.kt`, rediseño 2026-09-12):
+  backdrop + tráiler FIJOS detrás (`DetailBackdrop`) y encima una columna
+  con scroll: hero de un viewport + `RailsSection` (franja de fundido
+  transparente→BgBase y rails sobre fondo sólido). El tráiler NO se para
+  al bajar: queda tapado por los rails. Acciones bajo la sinopsis
+  (`ActionRow`, patrón Plex/Jellyfin): Mi lista, Visto, Información y, con
+  `can_edit_metadata` de `GET /me` (cache en `MetadataTools`), Actualizar
+  metadatos e Identificar (diálogo con candidatos TMDb, foco en el primer
+  resultado para que no se abra el teclado). Ya no hay corazón ni kebab
+  arriba a la derecha.
+- **Foco/scroll en Detalle — LECCIÓN**: el `LocalBringIntoViewSpec` por
+  defecto de Compose en Android TV **pivota cada foco al 30 % del
+  viewport**; en una columna con scroll eso desplaza la página al mover el
+  foco entre botones del hero ("se me baja"). `DetailBringIntoViewSpec`:
+  0 si el hijo ya se ve, pivote 0.3 si está fuera. Además: el foco que
+  entra en el hero va a Reproducir (`enter`), con foco en el hero la página
+  vuelve a 0 (`heroHasFocus` → `animateScrollTo(0)`), y ↑ desde el primer
+  rail se intercepta con `onPreviewKeyEvent` (un `focusProperties { up }`
+  en el contenedor no llega a las cards del LazyRow). Rails diferidos 2
+  frames y `Spacer` final solo con rails, para que el foco inicial no
+  encuentre recorrido que desplazar.
+- **Pendiente en Series**: `SeriesScreen` sigue con corazón arriba a la
+  derecha y sin fila de acciones ni Identificar; aplicar el mismo patrón.
 - **Imágenes**: el backend redimensionaba `?w=N` con vecino más cercano
   (`internal/imaging/thumbnail.go`) → backdrops "pixelados". Ahora
   Catmull-Rom (`x/image/draw`), JPEG 85, miniaturas versionadas
