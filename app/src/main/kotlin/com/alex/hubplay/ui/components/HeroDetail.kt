@@ -3,10 +3,12 @@
 package com.alex.hubplay.ui.components
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -94,6 +96,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -268,12 +271,27 @@ fun HeroDetailScaffold(
 
         var heroHasFocus by remember { mutableStateOf(false) }
         LaunchedEffect(heroHasFocus) {
-            if (heroHasFocus && scrollState.value != 0) scrollState.animateScrollTo(0)
+            if (heroHasFocus && scrollState.value != 0) {
+                scrollState.animateScrollTo(0, tween(HERO_SCROLL_MS))
+            }
         }
 
         HeroBackdrop(item = item, trailerResumeSec = trailerResumeSec)
 
-        CompositionLocalProvider(LocalBringIntoViewSpec provides HeroBringIntoViewSpec) {
+        val railsTopPx = with(LocalDensity.current) { heroHeight.roundToPx() }
+        val bringIntoViewSpec = remember(scrollState, railsTopPx) {
+            HeroBringIntoViewSpec(scrollState, railsTopPx)
+        }
+        // Al entrar el foco en los rails, la sección se pega arriba de un
+        // salto corto: reparto arriba y el siguiente rail debajo, sin restos
+        // del hero. Simétrico a `heroHasFocus` → 0.
+        var railsHaveFocus by remember { mutableStateOf(false) }
+        LaunchedEffect(railsHaveFocus) {
+            if (railsHaveFocus && scrollState.value < railsTopPx) {
+                scrollState.animateScrollTo(railsTopPx, tween(HERO_SCROLL_MS))
+            }
+        }
+        CompositionLocalProvider(LocalBringIntoViewSpec provides bringIntoViewSpec) {
             Column(modifier = Modifier.verticalScroll(scrollState)) {
                 Box(
                     modifier = Modifier
@@ -288,13 +306,15 @@ fun HeroDetailScaffold(
                     )
                 }
                 if (railsReady && !rails.isEmpty) {
-                    RailsSection(
-                        rails     = rails,
-                        currentId = item.id,
-                        nav       = config.nav,
-                        playFocus = playFocus,
-                        minHeight = heroHeight,
-                    )
+                    Box(modifier = Modifier.onFocusChanged { railsHaveFocus = it.hasFocus }) {
+                        RailsSection(
+                            rails     = rails,
+                            currentId = item.id,
+                            nav       = config.nav,
+                            playFocus = playFocus,
+                            minHeight = heroHeight,
+                        )
+                    }
                 }
             }
         }
@@ -302,19 +322,41 @@ fun HeroDetailScaffold(
 }
 
 /**
- * Bring-into-view de la ficha: 0 si el hijo ya está entero en pantalla
- * (moverse por el hero no desplaza), y si está fuera lo trae al 30 % del
- * alto (mismo pivote que usa Android TV por defecto).
+ * Bring-into-view de la ficha:
+ *  - 0 si el hijo ya está entero en pantalla (moverse por el hero o por
+ *    un rail visible no desplaza);
+ *  - si el hijo está en la zona de rails y cabe en el primer viewport de
+ *    rails, la sección se pega ARRIBA (`railsTop`): al bajar del hero se
+ *    ve el reparto arriba y el siguiente rail debajo, sin restos del hero
+ *    (el pivote del 30 % dejaba media ficha asomando);
+ *  - si no cabe (rails más profundos), pivote al 30 % del alto como en TV.
+ * El desplazamiento es un tween corto: el usuario quiere llegar "ya".
  */
-private val HeroBringIntoViewSpec = object : BringIntoViewSpec {
+private class HeroBringIntoViewSpec(
+    private val scroll:   ScrollState,
+    private val railsTop: Int,
+) : BringIntoViewSpec {
+    override val scrollAnimationSpec: AnimationSpec<Float> = tween(HERO_SCROLL_MS)
+
     override fun calculateScrollDistance(
         offset: Float,
         size: Float,
         containerSize: Float,
     ): Float {
+        val topInContent = scroll.value + offset
+        // Hijo del hero: el scroll a 0 lo hace la ficha (`heroHasFocus`).
+        if (topInContent < railsTop) return 0f
         val visible = offset >= 0f && offset + size <= containerSize
         if (visible || size >= containerSize) return 0f
-        return offset - containerSize * RAIL_PIVOT_FRACTION
+        val fitsPinned = topInContent + size - railsTop <= containerSize
+        return when {
+            // Viniendo del hero, el scroll hasta los rails lo hace la ficha
+            // (`railsHaveFocus`): la animación de bring-into-view avanzaba
+            // a 14 px por frame y se cortaba a medias (medido en la Mi TV).
+            fitsPinned && scroll.value < railsTop -> 0f
+            fitsPinned                            -> railsTop - scroll.value.toFloat()
+            else                                  -> offset - containerSize * RAIL_PIVOT_FRACTION
+        }
     }
 }
 
@@ -1454,8 +1496,11 @@ private const val SECTION_LABEL_ALPHA = 0.85f
 private const val OPEN_CARD_ALPHA_FOCUSED = 0.9f
 private const val OPEN_CARD_ALPHA = 0.5f
 
-/** Franja de fundido backdrop → velo al bajar a los rails. */
-private val RAILS_FADE_HEIGHT = 140.dp
+/** Franja de fundido backdrop → velo al bajar a los rails (con la sección pegada arriba, que quepan dos rails). */
+private val RAILS_FADE_HEIGHT = 96.dp
+
+/** Desplazamiento hero ↔ rails: corto, casi un salto. */
+private const val HERO_SCROLL_MS = 220
 
 /** Líneas de sinopsis en el hero; "Ver más" la despliega hasta [OVERVIEW_MAX_LINES_EXPANDED]. */
 private const val OVERVIEW_MAX_LINES = 4

@@ -56,6 +56,10 @@ class HubplayApp : Application(), SingletonImageLoader.Factory {
         // main-thread startup path (predictable) rather than later on
         // whichever thread first reads .container.
         container.tokenStore
+        // Los clientes OkHttp (TLS con TrustManager propio → lee todas las
+        // CA del sistema, ~0,5 s en la Mi TV) se construyen aquí en un hilo
+        // aparte mientras el intro de marca corre; ver AppContainer.prewarm.
+        Thread({ container.prewarm() }, "hubplay-prewarm").start()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {

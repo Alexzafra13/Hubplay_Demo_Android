@@ -31,3 +31,12 @@ Trampas: `input tap` pone la TV en modo táctil y rompe las pruebas de
 foco (usar solo D-pad); si el usuario está usando el mando a la vez las
 pantallas cambian solas; en Git Bash usar `MSYS_NO_PATHCONV=1` con rutas
 `/sdcard/...`.
+
+Arranque en frío: tras `adb install` el dex no está optimizado y los
+primeros arranques tardan 3-4 s más. Antes de medir:
+
+```bash
+adb -s $D shell cmd package compile -m speed -f com.alex.hubplay.debug
+adb -s $D shell am start -W -n com.alex.hubplay.debug/com.alex.hubplay.MainActivity | grep TotalTime
+adb -s $D shell am start -W --start-profiler /data/local/tmp/s.trace --sampling 500 -n com.alex.hubplay.debug/com.alex.hubplay.MainActivity
+```

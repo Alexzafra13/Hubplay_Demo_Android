@@ -166,9 +166,16 @@ adb -s $D shell pm clear com.alex.hubplay.debug        # volver al login
   `contentPadding` dentro del LazyRow (la card enfocada crece un 8 % y se
   recortaba) y sobre un velo al 72 % para que el tráiler/backdrop siga
   viéndose al bajar. **Los rails tienen alto mínimo de un viewport**
-  (`RailsSection(minHeight)`): con un solo rail la página no podía llegar
-  al pivote del 30 % y la mitad del hero (botones, iconos, chip) se quedaba
-  asomando por arriba al bajar al reparto.
+  (`RailsSection(minHeight)`) y **al entrar el foco en ellos la sección se
+  pega arriba** (`railsHaveFocus` → `animateScrollTo(railsTop, tween(220))`,
+  simétrico a `heroHasFocus` → 0): reparto arriba, siguiente rail debajo,
+  cero restos del hero (2026-09-16, pedido por el usuario). El
+  `HeroBringIntoViewSpec` devuelve 0 para hijos del hero y para el salto
+  hero → rails (lo hace la ficha) y solo pivota al 30 % en rails más
+  profundos. Lección: **la animación de bring-into-view de Compose no sirve
+  para un salto largo** (avanzaba a 14 px/frame y se cortaba a mitad,
+  medido con log en la Mi TV); para saltos deterministas, `animateScrollTo`
+  explícito y spec a 0.
 - **Identificar es un overlay, no un `Dialog`** (2026-09-15): abrir una
   ventana `Dialog` con su propia composición costaba 0,5-0,9 s de hilo
   principal en la Mi TV (primer frame de 500 ms) y al cerrarla la ficha se
@@ -259,6 +266,30 @@ alto: decodificación + subida de texturas. Ya quitado: `Crossfade` +
 `HeroInfo`, sombra animada y placeholder bajo imágenes en `MediaCard`,
 capa hardware del WebView. Siguientes candidatos si hace falta: recortar
 el backdrop al 70 % superior, aligerar `MediaCard`, probar Baseline Profile.
+
+## 4b. Arranque en frío (medido 2026-09-16, debug, Mi TV)
+
+- **Lo que más pesa NO es la app**: tras cada `adb install` el sistema aún
+  no ha optimizado el dex y `DexFile.openDexFile` cuesta 3,7 s al crear el
+  ClassLoader (TotalTime 6,3 s). Con `adb shell cmd package compile -m
+  speed -f com.alex.hubplay.debug` el arranque baja a **1,2-1,4 s**. Al
+  medir arranque, compilar primero. En release lo resuelve Play (perfil
+  en la nube) y, mejor aún, un Baseline Profile.
+- Dentro de la app (perfil `am start --start-profiler`): `AppContainer`
+  costaba 2,1 s en el hilo principal → 0,7 s. Quitado: `ChannelOrderStore`
+  usaba `KotlinJsonAdapterFactory` (cargaba kotlin-reflect entero, 1,1 s)
+  → `@JsonClass(generateAdapter = true)` + adaptador perezoso; los
+  `OkHttpClient` con TrustManager propio (OkHttp lee todas las CA del
+  sistema en `sslSocketFactory`, 0,5 s) son `by lazy`, los Retrofit usan
+  `callFactory { mainOkHttp.newCall(it) }` y `AppContainer.prewarm()` los
+  construye en un hilo aparte desde `Application.onCreate`. El WebView del
+  tráiler (Chromium, 0,6 s) ya no se crea en el primer frame: al primer
+  tráiler o a los 5 s (`rememberWebViewWanted`).
+- `moshi-kotlin` sigue como dependencia solo porque el `Serializer`
+  generado por OpenAPI lo importa; el código propio va por codegen.
+- Quedan dos ráfagas de ~0,8-1 s de hilo principal tras el primer frame
+  (composición de Inicio en frío + llegada de datos). Siguiente paso si se
+  quiere seguir: perfilar esas dos ráfagas y Baseline Profile.
 
 ## 5. Pendiente (orden sugerido)
 

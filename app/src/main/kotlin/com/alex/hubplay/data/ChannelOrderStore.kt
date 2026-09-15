@@ -4,9 +4,9 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -40,10 +40,14 @@ class ChannelOrderStore(private val context: Context) {
     private val Context.dataStore by preferencesDataStore(name = DATASTORE_NAME)
     private val blobKey = stringPreferencesKey("channel_prefs_v1")
 
-    private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-    private val adapter = moshi.adapter<Map<String, ChannelPrefs>>(
-        Types.newParameterizedType(Map::class.java, String::class.java, ChannelPrefs::class.java),
-    )
+    // Adaptador generado (KSP) y perezoso. Con KotlinJsonAdapterFactory
+    // esto cargaba kotlin-reflect entero en el hilo principal al construir
+    // AppContainer: 1,1 s del arranque en frío en la Mi TV.
+    private val adapter by lazy {
+        Moshi.Builder().build().adapter<Map<String, ChannelPrefs>>(
+            Types.newParameterizedType(Map::class.java, String::class.java, ChannelPrefs::class.java),
+        )
+    }
 
     val prefsFlow: Flow<Map<String, ChannelPrefs>> =
         context.dataStore.data.map { prefs -> prefs[blobKey]?.let(::parse) ?: emptyMap() }
@@ -104,6 +108,7 @@ class ChannelOrderStore(private val context: Context) {
     }
 }
 
+@JsonClass(generateAdapter = true)
 data class ChannelPrefs(
     val order:  List<String> = emptyList(),
     val hidden: List<String> = emptyList(),

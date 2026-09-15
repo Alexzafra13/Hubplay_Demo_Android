@@ -256,7 +256,7 @@ dependencies {
     implementation(libs.okhttp.sse)            // /me/events SSE stream
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.moshi)
-    implementation(libs.moshi.kotlin)
+    implementation(libs.moshi.kotlin)          // solo lo usa el Serializer generado por OpenAPI; el código propio va por codegen (KSP)
     ksp(libs.moshi.kotlin.codegen)
 
     // ── QR generation (login pairing screen — encodes

@@ -67,26 +67,39 @@ class AppContainer(context: Context) {
     private val pinnedTrustManager: PinnedCertTrustManager =
         PinnedCertTrustManager(certPinStore, certChallengeBus)
     private val pinnedHostnameVerifier = PinnedHostnameVerifier(certPinStore)
-    private val pinnedSslSocketFactory = SSLContext.getInstance("TLS")
-        .apply { init(null, arrayOf<TrustManager>(pinnedTrustManager), null) }
-        .socketFactory
+
+    // ─── Clientes OkHttp: perezosos y precalentados en segundo plano ──────
+    // `sslSocketFactory(factory, trustManager)` con un TrustManager propio
+    // obliga a OkHttp a construir su limpiador de cadenas leyendo TODAS las
+    // CA del sistema (`getAcceptedIssuers`): ~0,5 s en la Mi TV. Antes se
+    // pagaba en el hilo principal dentro de Application.onCreate; ahora los
+    // Retrofit usan un `callFactory` que resuelve el cliente en la primera
+    // llamada y [prewarm] los construye en un hilo aparte nada más arrancar.
+
+    private val pinnedSslSocketFactory by lazy {
+        SSLContext.getInstance("TLS")
+            .apply { init(null, arrayOf<TrustManager>(pinnedTrustManager), null) }
+            .socketFactory
+    }
 
     /**
      * Bare OkHttp + Retrofit for the refresh endpoint. NO AuthInterceptor
      * to avoid recursing back into itself when a refresh returns 401.
      */
-    private val refreshClient: OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(BaseUrlInterceptor(tokenStore))
-        .sslSocketFactory(pinnedSslSocketFactory, pinnedTrustManager)
-        .hostnameVerifier(pinnedHostnameVerifier)
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .also { if (BuildConfig.DEBUG) it.addInterceptor(loggingInterceptor()) }
-        .build()
+    private val refreshClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .addInterceptor(BaseUrlInterceptor(tokenStore))
+            .sslSocketFactory(pinnedSslSocketFactory, pinnedTrustManager)
+            .hostnameVerifier(pinnedHostnameVerifier)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .also { if (BuildConfig.DEBUG) it.addInterceptor(loggingInterceptor()) }
+            .build()
+    }
 
     private val refreshRetrofit: Retrofit = Retrofit.Builder()
         .baseUrl(PLACEHOLDER_BASE_URL)
-        .client(refreshClient)
+        .callFactory { request -> refreshClient.newCall(request) }
         .addConverterFactory(ScalarsConverterFactory.create())
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()
@@ -100,15 +113,17 @@ class AppContainer(context: Context) {
      * SingletonImageLoader can route image fetches through the same
      * authenticated client (otherwise /images/file/{id} returns 401).
      */
-    val mainOkHttp: OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(BaseUrlInterceptor(tokenStore))
-        .addInterceptor(AuthInterceptor(tokenStore, refreshAuthApi))
-        .sslSocketFactory(pinnedSslSocketFactory, pinnedTrustManager)
-        .hostnameVerifier(pinnedHostnameVerifier)
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .also { if (BuildConfig.DEBUG) it.addInterceptor(loggingInterceptor()) }
-        .build()
+    val mainOkHttp: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .addInterceptor(BaseUrlInterceptor(tokenStore))
+            .addInterceptor(AuthInterceptor(tokenStore, refreshAuthApi))
+            .sslSocketFactory(pinnedSslSocketFactory, pinnedTrustManager)
+            .hostnameVerifier(pinnedHostnameVerifier)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .also { if (BuildConfig.DEBUG) it.addInterceptor(loggingInterceptor()) }
+            .build()
+    }
 
     /**
      * Plain client for third-party image hosts — today only TMDb poster
@@ -120,11 +135,13 @@ class AppContainer(context: Context) {
      * the system store — prompting "trust this server?" for a CDN would
      * be nonsensical). Uses the platform default TLS / hostname verifier.
      */
-    val externalOkHttp: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .also { if (BuildConfig.DEBUG) it.addInterceptor(loggingInterceptor()) }
-        .build()
+    val externalOkHttp: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .also { if (BuildConfig.DEBUG) it.addInterceptor(loggingInterceptor()) }
+            .build()
+    }
 
     /**
      * Call factory Coil's image loader uses. Routes by host: the paired
@@ -150,16 +167,29 @@ class AppContainer(context: Context) {
      * read timeout so long-lived connections don't get killed. Shares the
      * connection pool, auth interceptor, and TLS config with [mainOkHttp].
      */
-    val sseOkHttp: OkHttpClient = mainOkHttp.newBuilder()
-        .readTimeout(0, TimeUnit.SECONDS)
-        .build()
+    val sseOkHttp: OkHttpClient by lazy {
+        mainOkHttp.newBuilder()
+            .readTimeout(0, TimeUnit.SECONDS)
+            .build()
+    }
 
     val retrofit: Retrofit = Retrofit.Builder()
         .baseUrl(PLACEHOLDER_BASE_URL)
-        .client(mainOkHttp)
+        .callFactory { request -> mainOkHttp.newCall(request) }
         .addConverterFactory(ScalarsConverterFactory.create())
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()
+
+    /**
+     * Construye los clientes OkHttp (TLS + CA del sistema) fuera del hilo
+     * principal. Lo lanza [com.alex.hubplay.HubplayApp] en un hilo aparte
+     * al arrancar; si una llamada llega antes, `lazy` la hace esperar.
+     */
+    fun prewarm() {
+        mainOkHttp
+        sseOkHttp
+        externalOkHttp
+    }
 
     val deviceCodeRepository: DeviceCodeRepository = DeviceCodeRepository(
         authApi    = retrofit.create(AuthApi::class.java),
@@ -200,7 +230,7 @@ class AppContainer(context: Context) {
      * Server-Sent Events stream over `/me/events` — drives cross-device
      * sync of Continue Watching, played/unplayed and favourites.
      */
-    val meEventsStream: MeEventsStream = MeEventsStream(sseOkHttp, tokenStore, moshi)
+    val meEventsStream: MeEventsStream by lazy { MeEventsStream(sseOkHttp, tokenStore, moshi) }
 
     /**
      * Drives the visibility of the "Colecciones" tab in TopNav — we

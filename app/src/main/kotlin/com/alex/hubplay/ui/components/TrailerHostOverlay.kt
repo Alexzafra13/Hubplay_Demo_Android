@@ -61,6 +61,8 @@ fun TrailerHostOverlay(modifier: Modifier = Modifier) {
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var embeddable by remember(current?.videoKey) { mutableStateOf<Boolean?>(null) }
 
+    val webViewWanted = rememberWebViewWanted(trailerRequested = current != null)
+
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
     val alpha by animateFloatAsState(
@@ -157,6 +159,7 @@ fun TrailerHostOverlay(modifier: Modifier = Modifier) {
     }
 
     Box(modifier = modifier.fillMaxSize().alpha(alpha)) {
+        if (!webViewWanted) return@Box
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -239,6 +242,24 @@ fun TrailerHostOverlay(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * El WebView se crea DESPUÉS del arranque: instanciar Chromium cuesta
+ * ~0,6 s de hilo principal en la Mi TV y estaba en el camino crítico del
+ * primer frame. Se monta al primer tráiler o, si no lo hay, pasado
+ * [WEBVIEW_WARMUP_MS] (con el intro ya terminado), lo que llegue antes.
+ * Una vez a true no vuelve a false: el WebView vive toda la sesión.
+ */
+@Composable
+private fun rememberWebViewWanted(trailerRequested: Boolean): Boolean {
+    var wanted by remember { mutableStateOf(false) }
+    LaunchedEffect(trailerRequested) { if (trailerRequested) wanted = true }
+    LaunchedEffect(Unit) {
+        delay(WEBVIEW_WARMUP_MS)
+        wanted = true
+    }
+    return wanted
+}
+
 private suspend fun isEmbeddable(videoKey: String): Boolean {
     return try {
         val url = URL(
@@ -285,6 +306,9 @@ private const val TAG = "TrailerHostOverlay"
 
 /** Tiempo máximo de carga sin progreso antes de dar el tráiler por fallido. */
 private const val WATCHDOG_MS = 6_000L
+
+/** Sin tráiler pedido, el WebView se crea a este tiempo del arranque (intro y primer Inicio ya pintados). */
+private const val WEBVIEW_WARMUP_MS = 5_000L
 
 /** Fundido de entrada del WebView al revelar el tráiler. */
 private const val REVEAL_FADE_MS = 400
