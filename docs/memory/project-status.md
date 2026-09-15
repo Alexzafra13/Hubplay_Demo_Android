@@ -176,7 +176,15 @@ adb -s $D shell pm clear com.alex.hubplay.debug        # volver al login
   panel, `zIndex 50`), atrapa el foco con `focusProperties { exit = Cancel }`,
   Back lo cierra (`BackHandler`) y al cerrarse el foco vuelve al lápiz
   (`identifyFocus` en `HeroDetailScaffold`). Foco inicial en Buscar, nunca
-  en el campo (el TV abriría el teclado). La búsqueda se siembra con
+  en el campo (el TV abriría el teclado). **Los campos son ligeros**
+  (`IdentifyField`): un Box con borde que solo compone el
+  `OutlinedTextField` real al pulsarlo (el perfil en frío decía que los
+  dos campos de Material eran 590 de los 652 ms de abrir el panel).
+  Medido en la Mi TV en frío: primer frame del panel 20 ms (antes 560 ms
+  con `Dialog`), bloqueo total ~0,4 s (la lista de resultados) frente a
+  ~1,5 s. Verificado: sin teclado al abrir, foco al primer resultado,
+  CENTER en el campo abre el campo real con teclado, Back cierra y el
+  foco vuelve al lápiz. La búsqueda se siembra con
   `identifyQuery(title)`: quita "(2019)" / "[2019]" / "- 2019" del final
   (títulos sin identificar llevan el año de la carpeta y TMDb devolvía 0
   resultados); un número suelto ("Blade Runner 2049") se respeta. Test en
@@ -264,10 +272,11 @@ el backdrop al 70 % superior, aligerar `MediaCard`, probar Baseline Profile.
 2. Hero con canal en directo enfocado: queda vacío hasta que arranca la
    preview; mostrar nombre + programa.
 2b. Primer frame de Detalle: ver "Coste de abrir la ficha" en §3 (medido y
-   parcialmente aliviado el 2026-09-15). **Pendiente verificar en la Mi TV
-   el build del 2026-09-15** (la TV se apagó antes de poder medir el
-   resultado): rails con alto mínimo, overlay Identificar (tiempo, foco al
-   cerrar, teclado) y nueva medida de frames al abrir la ficha.
+   parcialmente aliviado el 2026-09-15). Verificado en la Mi TV: rails con
+   alto mínimo (reparto al 33 % con el hero fuera) y overlay Identificar.
+   En frío la ficha sigue costando ~4 frames de 400 ms (clases + JIT):
+   eso solo lo arregla un Baseline Profile en release. Herramientas de
+   medida en `tools/tvperf/` (README con el flujo).
 2c. Estudio Lucasfilm sigue devolviendo 0 títulos (backend) — visto de
    nuevo el 2026-09-15 desde la ficha de The Mandalorian.
 3. Un host con dos IPs sale dos veces en "Servidores en tu red" (dedupe

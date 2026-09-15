@@ -1251,25 +1251,23 @@ private fun IdentifySearchRow(
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        OutlinedTextField(
-            value           = query,
-            onValueChange   = { query = it },
-            label           = { Text(stringResource(R.string.identify_query_label)) },
-            singleLine      = true,
-            enabled         = fieldsEnabled,
-            modifier        = Modifier.weight(1f),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { search() }),
+        IdentifyField(
+            value         = query,
+            onValueChange = { query = it },
+            label         = stringResource(R.string.identify_query_label),
+            enabled       = fieldsEnabled,
+            keyboardType  = KeyboardType.Text,
+            onSearch      = search,
+            modifier      = Modifier.weight(1f),
         )
-        OutlinedTextField(
-            value           = yearText,
-            onValueChange   = { yearText = it.filter(Char::isDigit).take(YEAR_DIGITS) },
-            label           = { Text(stringResource(R.string.identify_year_label)) },
-            singleLine      = true,
-            enabled         = fieldsEnabled,
-            modifier        = Modifier.width(120.dp),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { search() }),
+        IdentifyField(
+            value         = yearText,
+            onValueChange = { yearText = it.filter(Char::isDigit).take(YEAR_DIGITS) },
+            label         = stringResource(R.string.identify_year_label),
+            enabled       = fieldsEnabled,
+            keyboardType  = KeyboardType.Number,
+            onSearch      = search,
+            modifier      = Modifier.width(120.dp),
         )
         HeroCtaButton(
             label          = stringResource(R.string.identify_search),
@@ -1278,6 +1276,76 @@ private fun IdentifySearchRow(
             focusRequester = searchFocus,
             onClick        = search,
         )
+    }
+}
+
+/**
+ * Campo del panel Identificar. Mientras no se edita es un Box enfocable con
+ * borde y el mismo aspecto que un campo outlined: componer el
+ * `OutlinedTextField` de Material costaba ~300 ms por campo en frío en la
+ * Mi TV y era el 90 % del coste de abrir el panel (perfil 2026-09-15). Al
+ * pulsarlo se compone el campo real, recibe el foco y abre el teclado; al
+ * buscar o perder el foco vuelve al modo ligero.
+ */
+@Composable
+private fun IdentifyField(
+    value:         String,
+    onValueChange: (String) -> Unit,
+    label:         String,
+    enabled:       Boolean,
+    keyboardType:  KeyboardType,
+    onSearch:      () -> Unit,
+    modifier:      Modifier = Modifier,
+) {
+    var editing by remember { mutableStateOf(false) }
+    if (editing) {
+        val fieldFocus = remember { FocusRequester() }
+        var hadFocus by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { runCatching { fieldFocus.requestFocus() } }
+        OutlinedTextField(
+            value           = value,
+            onValueChange   = onValueChange,
+            label           = { Text(label) },
+            singleLine      = true,
+            modifier        = modifier
+                .focusRequester(fieldFocus)
+                // El primer callback llega sin foco (nodo recién montado):
+                // solo se sale del modo edición si el foco llegó y se fue.
+                .onFocusChanged { if (it.isFocused) hadFocus = true else if (hadFocus) editing = false },
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(
+                onSearch = {
+                    editing = false
+                    onSearch()
+                },
+            ),
+        )
+    } else {
+        var focused by remember { mutableStateOf(false) }
+        val shape = RoundedCornerShape(4.dp)
+        Column(
+            modifier            = modifier
+                .height(IDENTIFY_FIELD_HEIGHT)
+                .clip(shape)
+                .border(if (focused) 2.dp else 1.dp, if (focused) Accent else Border, shape)
+                .onFocusChanged { focused = it.isFocused }
+                .clickable(enabled = enabled) { editing = true }
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text  = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (focused) Accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text     = value.ifEmpty { " " },
+                style    = MaterialTheme.typography.bodyLarge,
+                color    = if (enabled) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -1411,6 +1479,9 @@ private val IDENTIFY_LIST_MAX_HEIGHT = 330.dp
 
 /** Ancho del panel Identificar. */
 private val IDENTIFY_DIALOG_WIDTH = 760.dp
+
+/** Alto del campo ligero de Identificar (igual que un OutlinedTextField). */
+private val IDENTIFY_FIELD_HEIGHT = 56.dp
 
 /** El panel Identificar va por encima del hero y los rails, con un velo detrás. */
 private const val IDENTIFY_Z_INDEX = 50f
