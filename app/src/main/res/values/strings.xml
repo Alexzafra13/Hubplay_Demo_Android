@@ -163,6 +163,12 @@
 
     <!-- Player -->
     <string name="player_preparing">Preparando…</string>
+    <string name="player_play">Reproducir</string>
+    <string name="player_pause">Pausa</string>
+    <string name="player_rewind_10">Retroceder 10 s</string>
+    <string name="player_forward_10">Avanzar 10 s</string>
+    <string name="player_ends_at">Termina %1$s</string>
+    <string name="player_loading">Cargando…</string>
     <string name="player_audio_subtitles">Audio y subtítulos</string>
     <string name="player_section_audio">Audio</string>
     <string name="player_section_subtitles">Subtítulos</string>

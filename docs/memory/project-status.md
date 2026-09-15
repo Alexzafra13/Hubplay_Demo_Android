@@ -11,7 +11,8 @@
 - **Rama**: `main` == `origin/main`. CI verde (`detekt` estricto +
   unitarios + `assembleDebug`). Backend hermano: `Alexzafra13/HubPlay_demo`.
 - **Estado funcional en la Mi TV real**: login/emparejado, Inicio (hero +
-  rails), catálogo de pelis/series, detalle, reproducción HLS, TV en
+  rails), catálogo de pelis/series, detalle, reproducción HLS con chrome
+  propio (ver §4a), TV en
   directo con preview, buscar, colecciones, salvapantallas, intro de
   marca. Todo verificado contra el servidor de producción del autor.
 - **Lo que NO está probado**: móvil/tablet (compila, sin usar desde
@@ -266,6 +267,43 @@ alto: decodificación + subida de texturas. Ya quitado: `Crossfade` +
 `HeroInfo`, sombra animada y placeholder bajo imágenes en `MediaCard`,
 capa hardware del WebView. Siguientes candidatos si hace falta: recortar
 el backdrop al 70 % superior, aligerar `MediaCard`, probar Baseline Profile.
+
+## 4a. Reproductor de VOD (rediseño 2026-09-16)
+
+- **Chrome en Compose** (`ui/player/VodPlayerChrome.kt`, `VodPlayerLayer`),
+  ya no el `PlayerControlView` de Media3: en TV el foco del mando lo
+  tenía el árbol de Compose y las teclas nunca llegaban al controlador
+  ("toco botones y no hace nada"). `PlayerView` va con
+  `useController = false`, `SHOW_BUFFERING_NEVER`, `isFocusable = false` y
+  `FOCUS_BLOCK_DESCENDANTS` (si la vista podía coger el foco, los clics
+  de Compose fallaban a ratos).
+- **Disposición** (referencia: Jellyfin, leído por árbol de accesibilidad
+  porque el screencap sale blanco con vídeo): todo abajo a la izquierda:
+  logo/título + subtítulo ("Serie · T1 · E3" o el año), barra de progreso
+  enfocable (← → ±10 s), `55:36` / `1:53:52 · Termina 2:21`, y fila de
+  botones redondos (`HeroIconButton`): play/pausa, −10, +10, siguiente
+  episodio (si lo hay), audio y subtítulos.
+- **Carga**: backdrop del item con logo/título y una línea de progreso
+  fina + "Cargando…" hasta el primer frame (`firstFrameShown`), nada de
+  spinner en el centro. Buffering a mitad: rueda pequeña arriba a la
+  derecha.
+- **Teclas**: oculto → ← → saltan y enseñan, OK/↑/↓ enseñan, Play/Pause
+  del mando alterna; visible → foco en los botones, Back oculta
+  (**gestionado en `handleKey`, no vía `BackHandler`**: el del chrome no
+  llegaba a ejecutarse y Back salía del reproductor), se oculta solo a
+  los 4,5 s solo mientras reproduce. Al cerrarse, el foco vuelve al Box
+  raíz (`rootFocus`) para seguir capturando teclas.
+- `PlayerUiState` lleva `subtitle`, `backdropUrl`, `logoUrl` (rutas del
+  backend; `absoluteImage` en PlayerScreen las absolutiza con `?w=`).
+- Verificado en la Mi TV: carga con backdrop, mostrar/ocultar, pausa,
+  saltos exactos en pausa, foco estable al pulsar, Back oculta y Back sale.
+- Pendiente del reproductor: el panel de audio/subtítulos sigue siendo un
+  `ModalBottomSheet` (probar en TV), botón de velocidad/calidad si se
+  quiere (Jellyfin los tiene), y el directo (`LivePlayerChrome`) no se ha
+  tocado.
+- Trampa de pruebas: el salvapantallas del sistema de la TV (dreamx)
+  puede entrar entre pasos y las teclas acaban en diálogos del sistema;
+  comprobar `mCurrentFocus` antes de cada secuencia larga.
 
 ## 4b. Arranque en frío (medido 2026-09-16, debug, Mi TV)
 

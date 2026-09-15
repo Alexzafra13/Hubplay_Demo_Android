@@ -1,21 +1,11 @@
 package com.alex.hubplay.ui.player
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.ClosedCaption
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,16 +27,14 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.activity.compose.BackHandler
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.alex.hubplay.R
 import com.alex.hubplay.data.AuthState
+import com.alex.hubplay.data.withImageWidth
 import com.alex.hubplay.player.HubplayPlayer
 import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
@@ -68,6 +56,22 @@ private enum class ChromeState { Hidden, Visible }
 
 private const val AUTO_HIDE_MS = 4_500L
 private const val MS_PER_SECOND = 1_000L
+
+/** Anchos pedidos al backend para las imágenes del chrome de VOD. */
+private const val IMG_W_BACKDROP = 1280
+private const val IMG_W_LOGO = 400
+
+/**
+ * Ruta de imagen del backend → URL absoluta con `?w=`. Las URLs ya
+ * absolutas (TMDb) se dejan como vienen.
+ */
+private fun absoluteImage(path: String?, server: String?, width: Int): String? {
+    if (path.isNullOrBlank()) return null
+    if (path.startsWith("http://") || path.startsWith("https://")) return withImageWidth(path, width)
+    val base = server?.trimEnd('/') ?: return null
+    val abs = base + (if (path.startsWith("/")) path else "/$path")
+    return if (abs.contains("w=")) withImageWidth(abs, width) else abs + (if ('?' in abs) "&" else "?") + "w=$width"
+}
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -139,20 +143,23 @@ fun PlayerScreen(
                     this.player = player.exoPlayer
                     setKeepContentOnPlayerReset(true)
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-                    useController = !isLive
-                    controllerShowTimeoutMs = 4_000
-                    controllerAutoShow      = true
+                    // Ni controlador ni rueda de buffering de Media3: el
+                    // chrome (VOD y directo) es de Compose. El controlador
+                    // de Media3 nunca recibía las teclas del mando porque el
+                    // foco lo tenía el árbol de Compose de encima.
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                    useController = false
+                    // La vista no debe quedarse con el foco de las teclas:
+                    // el mando lo gestiona el chrome de Compose.
+                    isFocusable = false
+                    isFocusableInTouchMode = false
+                    descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                     // Tells the OS to suppress screen-dim / daydream
                     // while this View is visible. Without it Android TV
                     // boxes return to the launcher after ~5 min even
                     // mid-movie, which has been the bug.
                     keepScreenOn = true
                 }
-            },
-            update = { view ->
-                view.useController = !isLive
-                if (isLive) view.hideController()
             },
         )
 
@@ -162,37 +169,42 @@ fun PlayerScreen(
                 onBack    = onBack,
             )
         } else {
-            // VOD fallback back button (Media3 chrome handles the rest).
-            IconButton(
-                onClick  = onBack,
-                modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
-            ) {
-                Icon(
-                    imageVector       = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.action_back),
-                    tint              = Color.White,
-                )
-            }
+            // Salir con Back: se compone ANTES del chrome para que el
+            // BackHandler del chrome (ocultarlo) gane mientras esté visible.
+            BackHandler(onBack = onBack)
+
             // Audio + subtitle picker — only relevant for VOD HLS (live
             // IPTV streams typically expose a single audio track).
             var showTrackSheet by remember { mutableStateOf(false) }
-            IconButton(
-                onClick  = { showTrackSheet = true },
-                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-            ) {
-                Icon(
-                    imageVector        = Icons.Outlined.ClosedCaption,
-                    contentDescription = stringResource(R.string.player_audio_subtitles),
-                    tint               = Color.White,
+            val server = authState.serverUrl
+            val info = remember(ui.title, ui.subtitle, ui.backdropUrl, ui.logoUrl, ui.nextEpisode, server) {
+                VodChromeInfo(
+                    title       = ui.title,
+                    subtitle    = ui.subtitle,
+                    backdropUrl = absoluteImage(ui.backdropUrl, server, IMG_W_BACKDROP),
+                    logoUrl     = absoluteImage(ui.logoUrl, server, IMG_W_LOGO),
+                    hasNext     = ui.nextEpisode != null,
                 )
             }
+            VodPlayerLayer(
+                info        = info,
+                exo         = player.exoPlayer,
+                playerState = playerState,
+                preparing   = ui.startParams == null,
+                actions     = VodChromeActions(
+                    onOpenTracks  = { showTrackSheet = true },
+                    onNextEpisode = {
+                        val durMs = player.exoPlayer.duration
+                        viewModel.playNextEpisode(if (durMs > 0) durMs / MS_PER_SECOND else 0L)
+                    },
+                ),
+            )
             if (showTrackSheet) {
                 TrackSelectionSheet(
                     player    = player.exoPlayer,
                     onDismiss = { showTrackSheet = false },
                 )
             }
-            BackHandler(onBack = onBack)
 
             // ── Auto-play siguiente episodio ─────────────────────────
             // When the episode reaches STATE_ENDED and the VM resolved
@@ -215,26 +227,6 @@ fun PlayerScreen(
                     modifier  = Modifier.align(Alignment.BottomEnd),
                 )
                 BackHandler { autoPlayDismissed = true }
-            }
-        }
-
-        // Loading overlay.
-        //  - VOD: centered spinner with the title.
-        //  - Live: nothing. The PlayerView itself shows a small
-        //    buffering wheel in the centre when needed; an extra
-        //    overlay near the clock badge just cluttered the corner.
-        if ((playerState.isBuffering || ui.startParams == null) && !isLive) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text  = ui.title ?: stringResource(R.string.player_preparing),
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
             }
         }
 

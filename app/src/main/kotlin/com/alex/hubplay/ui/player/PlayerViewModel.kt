@@ -96,6 +96,9 @@ class PlayerViewModel(
                 it.copy(
                     mode        = PlayerMode.Vod,
                     title       = item?.title ?: "Reproduciendo…",
+                    subtitle    = item?.let(::subtitleFor),
+                    backdropUrl = item?.backdropUrl ?: item?.posterUrl,
+                    logoUrl     = item?.logoUrl,
                     startParams = PlayerStartParams(
                         streamUrl    = streamUrl,
                         resumePosSec = resumeSec,
@@ -386,6 +389,20 @@ class PlayerViewModel(
         }
     }
 
+    /** "Serie · T1 · E3" para episodios; el año para el resto (o nada). */
+    private fun subtitleFor(item: ItemDetailDto): String? {
+        if (item.type == "episode") {
+            val code = listOfNotNull(
+                item.seasonNumber?.let { "T$it" },
+                item.episodeNumber?.let { "E$it" },
+            ).joinToString(" · ")
+            return listOfNotNull(item.seriesTitle, code.takeIf { it.isNotEmpty() })
+                .joinToString(" · ")
+                .ifEmpty { null }
+        }
+        return item.year?.toString()
+    }
+
     private fun describe(t: Throwable): String = when (t) {
         is HttpException -> "HTTP ${t.code()} ${t.message()}"
         else             -> "${t.javaClass.simpleName}: ${t.message ?: "sin mensaje"}"
@@ -423,6 +440,11 @@ data class PlayerUiState(
     val itemId:          String,
     val mode:            PlayerMode = PlayerMode.Unknown,
     val title:           String? = null,
+    /** Bajo el título: "Serie · T1 · E3" en episodios, el año en películas. */
+    val subtitle:        String? = null,
+    /** Imágenes del item (rutas del backend, sin absolutizar). La pantalla de carga usa el backdrop. */
+    val backdropUrl:     String? = null,
+    val logoUrl:         String? = null,
     val startParams:     PlayerStartParams? = null,
     val error:           String? = null,
     /** Episode to auto-play when this one ends. Null = end of series / not an episode. */
