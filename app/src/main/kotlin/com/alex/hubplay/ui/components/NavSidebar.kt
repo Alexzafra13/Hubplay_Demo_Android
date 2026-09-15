@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -271,8 +272,13 @@ private fun SidebarRow(
     }
     val interactionSource = remember { MutableInteractionSource() }
 
+    // fillMaxWidth: todas las filas comparten el mismo rectángulo. Con ancho
+    // "wrap" (etiquetas de distinto largo) la búsqueda de foco a la DERECHA
+    // encontraba otra fila del menú más ancha antes que el contenido y el
+    // mando se quedaba dando vueltas por el menú.
     Row(
         modifier = modifier
+            .fillMaxWidth()
             .padding(horizontal = 6.dp, vertical = 2.dp)
             .height(SidebarRowHeight)
             .scale(scale)

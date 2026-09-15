@@ -69,7 +69,7 @@ class ItemMetadataController(
     }
 
     /** Abre el diálogo sembrado con el título y año actuales del item. */
-    fun openIdentify(title: String, year: Int?) = searchCandidates(query = title, year = year)
+    fun openIdentify(title: String, year: Int?) = searchCandidates(query = identifyQuery(title), year = year)
 
     fun searchCandidates(query: String, year: Int?) {
         _state.update { it.copy(identify = IdentifyState(query = query, year = year, loading = true)) }
@@ -104,3 +104,16 @@ class ItemMetadataController(
         _state.update { st -> st.identify?.let { st.copy(identify = transform(it)) } ?: st }
     }
 }
+
+/**
+ * Título con el que se siembra la búsqueda en TMDb. Un item sin identificar
+ * suele llevar el año del nombre de carpeta ("The Mandalorian (2019)",
+ * "Bumblebee - 2018"); TMDb no encuentra nada con ese sufijo y el año ya
+ * va en su propio campo. Solo se quita si va entre paréntesis/corchetes o
+ * tras un guion: un número suelto puede ser parte del título ("Blade
+ * Runner 2049"). Si al quitarlo no queda nada, se deja tal cual.
+ */
+fun identifyQuery(title: String): String =
+    title.replace(TRAILING_YEAR, "").trim().ifEmpty { title.trim() }
+
+private val TRAILING_YEAR = Regex("""\s*(\((19|20)\d{2}\)|\[(19|20)\d{2}]|[\-–:]\s*(19|20)\d{2})\s*$""")

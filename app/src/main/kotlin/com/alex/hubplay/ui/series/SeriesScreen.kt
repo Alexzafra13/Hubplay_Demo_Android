@@ -69,10 +69,12 @@ import com.alex.hubplay.ui.components.HeroCtas
 import com.alex.hubplay.ui.components.HeroDetailConfig
 import com.alex.hubplay.ui.components.HeroDetailScaffold
 import com.alex.hubplay.ui.components.HeroHeader
+import com.alex.hubplay.ui.components.HeroMeta
+import com.alex.hubplay.ui.components.HeroMetaRow
 import com.alex.hubplay.ui.components.HeroNav
 import com.alex.hubplay.ui.components.HeroRails
 import com.alex.hubplay.ui.components.HeroToggles
-import com.alex.hubplay.ui.components.IdentifyDialog
+import com.alex.hubplay.ui.components.IdentifyOverlay
 import com.alex.hubplay.ui.metadata.MetadataToolsState
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.AccentSoft
@@ -151,7 +153,7 @@ fun SeriesScreen(
                     )
                 }
                 tools.identify?.let { state ->
-                    IdentifyDialog(
+                    IdentifyOverlay(
                         state     = state,
                         onSearch  = viewModel.tools::searchCandidates,
                         onPick    = viewModel.tools::applyIdentify,
@@ -258,54 +260,18 @@ private fun MetaRow(
         seasonsCount == 1 && episodeCount > 0 -> stringResource(R.string.series_episodes_count, episodeCount)
         else                                  -> null
     }
-    Row(
-        verticalAlignment     = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        item.year?.let {
-            Text(
-                text     = it.toString(),
-                style    = MaterialTheme.typography.bodyMedium,
-                color    = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-            )
-        }
-        countLabel?.let {
-            Text("·", style = MaterialTheme.typography.bodyMedium,
-                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                text     = it,
-                style    = MaterialTheme.typography.bodyMedium,
-                color    = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-            )
-        }
-        item.rating?.let {
-            Text("·", style = MaterialTheme.typography.bodyMedium,
-                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                text       = "★ ${"%.1f".format(it)}",
-                style      = MaterialTheme.typography.bodyMedium,
-                color      = Accent,
-                fontWeight = FontWeight.SemiBold,
-                maxLines   = 1,
-            )
-        }
-        if (!compact) {
-            item.genres.take(2).forEach { genre ->
-                Text("·", style = MaterialTheme.typography.bodyMedium,
-                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    text     = genre,
-                    style    = MaterialTheme.typography.bodyMedium,
-                    color    = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+    // Un solo Text (ver HeroMetaRow): cada dato como nodo propio pesaba en
+    // el primer frame de la ficha.
+    val parts = buildList {
+        item.year?.let { add(HeroMeta(it.toString())) }
+        countLabel?.let { add(HeroMeta(it)) }
+        item.rating?.let { add(HeroMeta("★ ${"%.1f".format(it)}", accent = true)) }
+        if (!compact) item.genres.take(MAX_META_GENRES).forEach { add(HeroMeta(it)) }
     }
+    HeroMetaRow(parts)
 }
+
+private const val MAX_META_GENRES = 2
 
 // ─── Episodes panel (split view) ────────────────────────────────────────────
 

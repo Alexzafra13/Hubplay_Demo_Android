@@ -2,7 +2,7 @@
 
 > Entrypoint de cada sesión. Corto a propósito: lo que hace falta para
 > retomar sin releer código. Histórico de sesiones en `archive/`.
-> Última actualización: **2026-09-12**.
+> Última actualización: **2026-09-15**.
 
 ---
 
@@ -161,10 +161,48 @@ adb -s $D shell pm clear com.alex.hubplay.debug        # volver al login
   póster compacto (170 dp) para que quepan los tres botones y los iconos;
   etiquetas cortas del resolver ("Seguir S1·E3", "Ver S1·E1"). Series no
   tiene toggle de visto. `ItemMetadataController` (ui/metadata) da permiso,
-  refresh e identify a `SeriesViewModel`; `DetailViewModel` aún tiene su
-  copia (migrar cuando se toque). Los rails van con `contentPadding` dentro
-  del LazyRow (la card enfocada crece un 8 % y se recortaba) y sobre un
-  velo al 72 % para que el tráiler/backdrop siga viéndose al bajar.
+  refresh e identify a los DOS ViewModels (Detail migrado 2026-09-15;
+  declarar `tools` ANTES del `init` que lo usa o NPE). Los rails van con
+  `contentPadding` dentro del LazyRow (la card enfocada crece un 8 % y se
+  recortaba) y sobre un velo al 72 % para que el tráiler/backdrop siga
+  viéndose al bajar. **Los rails tienen alto mínimo de un viewport**
+  (`RailsSection(minHeight)`): con un solo rail la página no podía llegar
+  al pivote del 30 % y la mitad del hero (botones, iconos, chip) se quedaba
+  asomando por arriba al bajar al reparto.
+- **Identificar es un overlay, no un `Dialog`** (2026-09-15): abrir una
+  ventana `Dialog` con su propia composición costaba 0,5-0,9 s de hilo
+  principal en la Mi TV (primer frame de 500 ms) y al cerrarla la ficha se
+  quedaba sin foco. `IdentifyOverlay` se compone dentro de la ficha (velo +
+  panel, `zIndex 50`), atrapa el foco con `focusProperties { exit = Cancel }`,
+  Back lo cierra (`BackHandler`) y al cerrarse el foco vuelve al lápiz
+  (`identifyFocus` en `HeroDetailScaffold`). Foco inicial en Buscar, nunca
+  en el campo (el TV abriría el teclado). La búsqueda se siembra con
+  `identifyQuery(title)`: quita "(2019)" / "[2019]" / "- 2019" del final
+  (títulos sin identificar llevan el año de la carpeta y TMDb devolvía 0
+  resultados); un número suelto ("Blade Runner 2049") se respeta. Test en
+  `ui/metadata/IdentifyQueryTest`.
+- **Menú lateral y foco a la DERECHA** (2026-09-15): las filas del sidebar
+  tenían ancho "wrap" (etiquetas de distinto largo), y la búsqueda 2D de
+  foco a la derecha encontraba otra fila más ancha del propio menú antes
+  que el contenido: el mando daba vueltas por el menú. Arreglo:
+  `fillMaxWidth()` en `SidebarRow`. Regla: **las filas de un menú vertical
+  deben compartir rectángulo horizontal**.
+- **Coste de abrir la ficha desde Inicio con tráiler** (medido 2026-09-15,
+  debug, en caliente; `fs.py`/atrace/`am profile` en la sesión): ~300 ms
+  de hilo principal repartidos en 4 frames (36/60/134/67 ms): desmontar
+  Inicio (`Compose:onForgotten` 40 ms), componer + medir el hero (100 ms;
+  todo dentro de la subcomposición de `BoxWithConstraints`), rails 45 ms.
+  En frío (primera ficha del proceso) el doble o más. Dentro del hero:
+  botones e iconos ~45 ms, fila de metadatos con 9 `Text` ~12 ms, Coil
+  ~60 ms arrancando ~20 `AsyncImage`, rasterizar iconos vectoriales 30 ms,
+  texto 65 ms. Hecho: fila de metadatos en UN solo `Text`
+  (`HeroMetaRow`), `HeroIconButton` sin `material3.IconButton` (ripple +
+  tamaño mínimo), mapeo de `fetchChildren` en `Dispatchers.Default` (Series
+  mapeaba episodios en main mientras se componía el hero). Con vídeo, el
+  box va a ~28 fps fijos (RenderThread + GPU 33 ms/frame): es el suelo.
+  Siguientes candidatos: componer el hero en dos frames (esenciales →
+  resto), cachear los `VectorPainter` de los iconos, Baseline Profile
+  (release) para el arranque en frío.
 - **Vista previa** (idea del usuario): tráiler sonando + página arriba +
   sin diálogo + 5 s sin mando → todo se desvanece y la carátula viaja a la
   esquina inferior izquierda (una capa con escala/desplazamiento leída en
@@ -225,9 +263,13 @@ el backdrop al 70 % superior, aligerar `MediaCard`, probar Baseline Profile.
    debe deduplicar** o Compose aborta el proceso entero.
 2. Hero con canal en directo enfocado: queda vacío hasta que arranca la
    preview; mostrar nombre + programa.
-2b. Primer frame de Detalle: 250-450 ms de measure/layout/draw al abrir
-   la ficha (framestats). Ver qué pesa (texto de sinopsis, AsyncImages,
-   logo) y trocear o diferir como los rails.
+2b. Primer frame de Detalle: ver "Coste de abrir la ficha" en §3 (medido y
+   parcialmente aliviado el 2026-09-15). **Pendiente verificar en la Mi TV
+   el build del 2026-09-15** (la TV se apagó antes de poder medir el
+   resultado): rails con alto mínimo, overlay Identificar (tiempo, foco al
+   cerrar, teclado) y nueva medida de frames al abrir la ficha.
+2c. Estudio Lucasfilm sigue devolviendo 0 títulos (backend) — visto de
+   nuevo el 2026-09-15 desde la ficha de The Mandalorian.
 3. Un host con dos IPs sale dos veces en "Servidores en tu red" (dedupe
    es por URL).
 4. Detalle sin artwork (mucho vacío), `CollectionDetailScreen` con

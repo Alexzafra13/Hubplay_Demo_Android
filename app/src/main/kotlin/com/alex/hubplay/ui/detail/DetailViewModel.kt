@@ -7,7 +7,8 @@ import com.alex.hubplay.data.CollectionDetail
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.ui.friendlyError
-import com.alex.hubplay.ui.metadata.IdentifyState
+import com.alex.hubplay.ui.metadata.ItemMetadataController
+import com.alex.hubplay.ui.metadata.MetadataToolsState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,9 +35,16 @@ class DetailViewModel(
     private val _ui = MutableStateFlow(DetailUiState(isLoading = true))
     val ui: StateFlow<DetailUiState> = _ui.asStateFlow()
 
+    /**
+     * Permiso + Actualizar metadatos + Identificar (compartido con Series).
+     * Declarado antes de `init`: los inicializadores corren en orden.
+     */
+    val tools = ItemMetadataController(viewModelScope, repository, itemId) { reloadItem() }
+    val toolsState: StateFlow<MetadataToolsState> get() = tools.state
+
     init {
         load()
-        loadPermissions()
+        tools.loadPermissions()
     }
 
     fun load() {
@@ -56,18 +64,6 @@ class DetailViewModel(
                         )
                     }
                 }
-        }
-    }
-
-    /**
-     * Permiso de metadatos (GET /me, cacheado en el repositorio). Falla en
-     * silencio: sin permiso confirmado, la fila de acciones simplemente no
-     * enseña "Actualizar metadatos" / "Identificar".
-     */
-    private fun loadPermissions() {
-        viewModelScope.launch {
-            runCatching { repository.fetchCanEditMetadata() }
-                .onSuccess { can -> _ui.update { it.copy(canEditMetadata = can) } }
         }
     }
 
@@ -98,63 +94,6 @@ class DetailViewModel(
             runCatching { repository.fetchCollectionDetail(collectionId) }
                 .onSuccess { c -> _ui.update { it.copy(collection = c) } }
         }
-    }
-
-    /** "Actualizar metadatos": re-corre el enrich del scanner sobre el item. */
-    fun refreshMetadata() {
-        viewModelScope.launch {
-            runCatching { repository.refreshItemMetadata(itemId) }
-                .onSuccess {
-                    _ui.update { it.copy(notice = "Metadatos actualizados") }
-                    reloadItem()
-                }
-                .onFailure { err ->
-                    _ui.update { it.copy(notice = friendlyError(err, "No se pudieron actualizar los metadatos")) }
-                }
-        }
-    }
-
-    /** Abre el diálogo de identificar sembrado con el título y año actuales. */
-    fun openIdentify() {
-        val item = _ui.value.item ?: return
-        searchCandidates(query = item.title, year = item.year)
-    }
-
-    fun searchCandidates(query: String, year: Int?) {
-        _ui.update {
-            it.copy(identify = IdentifyState(query = query, year = year, loading = true))
-        }
-        viewModelScope.launch {
-            runCatching { repository.fetchIdentifyCandidates(itemId, query, year) }
-                .onSuccess { list ->
-                    updateIdentify { it.copy(candidates = list, loading = false) }
-                }
-                .onFailure { err ->
-                    updateIdentify { it.copy(loading = false, error = friendlyError(err, "No se pudo buscar en TMDb")) }
-                }
-        }
-    }
-
-    fun applyIdentify(externalId: String) {
-        updateIdentify { it.copy(applying = true, error = null) }
-        viewModelScope.launch {
-            runCatching { repository.identifyItem(itemId, externalId) }
-                .onSuccess {
-                    _ui.update { it.copy(identify = null, notice = "Ficha actualizada") }
-                    reloadItem()
-                }
-                .onFailure { err ->
-                    updateIdentify { it.copy(applying = false, error = friendlyError(err, "No se pudo aplicar")) }
-                }
-        }
-    }
-
-    fun closeIdentify() { _ui.update { it.copy(identify = null) } }
-
-    fun clearNotice() { _ui.update { it.copy(notice = null) } }
-
-    private fun updateIdentify(transform: (IdentifyState) -> IdentifyState) {
-        _ui.update { st -> st.identify?.let { st.copy(identify = transform(it)) } ?: st }
     }
 
     /**
@@ -263,10 +202,4 @@ data class DetailUiState(
     /** Saga de la película (rail bajo el reparto). `null` si no pertenece a ninguna. */
     val collection:      CollectionDetail? = null,
     val error:           String?        = null,
-    /** El usuario puede editar metadatos (admin o `can_edit_metadata`). */
-    val canEditMetadata: Boolean        = false,
-    /** Diálogo "Identificar" abierto, con su búsqueda. `null` = cerrado. */
-    val identify:        IdentifyState? = null,
-    /** Aviso transitorio (Toast). La pantalla lo limpia al mostrarlo. */
-    val notice:          String?        = null,
 )

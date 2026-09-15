@@ -6,8 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -166,19 +168,19 @@ fun HeroIconButton(
         animationSpec = tween(180),
         label         = "icon-btn-scale",
     )
-    androidx.compose.material3.IconButton(
-        onClick  = onClick,
-        enabled  = enabled,
-        modifier = modifier
+    // Box + clickable en vez de material3.IconButton: sin ripple ni tamaño
+    // mínimo interactivo (el foco ya se ve por el borde). Son tres o cuatro
+    // por ficha y cada IconButton costaba ~4 ms de composición en el TV box.
+    Box(
+        modifier         = modifier
             .scale(scale)
-            .clip(androidx.compose.foundation.shape.CircleShape)
+            .size(ICON_BUTTON_SIZE)
+            .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f))
             .onFocusChanged { focused = it.isFocused }
-            .then(
-                if (focused)
-                    Modifier.border(2.dp, Accent, androidx.compose.foundation.shape.CircleShape)
-                else Modifier,
-            ),
+            .then(if (focused) Modifier.border(2.dp, Accent, CircleShape) else Modifier)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector        = icon,
@@ -187,3 +189,6 @@ fun HeroIconButton(
         )
     }
 }
+
+/** Mismo tamaño que el IconButton de Material 3 al que sustituye. */
+private val ICON_BUTTON_SIZE = 48.dp

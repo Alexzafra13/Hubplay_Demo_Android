@@ -2,6 +2,7 @@
 
 package com.alex.hubplay.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -9,6 +10,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
@@ -95,17 +97,18 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
@@ -247,6 +250,15 @@ fun HeroDetailScaffold(
             runCatching { playFocus.requestFocus() }
         }
 
+        // Al cerrar Identificar el foco vuelve al lápiz que lo abrió. Sin
+        // esto la ficha se quedaba sin foco y la primera tecla se perdía.
+        val identifyFocus = remember { FocusRequester() }
+        var wasDialogOpen by remember { mutableStateOf(false) }
+        LaunchedEffect(dialogOpen) {
+            if (!dialogOpen && wasDialogOpen) runCatching { identifyFocus.requestFocus() }
+            wasDialogOpen = dialogOpen
+        }
+
         var railsReady by remember(item.id) { mutableStateOf(false) }
         LaunchedEffect(item.id) {
             withFrameNanos { }
@@ -269,10 +281,20 @@ fun HeroDetailScaffold(
                         .focusProperties { enter = { playFocus } }
                         .onFocusChanged { heroHasFocus = it.hasFocus },
                 ) {
-                    HeroPanel(config = config, playFocus = playFocus, previewProgress = { previewProgress })
+                    HeroPanel(
+                        config          = config,
+                        focus           = HeroFocus(play = playFocus, identify = identifyFocus),
+                        previewProgress = { previewProgress },
+                    )
                 }
                 if (railsReady && !rails.isEmpty) {
-                    RailsSection(rails = rails, currentId = item.id, nav = config.nav, playFocus = playFocus)
+                    RailsSection(
+                        rails     = rails,
+                        currentId = item.id,
+                        nav       = config.nav,
+                        playFocus = playFocus,
+                        minHeight = heroHeight,
+                    )
                 }
             }
         }
@@ -454,10 +476,16 @@ private fun HeroBackdrop(item: Content, trailerResumeSec: Long) {
  * sección) arriba a la izquierda y, centrado, el bloque de dos columnas
  * (póster + Reproducir + iconos | info).
  */
+/** Requesters del hero: Reproducir (foco inicial) y el lápiz de Identificar. */
+private class HeroFocus(
+    val play:     FocusRequester,
+    val identify: FocusRequester,
+)
+
 @Composable
 private fun HeroPanel(
     config:          HeroDetailConfig,
-    playFocus:       FocusRequester,
+    focus:           HeroFocus,
     previewProgress: () -> Float,
 ) {
     val geometry = remember { PreviewGeometry() }
@@ -511,9 +539,9 @@ private fun HeroPanel(
             horizontalArrangement = Arrangement.spacedBy(32.dp),
         ) {
             PosterColumn(
-                config    = config,
-                playFocus = playFocus,
-                preview   = PreviewMotion(geometry, previewProgress),
+                config  = config,
+                focus   = focus,
+                preview = PreviewMotion(geometry, previewProgress),
             )
             Box(modifier = fadeOut) {
                 InfoColumn(config = config)
@@ -524,9 +552,9 @@ private fun HeroPanel(
 
 @Composable
 private fun PosterColumn(
-    config:    HeroDetailConfig,
-    playFocus: FocusRequester,
-    preview:   PreviewMotion,
+    config:  HeroDetailConfig,
+    focus:   HeroFocus,
+    preview: PreviewMotion,
 ) {
     val item = config.item
     // Con acción secundaria (Episodios) la columna no cabe en el hero con
@@ -565,7 +593,7 @@ private fun PosterColumn(
                 icon           = play.icon,
                 primary        = true,
                 enabled        = play.enabled,
-                focusRequester = playFocus,
+                focusRequester = focus.play,
                 onClick        = play.onClick,
                 modifier       = Modifier.width(posterWidth),
             )
@@ -579,7 +607,7 @@ private fun PosterColumn(
                     modifier = Modifier.width(posterWidth),
                 )
             }
-            QuickActions(config = config, width = posterWidth)
+            QuickActions(config = config, width = posterWidth, identifyFocus = focus.identify)
         }
     }
 }
@@ -674,7 +702,7 @@ private fun ExpandableOverview(text: String) {
  * etiquetas fijas: una línea pequeña dice qué hace el que tiene el foco.
  */
 @Composable
-private fun QuickActions(config: HeroDetailConfig, width: Dp) {
+private fun QuickActions(config: HeroDetailConfig, width: Dp, identifyFocus: FocusRequester) {
     val item = config.item
     val isFavorite = (item as? Content.Movie)?.isFavorite
         ?: (item as? Content.Series)?.isFavorite
@@ -712,10 +740,11 @@ private fun QuickActions(config: HeroDetailConfig, width: Dp) {
             }
             if (config.toggles.canEditMetadata && canIdentify) {
                 QuickActionIcon(
-                    icon    = Icons.Outlined.Edit,
-                    label   = R.string.detail_action_metadata,
-                    onClick = config.actions.onIdentify,
-                    onFocus = focus.handler(QuickAction.Metadata),
+                    icon     = Icons.Outlined.Edit,
+                    label    = R.string.detail_action_metadata,
+                    onClick  = config.actions.onIdentify,
+                    onFocus  = focus.handler(QuickAction.Metadata),
+                    modifier = Modifier.focusRequester(identifyFocus),
                 )
             }
         }
@@ -749,16 +778,46 @@ private class QuickActionFocus {
 
 @Composable
 private fun QuickActionIcon(
-    icon:    ImageVector,
-    label:   Int,
-    onClick: () -> Unit,
-    onFocus: (Boolean) -> Unit,
+    icon:     ImageVector,
+    label:    Int,
+    onClick:  () -> Unit,
+    onFocus:  (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     HeroIconButton(
         icon               = icon,
         contentDescription = stringResource(label),
         onClick            = onClick,
-        modifier           = Modifier.onFocusChanged { onFocus(it.isFocused) },
+        modifier           = modifier.onFocusChanged { onFocus(it.isFocused) },
+    )
+}
+
+/**
+ * Línea de metadatos del hero ("★ 8,4 · 2019 · 99 min · Terror") en UN solo
+ * `Text`: cada dato como composable propio eran hasta nueve nodos de texto
+ * que medir y dibujar en el primer frame de la ficha en el TV box.
+ * [HeroMeta.accent] pinta el dato en acento y seminegrita (la nota).
+ */
+class HeroMeta(val text: String, val accent: Boolean = false)
+
+@Composable
+fun HeroMetaRow(parts: List<HeroMeta>, modifier: Modifier = Modifier) {
+    if (parts.isEmpty()) return
+    val accent    = SpanStyle(color = Accent, fontWeight = FontWeight.SemiBold)
+    val separator = SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val line = buildAnnotatedString {
+        parts.forEachIndexed { index, part ->
+            if (index > 0) withStyle(separator) { append(META_SEPARATOR) }
+            if (part.accent) withStyle(accent) { append(part.text) } else append(part.text)
+        }
+    }
+    Text(
+        text     = line,
+        style    = MaterialTheme.typography.bodyMedium,
+        color    = MaterialTheme.colorScheme.onBackground,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
     )
 }
 
@@ -816,6 +875,7 @@ private fun RailsSection(
     currentId: String,
     nav:       HeroNav,
     playFocus: FocusRequester,
+    minHeight: Dp,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
@@ -824,7 +884,15 @@ private fun RailsSection(
                 .height(RAILS_FADE_HEIGHT)
                 .background(Brush.verticalGradient(0f to Color.Transparent, 1f to BgBase.copy(alpha = RAILS_SCRIM_ALPHA))),
         )
-        Column(modifier = Modifier.fillMaxWidth().background(BgBase.copy(alpha = RAILS_SCRIM_ALPHA))) {
+        // Mínimo un viewport de rails: con un solo rail la página no podía
+        // desplazarse hasta el pivote y el rail quedaba al 65 % de alto con
+        // media ficha (botones, iconos, chip) asomando por arriba.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = minHeight - RAILS_FADE_HEIGHT)
+                .background(BgBase.copy(alpha = RAILS_SCRIM_ALPHA)),
+        ) {
             // Solo el PRIMER rail rutea ↑ a Reproducir. Se intercepta la tecla
             // en vez de `focusProperties { up }`: el LazyRow es un focus
             // group y la propiedad heredada no llegaba a las cards.
@@ -1057,12 +1125,20 @@ private fun CastCard(person: Person, onClick: () -> Unit) {
 /**
  * "Identificar": buscar el item en TMDb y aplicar el match correcto
  * (sobrescribe título, sinopsis, reparto e imágenes), con "Actualizar
- * metadatos" como acción secundaria. Adaptado a D-pad: el foco arranca en
- * el primer resultado, no en el campo de texto (el teclado del TV se
+ * metadatos" como acción secundaria.
+ *
+ * Es un overlay dentro del árbol de la ficha, NO un `Dialog`: abrir una
+ * ventana nueva con su propia composición costaba 0,5-0,9 s de hilo
+ * principal en el TV box (primer frame de 500 ms), y al cerrarla la ficha
+ * se quedaba sin foco. Aquí solo se compone el panel. El foco queda
+ * atrapado dentro (`exit = Cancel`) y Back lo cierra.
+ *
+ * Adaptado a D-pad: el foco arranca en Buscar y salta al primer resultado
+ * cuando llega la lista, nunca al campo de texto (el teclado del TV se
  * abriría solo).
  */
 @Composable
-fun IdentifyDialog(
+fun IdentifyOverlay(
     state:     IdentifyState,
     onSearch:  (String, Int?) -> Unit,
     onPick:    (String) -> Unit,
@@ -1070,7 +1146,12 @@ fun IdentifyDialog(
     onDismiss: () -> Unit,
 ) {
     val firstResultFocus = remember { FocusRequester() }
+    val searchFocus      = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    BackHandler(onBack = onDismiss)
+    LaunchedEffect(Unit) {
+        runCatching { searchFocus.requestFocus() }
+    }
     LaunchedEffect(state.candidates) {
         if (state.candidates.isEmpty()) return@LaunchedEffect
         runCatching { firstResultFocus.requestFocus() }
@@ -1082,11 +1163,14 @@ fun IdentifyDialog(
         delay(KEYBOARD_HIDE_RETRY_MS * 2)
         keyboard?.hide()
     }
-    // usePlatformDefaultWidth = false: el ancho por defecto del Dialog en
-    // TV (~440 dp) dejaba el campo de título en 120 dp.
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties       = DialogProperties(usePlatformDefaultWidth = false),
+    Box(
+        modifier         = Modifier
+            .fillMaxSize()
+            .zIndex(IDENTIFY_Z_INDEX)
+            .background(BgBase.copy(alpha = IDENTIFY_SCRIM_ALPHA))
+            .focusProperties { exit = { FocusRequester.Cancel } }
+            .focusGroup(),
+        contentAlignment = Alignment.Center,
     ) {
         Surface(
             shape    = RoundedCornerShape(16.dp),
@@ -1110,7 +1194,7 @@ fun IdentifyDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                IdentifySearchRow(state = state, onSearch = onSearch)
+                IdentifySearchRow(state = state, onSearch = onSearch, searchFocus = searchFocus)
                 IdentifyStatus(state = state)
                 LazyColumn(
                     modifier            = Modifier.heightIn(max = IDENTIFY_LIST_MAX_HEIGHT),
@@ -1125,33 +1209,42 @@ fun IdentifyDialog(
                         )
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HeroCtaButton(
-                        label   = stringResource(R.string.detail_action_refresh_metadata),
-                        icon    = Icons.Default.Refresh,
-                        primary = false,
-                        enabled = !state.applying,
-                        onClick = onRefresh,
-                    )
-                    HeroCtaButton(
-                        label   = stringResource(R.string.identify_close),
-                        icon    = Icons.Default.Close,
-                        primary = false,
-                        onClick = onDismiss,
-                    )
-                }
+                IdentifyFooter(state = state, onRefresh = onRefresh, onDismiss = onDismiss)
             }
         }
     }
 }
 
 @Composable
-private fun IdentifySearchRow(state: IdentifyState, onSearch: (String, Int?) -> Unit) {
+private fun IdentifyFooter(state: IdentifyState, onRefresh: () -> Unit, onDismiss: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        HeroCtaButton(
+            label   = stringResource(R.string.detail_action_refresh_metadata),
+            icon    = Icons.Default.Refresh,
+            primary = false,
+            enabled = !state.applying,
+            onClick = onRefresh,
+        )
+        HeroCtaButton(
+            label   = stringResource(R.string.identify_close),
+            icon    = Icons.Default.Close,
+            primary = false,
+            onClick = onDismiss,
+        )
+    }
+}
+
+@Composable
+private fun IdentifySearchRow(
+    state:       IdentifyState,
+    onSearch:    (String, Int?) -> Unit,
+    searchFocus: FocusRequester,
+) {
     var query    by remember(state.query) { mutableStateOf(state.query) }
     var yearText by remember(state.year) { mutableStateOf(state.year?.toString().orEmpty()) }
     val search = { onSearch(query, yearText.toIntOrNull()) }
-    // Mientras se busca, los campos no son enfocables: el foco inicial del
-    // Dialog caía en Título y el TV abría el teclado antes de que la lista
+    // Mientras se busca, los campos no son enfocables: si el foco inicial
+    // cayera en Título el TV abriría el teclado antes de que la lista
     // existiera para llevárselo. Al llegar resultados, el foco va al primero.
     val fieldsEnabled = !state.loading && !state.applying
     Row(
@@ -1179,10 +1272,11 @@ private fun IdentifySearchRow(state: IdentifyState, onSearch: (String, Int?) -> 
             keyboardActions = KeyboardActions(onSearch = { search() }),
         )
         HeroCtaButton(
-            label   = stringResource(R.string.identify_search),
-            icon    = Icons.Default.Search,
-            primary = true,
-            onClick = search,
+            label          = stringResource(R.string.identify_search),
+            icon           = Icons.Default.Search,
+            primary        = true,
+            focusRequester = searchFocus,
+            onClick        = search,
         )
     }
 }
@@ -1312,11 +1406,18 @@ private val POSTER_WIDTH_COMPACT = 170.dp
 /** Línea reservada bajo los iconos para el nombre de la acción enfocada. */
 private val QUICK_ACTION_CAPTION_HEIGHT = 18.dp
 
-/** Alto máximo de la lista de candidatos del diálogo Identificar. */
+/** Alto máximo de la lista de candidatos del panel Identificar. */
 private val IDENTIFY_LIST_MAX_HEIGHT = 330.dp
 
-/** Ancho del diálogo Identificar (el Dialog no usa el ancho por defecto de la plataforma). */
+/** Ancho del panel Identificar. */
 private val IDENTIFY_DIALOG_WIDTH = 760.dp
+
+/** El panel Identificar va por encima del hero y los rails, con un velo detrás. */
+private const val IDENTIFY_Z_INDEX = 50f
+private const val IDENTIFY_SCRIM_ALPHA = 0.72f
+
+/** Separador entre datos de [HeroMetaRow]. */
+private const val META_SEPARATOR = "  ·  "
 
 private const val YEAR_DIGITS = 4
 

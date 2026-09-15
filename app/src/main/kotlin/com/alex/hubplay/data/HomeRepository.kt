@@ -11,6 +11,8 @@ import com.alex.hubplay.data.api.dto.PersonFilmographyEntryDto
 import com.alex.hubplay.data.api.dto.PersonRefDto
 import com.alex.hubplay.data.api.dto.RecommendedItemDto
 import com.alex.hubplay.data.api.dto.TrendingItemDto
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Contract for the home / catalogue data surface. Screens and ViewModels
@@ -153,9 +155,12 @@ class HomeRepositoryImpl(
      * The list comes back in scanner order; SeriesScreen filters by type
      * and sorts by season_number / episode_number itself.
      */
-    override suspend fun fetchChildren(parentId: String): List<Content> {
+    // En Default: la ficha de una serie pide los hijos de cada temporada y
+    // mapear decenas de episodios en el hilo principal costaba 25-40 ms
+    // justo mientras se compone el hero.
+    override suspend fun fetchChildren(parentId: String): List<Content> = withContext(Dispatchers.Default) {
         val server = serverUrl()
-        return api.getChildren(parentId).data.orEmpty().map { it.toContent(server) }
+        api.getChildren(parentId).data.orEmpty().map { it.toContent(server) }
     }
 
     /** /me/next-up — queued episodes across every series. */
