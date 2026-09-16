@@ -12,6 +12,7 @@ import com.alex.hubplay.data.api.dto.ContinueWatchingResponse
 import com.alex.hubplay.data.api.dto.FavoriteIdsResponse
 import com.alex.hubplay.data.api.dto.FavoriteToggleResponse
 import com.alex.hubplay.data.api.dto.GroupsResponse
+import com.alex.hubplay.data.api.dto.HomeLayoutDto
 import com.alex.hubplay.data.api.dto.HomeLayoutResponse
 import com.alex.hubplay.data.api.dto.IdentifyCandidatesResponse
 import com.alex.hubplay.data.api.dto.IdentifyRequest
@@ -64,6 +65,10 @@ interface HubplayApi {
     /** GET /api/v1/me/home/layout */
     @GET("me/home/layout")
     suspend fun getHomeLayout(): HomeLayoutResponse
+
+    /** PUT /api/v1/me/home/layout — orden y visibilidad de los rails del usuario (por perfil). */
+    @PUT("me/home/layout")
+    suspend fun putHomeLayout(@Body layout: HomeLayoutDto): HomeLayoutResponse
 
     /** GET /api/v1/me/home/trending — enriched with backdrop / logo / overview. */
     @GET("me/home/trending")

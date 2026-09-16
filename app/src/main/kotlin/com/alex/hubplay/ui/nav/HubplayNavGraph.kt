@@ -39,6 +39,9 @@ import com.alex.hubplay.ui.search.SearchScreen
 import com.alex.hubplay.ui.search.SearchViewModel
 import com.alex.hubplay.ui.series.SeriesScreen
 import com.alex.hubplay.ui.series.SeriesViewModel
+import com.alex.hubplay.ui.settings.HomeLayoutScreen
+import com.alex.hubplay.ui.settings.HomeLayoutViewModel
+import com.alex.hubplay.ui.settings.SettingsActions
 import com.alex.hubplay.ui.settings.SettingsScreen
 import com.alex.hubplay.ui.settings.SettingsViewModel
 import com.alex.hubplay.ui.settings.TrustedServersScreen
@@ -316,13 +319,27 @@ fun HubplayNavGraph(
                 }
             }
             SettingsScreen(
-                viewModel             = vm,
-                onBack                = { navController.popBackStack() },
-                onLogOut              = logOut,
-                onForgetServer        = forgetServer,
-                onChangeProfile       = changeProfile,
-                onReorderChannels     = openChannelOrder,
-                onOpenTrustedServers  = { navController.navigate(Route.TrustedServers.path) },
+                viewModel = vm,
+                actions   = SettingsActions(
+                    onBack                = { navController.popBackStack() },
+                    onLogOut              = logOut,
+                    onForgetServer        = forgetServer,
+                    onChangeProfile       = changeProfile,
+                    onReorderChannels     = openChannelOrder,
+                    onOpenHomeLayout      = { navController.navigate(Route.HomeLayout.path) },
+                    onOpenTrustedServers  = { navController.navigate(Route.TrustedServers.path) },
+                ),
+            )
+        }
+
+        // ── Ajustes → Inicio (rails: orden y visibilidad, por perfil) ─
+        composable(Route.HomeLayout.path) {
+            val vm = viewModel<HomeLayoutViewModel>(
+                factory = HomeLayoutViewModel.factory(container.homeRepository),
+            )
+            HomeLayoutScreen(
+                viewModel = vm,
+                onBack    = { navController.popBackStack() },
             )
         }
 

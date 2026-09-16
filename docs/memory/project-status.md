@@ -338,6 +338,37 @@ el backdrop al 70 % superior, aligerar `MediaCard`, probar Baseline Profile.
   Con el chrome del reproductor, pausar primero: si no, el auto-ocultado
   de 4,5 s se dispara entre dumps (cada `uiautomator dump` tarda 2-3 s).
 
+## 4c. Inicio y Ajustes → Inicio (2026-09-16 noche)
+
+- **Cards a la misma altura**: `RAIL_CARD_HEIGHT = 180.dp` en MediaCard;
+  `railCardWidth(style)` da 320 dp (16:9) o 120 dp (2:3). Un solo alto de
+  rail (`RailHeight` 273 dp) para todos, incluido "En directo ahora"
+  (`LIVE_CARD_WIDTH` 320). Antes cada rail medía distinto y al pasar de
+  uno a otro la página saltaba.
+- **↑ desde el primer rail**: los botones del hero solo se componen con
+  `isLanding`, así que `focusProperties { up }` no tenía destino. Ahora el
+  primer rail intercepta ↑ (`onPreviewKeyEvent`), pone `heroButtonsFocused`
+  y `wantHeroFocus`, y un `LaunchedEffect` pide el foco a Reproducir un
+  frame después. Con el foco en el hero, `viewModel.onHeroFocused()` limpia
+  la card (sin consumir la puerta del primer foco) y vuelve el carrusel con
+  su rotación (verificado: rota a los 8 s tras volver).
+- **Subir entre rails se anima**: el rail por encima de la ventana no está
+  en `visibleItemsInfo`, pero como todos miden `RailHeight` la distancia es
+  exacta (`firstVisibleItemScrollOffset + n × RailHeight`) → `animateScrollBy`.
+- **Ajustes → Inicio** (`ui/settings/HomeLayoutScreen.kt` + ViewModel):
+  lista `GET /me/home/layout` completa (ocultos incluidos), OK alterna
+  mostrar/ocultar, flechas suben/bajan, cada cambio hace `PUT` (por usuario
+  = por perfil, mismo dato que usa la web) y `HomeRepository.layoutVersion`
+  sube para que `HomeViewModel` recargue Inicio. `homeRailTitle()` es el
+  título compartido. `SettingsScreen` recibe ahora `SettingsActions`.
+  Tipos que el backend admite hoy: continue_watching, next_up, trending,
+  live_now, latest_in_library (uno por biblioteca). Para "Canales
+  favoritos", "Colecciones", "Recomendado para ti" o "Más vistos" hace falta
+  añadir el tipo en `validSectionType` + `defaultLayout` del backend y un
+  endpoint de datos; la app ya ignora tipos desconocidos sin romperse.
+- `config/detekt-baseline.xml` regenerado (la firma de `SettingsScreen`
+  cambió y arrastraba entradas obsoletas).
+
 ## 4b. Arranque en frío (medido 2026-09-16, debug, Mi TV)
 
 - **Lo que más pesa NO es la app**: tras cada `adb install` el sistema aún

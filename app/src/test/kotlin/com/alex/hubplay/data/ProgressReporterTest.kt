@@ -13,6 +13,7 @@ import com.alex.hubplay.data.api.dto.ContinueWatchingResponse
 import com.alex.hubplay.data.api.dto.FavoriteIdsResponse
 import com.alex.hubplay.data.api.dto.FavoriteToggleResponse
 import com.alex.hubplay.data.api.dto.GroupsResponse
+import com.alex.hubplay.data.api.dto.HomeLayoutDto
 import com.alex.hubplay.data.api.dto.HomeLayoutResponse
 import com.alex.hubplay.data.api.dto.IdentifyCandidatesResponse
 import com.alex.hubplay.data.api.dto.IdentifyRequest
@@ -220,6 +221,7 @@ class ProgressReporterTest {
         // ─── Unused for these tests ────────────────────────────────────────
         override suspend fun getContinueWatching(): ContinueWatchingResponse = TODO()
         override suspend fun getHomeLayout(): HomeLayoutResponse              = TODO()
+        override suspend fun putHomeLayout(layout: HomeLayoutDto): HomeLayoutResponse = TODO()
         override suspend fun getTrending(limit: Int): TrendingResponse        = TODO()
         override suspend fun getRecommended(limit: Int): RecommendedResponse = TODO()
         override suspend fun getLatest(limit: Int, libraryId: String?, type: String?): LatestResponse = TODO()

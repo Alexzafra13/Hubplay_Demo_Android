@@ -4,11 +4,11 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeData
 import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.MeEvent
-import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.MeEventsStream
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -21,8 +21,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChangedBy
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 
@@ -98,6 +99,11 @@ class HomeViewModel(
     private var continueRefreshJob: Job? = null
 
     init {
+        // Ajustes → Inicio guardó otro orden/visibilidad: se recarga entero.
+        repository.layoutVersion
+            .drop(1)
+            .onEach { refresh() }
+            .launchIn(viewModelScope)
         refresh()
         // Flow rápido para la UI: hero + backdrop deben sentirse instantáneos.
         focusBus

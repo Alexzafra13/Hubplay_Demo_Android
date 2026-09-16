@@ -3,6 +3,8 @@ package com.alex.hubplay.data
 import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.dto.CollectionListEntryDto
 import com.alex.hubplay.data.api.dto.ContinueWatchingEntryDto
+import com.alex.hubplay.data.api.dto.HomeLayoutDto
+import com.alex.hubplay.data.api.dto.HomeSectionDto
 import com.alex.hubplay.data.api.dto.ItemRecommendationDto
 import com.alex.hubplay.data.api.dto.ItemSummaryDto
 import com.alex.hubplay.data.api.dto.LiveNowChannelDto
@@ -12,6 +14,9 @@ import com.alex.hubplay.data.api.dto.PersonRefDto
 import com.alex.hubplay.data.api.dto.RecommendedItemDto
 import com.alex.hubplay.data.api.dto.TrendingItemDto
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 
 /**
@@ -27,6 +32,15 @@ interface HomeRepository {
     suspend fun fetchLibraries(): Map<String, String>
     suspend fun fetchLiveNow(limit: Int = 10): List<Content.LiveChannel>
     suspend fun fetchHomeLayout(): List<HomeRailConfig>
+
+    /** Todas las secciones del layout de Inicio, ocultas incluidas (Ajustes → Inicio). */
+    suspend fun fetchHomeSections(): List<HomeSectionDto> = emptyList()
+
+    /** Guarda orden y visibilidad en el servidor; devuelve lo que el servidor dejó. */
+    suspend fun saveHomeSections(sections: List<HomeSectionDto>): List<HomeSectionDto> = sections
+
+    /** Sube cada vez que se guarda el layout: Inicio lo observa para recargar. */
+    val layoutVersion: StateFlow<Int> get() = MutableStateFlow(0)
     suspend fun fetchChildren(parentId: String): List<Content>
     suspend fun fetchNextUp(): List<Content.Episode>
     suspend fun fetchCatalogue(type: String, limit: Int = 60, offset: Int = 0, sortBy: String = "added_at", sortOrder: String = "desc"): List<Content>
@@ -115,6 +129,18 @@ class HomeRepositoryImpl(
      * layout is stored the server synthesises a sensible default;
      * either way we get a list of [HomeRailConfig] in display order.
      */
+    private val _layoutVersion = MutableStateFlow(0)
+    override val layoutVersion: StateFlow<Int> = _layoutVersion
+
+    override suspend fun fetchHomeSections(): List<HomeSectionDto> =
+        api.getHomeLayout().data?.sections.orEmpty()
+
+    override suspend fun saveHomeSections(sections: List<HomeSectionDto>): List<HomeSectionDto> {
+        val saved = api.putHomeLayout(HomeLayoutDto(version = 1, sections = sections)).data?.sections ?: sections
+        _layoutVersion.update { it + 1 }
+        return saved
+    }
+
     override suspend fun fetchHomeLayout(): List<HomeRailConfig> {
         val data = api.getHomeLayout().data ?: return defaultHomeLayout()
         return data.sections
@@ -131,13 +157,7 @@ class HomeRepositoryImpl(
             }
     }
 
-    private fun railTitle(type: HomeRailType, libraryName: String?): String = when (type) {
-        HomeRailType.ContinueWatching  -> "Continuar viendo"
-        HomeRailType.NextUp             -> "A continuación"
-        HomeRailType.Trending           -> "Tendencias"
-        HomeRailType.LiveNow            -> "En directo ahora"
-        HomeRailType.LatestInLibrary    -> libraryName?.let { "Lo último en $it" } ?: "Lo último"
-    }
+    private fun railTitle(type: HomeRailType, libraryName: String?): String = homeRailTitle(type, libraryName)
 
     /**
      * Server-side fallback default — used when /me/home/layout returns
@@ -857,6 +877,15 @@ const val IMG_W_SCREENSAVER = 1920
  */
 fun withImageWidth(url: String, width: Int): String =
     url.replace(Regex("([?&])w=[0-9]+")) { "${it.groupValues[1]}w=$width" }
+
+/** Título visible de un rail de Inicio (también lo usa Ajustes → Inicio). */
+fun homeRailTitle(type: HomeRailType, libraryName: String?): String = when (type) {
+    HomeRailType.ContinueWatching  -> "Continuar viendo"
+    HomeRailType.NextUp             -> "A continuación"
+    HomeRailType.Trending           -> "Tendencias"
+    HomeRailType.LiveNow            -> "En directo ahora"
+    HomeRailType.LatestInLibrary    -> libraryName?.let { "Lo último en $it" } ?: "Lo último"
+}
 
 /** Un resultado de TMDb al re-identificar un item (Detalle → Identificar). */
 @androidx.compose.runtime.Immutable

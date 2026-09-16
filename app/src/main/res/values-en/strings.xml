@@ -6,6 +6,7 @@
     <string name="brand_hubplay">HubPlay</string>
 
     <!-- Actions (shared verbs) -->
+    <string name="action_dismiss">Dismiss</string>
     <string name="action_retry">Retry</string>
     <string name="action_close">Close</string>
     <string name="action_back">Back</string>
@@ -81,6 +82,17 @@
     <string name="settings_value_unknown">—</string>
     <string name="settings_action_logout">Sign out</string>
     <string name="settings_action_change_server">Change server (forget this one)</string>
+    <string name="settings_section_home">Home</string>
+    <string name="settings_home_help">Choose which rails appear on Home and in what order. Saved on the server for this profile.</string>
+    <string name="settings_action_home_layout">Set up Home</string>
+    <string name="home_layout_title">Home rails</string>
+    <string name="home_layout_help">OK shows or hides the rail · arrows change the order</string>
+    <string name="home_layout_shown">Shown</string>
+    <string name="home_layout_hidden">Hidden</string>
+    <string name="home_layout_show">Show</string>
+    <string name="home_layout_hide">Hide</string>
+    <string name="home_layout_move_up">Move up</string>
+    <string name="home_layout_move_down">Move down</string>
     <string name="settings_section_personalization">Personalization</string>
     <string name="settings_personalization_help">Reorder and hide Live TV channels. Changes apply on this device only.</string>
     <string name="settings_action_reorder_channels">Reorder channels</string>

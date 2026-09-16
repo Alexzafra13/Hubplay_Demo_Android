@@ -16,24 +16,21 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.SwitchAccount
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.ViewAgenda
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -41,13 +38,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.R
@@ -66,14 +68,16 @@ import com.alex.hubplay.ui.theme.BgBase
  */
 @Composable
 fun SettingsScreen(
-    viewModel:             SettingsViewModel,
-    onBack:                () -> Unit,
-    onLogOut:              () -> Unit,
-    onForgetServer:        () -> Unit,
-    onChangeProfile:       () -> Unit = {},
-    onReorderChannels:     () -> Unit = {},
-    onOpenTrustedServers:  () -> Unit = {},
+    viewModel: SettingsViewModel,
+    actions:   SettingsActions,
 ) {
+    val onBack                = actions.onBack
+    val onLogOut              = actions.onLogOut
+    val onForgetServer        = actions.onForgetServer
+    val onChangeProfile       = actions.onChangeProfile
+    val onReorderChannels     = actions.onReorderChannels
+    val onOpenHomeLayout      = actions.onOpenHomeLayout
+    val onOpenTrustedServers  = actions.onOpenTrustedServers
     val ui by viewModel.ui.collectAsState()
     var showCrashDialog by remember { mutableStateOf(false) }
 
@@ -107,8 +111,15 @@ fun SettingsScreen(
                 modifier         = Modifier.fillMaxSize().padding(horizontal = 32.dp),
                 contentAlignment = Alignment.TopCenter,
             ) {
+                // verticalScroll: sin él, todo lo que quedaba bajo el pliegue
+                // ("Reordenar canales", servidores de confianza, diagnóstico…)
+                // era inalcanzable con el mando: el foco no bajaba de la
+                // última tarjeta visible.
                 Column(
-                    modifier            = Modifier.widthIn(max = 720.dp).fillMaxWidth(),
+                    modifier            = Modifier
+                        .widthIn(max = 720.dp)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
                     Spacer(Modifier.height(8.dp))
@@ -151,6 +162,20 @@ fun SettingsScreen(
                                 onClick = onChangeProfile,
                             )
                         }
+                    }
+
+                    SectionCard(title = stringResource(R.string.settings_section_home), icon = Icons.Outlined.Home) {
+                        Text(
+                            text  = stringResource(R.string.settings_home_help),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        SecondaryAction(
+                            label   = stringResource(R.string.settings_action_home_layout),
+                            icon    = Icons.Outlined.ViewAgenda,
+                            onClick = onOpenHomeLayout,
+                        )
                     }
 
                     SectionCard(title = stringResource(R.string.settings_section_personalization), icon = Icons.Outlined.Tune) {
@@ -219,6 +244,18 @@ fun SettingsScreen(
         )
     }
 }
+
+/** Salidas de la pantalla de Ajustes hacia la navegación. */
+@androidx.compose.runtime.Immutable
+class SettingsActions(
+    val onBack:                () -> Unit,
+    val onLogOut:              () -> Unit,
+    val onForgetServer:        () -> Unit,
+    val onChangeProfile:       () -> Unit = {},
+    val onReorderChannels:     () -> Unit = {},
+    val onOpenHomeLayout:      () -> Unit = {},
+    val onOpenTrustedServers:  () -> Unit = {},
+)
 
 @Composable
 private fun SecondaryAction(
