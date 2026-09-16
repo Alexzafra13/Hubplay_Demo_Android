@@ -315,6 +315,16 @@ el backdrop al 70 % superior, aligerar `MediaCard`, probar Baseline Profile.
   entre las pistas de audio (lo que ffmpeg entiende), igual que el web.
   Verificado: Capitán América (2025) lista 3 pistas, elegir "Inglés" pide
   `info?audio=2` + `master.m3u8?audio=2` y sigue donde iba.
+- **Tercera vuelta (2026-09-16, feedback)**: solo el logo arriba (24 dp,
+  sin año; los episodios sí llevan "Serie · T1 · E3"), "Termina H:mm"
+  encima de la barra a la derecha y "pos / duración" debajo a la
+  izquierda, saltos de 30 s (botones y barra), audio y subtítulos en dos
+  iconos que abren solo su lista (`TrackSelectionSheet(section)`), y al
+  cerrar la hoja el foco vuelve al icono que la abrió (`opener` en
+  `ControlButtons`; mientras la hoja está abierta el chrome no se
+  auto-oculta). Animación de ocultado: el logo sube y los controles bajan,
+  se desvanecen y se encogen al 96 % (`scaleOut` con origen abajo-izq),
+  380 ms; al mostrar suben con `FastOutSlowIn`.
 - Pendiente del reproductor: los subtítulos siguen siendo los que ve
   ExoPlayer (el HLS lleva los que ffmpeg extrae); podrían listarse también
   desde `media_streams` con `?sub=N`. Velocidad/calidad si se quiere. El

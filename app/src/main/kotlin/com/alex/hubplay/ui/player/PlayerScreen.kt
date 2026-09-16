@@ -175,7 +175,7 @@ fun PlayerScreen(
 
             // Audio + subtitle picker — only relevant for VOD HLS (live
             // IPTV streams typically expose a single audio track).
-            var showTrackSheet by remember { mutableStateOf(false) }
+            var trackSection by remember { mutableStateOf<TrackSection?>(null) }
             val server = authState.serverUrl
             val info = remember(ui.title, ui.subtitle, ui.backdropUrl, ui.logoUrl, ui.nextEpisode, server) {
                 VodChromeInfo(
@@ -191,18 +191,21 @@ fun PlayerScreen(
                 exo         = player.exoPlayer,
                 playerState = playerState,
                 preparing   = ui.startParams == null,
+                sheetOpen   = trackSection != null,
                 actions     = VodChromeActions(
-                    onOpenTracks  = { showTrackSheet = true },
+                    onOpenAudio     = { trackSection = TrackSection.Audio },
+                    onOpenSubtitles = { trackSection = TrackSection.Subtitles },
                     onNextEpisode = {
                         val durMs = player.exoPlayer.duration
                         viewModel.playNextEpisode(if (durMs > 0) durMs / MS_PER_SECOND else 0L)
                     },
                 ),
             )
-            if (showTrackSheet) {
+            trackSection?.let { section ->
                 TrackSelectionSheet(
                     player              = player.exoPlayer,
-                    onDismiss           = { showTrackSheet = false },
+                    onDismiss           = { trackSection = null },
+                    section             = section,
                     serverAudio         = ui.audioTracks,
                     selectedServerAudio = ui.selectedAudio,
                     onSelectServerAudio = { ordinal ->

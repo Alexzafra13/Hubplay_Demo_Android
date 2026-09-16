@@ -53,6 +53,8 @@ import com.alex.hubplay.R
 fun TrackSelectionSheet(
     player:    ExoPlayer,
     onDismiss: () -> Unit,
+    /** Qué lista enseñar: el chrome tiene un icono para audio y otro para subtítulos. */
+    section:   TrackSection = TrackSection.Both,
     /** Pistas del fichero según el servidor; si hay, mandan sobre las que ve ExoPlayer (el HLS solo lleva una). */
     serverAudio:         List<AudioTrackOption> = emptyList(),
     selectedServerAudio: Int = -1,
@@ -75,6 +77,7 @@ fun TrackSelectionSheet(
             modifier            = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            if (section != TrackSection.Subtitles) {
             SectionHeader(stringResource(R.string.player_section_audio))
             if (serverAudio.isNotEmpty()) {
                 ServerAudioRows(serverAudio, selectedServerAudio) { ordinal ->
@@ -86,8 +89,10 @@ fun TrackSelectionSheet(
             } else {
                 ExoAudioRows(player, audioGroups) { tracks = player.currentTracks }
             }
+            }
 
-            Spacer(Modifier.height(16.dp))
+            if (section != TrackSection.Audio) {
+            if (section == TrackSection.Both) Spacer(Modifier.height(16.dp))
             SectionHeader(stringResource(R.string.player_section_subtitles))
             TrackRow(
                 label    = stringResource(R.string.player_subtitles_disabled),
@@ -121,10 +126,14 @@ fun TrackSelectionSheet(
                     )
                 }
             }
+            }
             Spacer(Modifier.height(16.dp))
         }
     }
 }
+
+/** Qué enseña [TrackSelectionSheet]. */
+enum class TrackSection { Audio, Subtitles, Both }
 
 /** Pistas de audio que ve ExoPlayer (direct play: el fichero lleva todas). */
 @OptIn(UnstableApi::class)

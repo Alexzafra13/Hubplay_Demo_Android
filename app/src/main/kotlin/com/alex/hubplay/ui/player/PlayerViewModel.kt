@@ -456,7 +456,7 @@ class PlayerViewModel(
             ?: tag.uppercase()
     }
 
-    /** "Serie · T1 · E3" para episodios; el año para el resto (o nada). */
+    /** "Serie · T1 · E3" para episodios; nada para el resto (bajo el logo solo va el logo). */
     private fun subtitleFor(item: ItemDetailDto): String? {
         if (item.type == "episode") {
             val code = listOfNotNull(
@@ -467,7 +467,7 @@ class PlayerViewModel(
                 .joinToString(" · ")
                 .ifEmpty { null }
         }
-        return item.year?.toString()
+        return null
     }
 
     private fun describe(t: Throwable): String = when (t) {

@@ -2,10 +2,13 @@ package com.alex.hubplay.ui.player
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -26,12 +29,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Replay30
 import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.outlined.ClosedCaption
+import androidx.compose.material.icons.outlined.Audiotrack
+import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +55,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -116,8 +121,9 @@ class VodChromeInfo(
 /** Acciones del chrome hacia la pantalla. */
 @androidx.compose.runtime.Immutable
 class VodChromeActions(
-    val onOpenTracks:  () -> Unit,
-    val onNextEpisode: () -> Unit,
+    val onOpenAudio:     () -> Unit,
+    val onOpenSubtitles: () -> Unit,
+    val onNextEpisode:   () -> Unit,
 )
 
 @Composable
@@ -127,6 +133,8 @@ fun VodPlayerLayer(
     playerState: PlayerState,
     preparing:   Boolean,
     actions:     VodChromeActions,
+    /** Hoja de audio/subtítulos abierta: el chrome no se oculta y, al cerrarla, el foco vuelve al icono. */
+    sheetOpen:   Boolean = false,
 ) {
     var visible by remember { mutableStateOf(true) }
     var lastInteractionAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -134,8 +142,9 @@ fun VodPlayerLayer(
 
     // Auto-ocultar solo mientras reproduce: en pausa el usuario quiere ver
     // dónde está.
-    LaunchedEffect(lastInteractionAt, visible, playerState.isPlaying) {
-        if (!visible || !playerState.isPlaying) return@LaunchedEffect
+    LaunchedEffect(sheetOpen) { if (!sheetOpen) touch() }
+    LaunchedEffect(lastInteractionAt, visible, playerState.isPlaying, sheetOpen) {
+        if (!visible || !playerState.isPlaying || sheetOpen) return@LaunchedEffect
         val target = lastInteractionAt + AUTO_HIDE_MS
         delay((target - System.currentTimeMillis()).coerceAtLeast(0L))
         if (System.currentTimeMillis() >= lastInteractionAt + AUTO_HIDE_MS) visible = false
@@ -182,7 +191,7 @@ fun VodPlayerLayer(
     ) {
         LoadingAndBuffering(info = info, showBackdrop = showBackdrop, buffering = playerState.isBuffering)
         ChromeOverlay(
-            shown       = visible && !showBackdrop,
+            state       = ChromeVisibility(shown = visible && !showBackdrop, sheetOpen = sheetOpen),
             info        = info,
             exo         = exo,
             playerState = playerState,
@@ -203,10 +212,13 @@ fun VodPlayerLayer(
     }
 }
 
+/** Si el chrome se ve y si hay una hoja (audio/subtítulos) abierta encima. */
+private class ChromeVisibility(val shown: Boolean, val sheetOpen: Boolean)
+
 /** Título arriba a la izquierda y controles abajo, con sus fundidos. */
 @Composable
 private fun BoxScope.ChromeOverlay(
-    shown:       Boolean,
+    state:       ChromeVisibility,
     info:        VodChromeInfo,
     exo:         ExoPlayer,
     playerState: PlayerState,
@@ -214,10 +226,16 @@ private fun BoxScope.ChromeOverlay(
     actions:     VodChromeActions,
     callbacks:   ControlsCallbacks,
 ) {
+    // Ocultar: el logo se va hacia arriba mientras los controles bajan,
+    // se desvanecen y se encogen un pelín (como si se apagaran). Mostrar:
+    // suben con frenada suave.
+    val shown = state.shown
     AnimatedVisibility(
         visible  = shown,
-        enter    = fadeIn(animationSpec = tween(FADE_IN_MS)),
-        exit     = fadeOut(animationSpec = tween(FADE_OUT_MS)),
+        enter    = fadeIn(animationSpec = tween(FADE_IN_MS)) +
+            slideInVertically(animationSpec = tween(SLIDE_MS, easing = FastOutSlowInEasing)) { -it / SLIDE_FRACTION },
+        exit     = fadeOut(animationSpec = tween(HIDE_MS)) +
+            slideOutVertically(animationSpec = tween(HIDE_MS, easing = FastOutLinearInEasing)) { -it / SLIDE_FRACTION },
         modifier = Modifier.align(Alignment.TopStart),
     ) {
         TopTitle(info = info)
@@ -225,9 +243,10 @@ private fun BoxScope.ChromeOverlay(
     AnimatedVisibility(
         visible  = shown,
         enter    = fadeIn(animationSpec = tween(FADE_IN_MS)) +
-            slideInVertically(animationSpec = tween(SLIDE_MS), initialOffsetY = { it / SLIDE_FRACTION }),
-        exit     = fadeOut(animationSpec = tween(FADE_OUT_MS)) +
-            slideOutVertically(animationSpec = tween(SLIDE_MS), targetOffsetY = { it / SLIDE_FRACTION }),
+            slideInVertically(animationSpec = tween(SLIDE_MS, easing = FastOutSlowInEasing)) { it / SLIDE_FRACTION },
+        exit     = fadeOut(animationSpec = tween(HIDE_MS)) +
+            slideOutVertically(animationSpec = tween(HIDE_MS, easing = FastOutLinearInEasing)) { it / SLIDE_FRACTION } +
+            scaleOut(animationSpec = tween(HIDE_MS), targetScale = HIDE_SCALE, transformOrigin = TransformOrigin(0f, 1f)),
         modifier = Modifier.align(Alignment.BottomStart),
     ) {
         ControlsBlock(
@@ -237,6 +256,7 @@ private fun BoxScope.ChromeOverlay(
             playFocus   = playFocus,
             actions     = actions,
             callbacks   = callbacks,
+            sheetOpen   = state.sheetOpen,
         )
     }
 }
@@ -395,10 +415,9 @@ private fun ControlsBlock(
     playFocus:   FocusRequester,
     actions:     VodChromeActions,
     callbacks:   ControlsCallbacks,
+    sheetOpen:   Boolean,
 ) {
-    val onSeek       = callbacks.onSeek
-    val onTogglePlay = callbacks.onTogglePlay
-    val onInteract   = callbacks.onInteract
+    val onSeek   = callbacks.onSeek
     val playhead = remember { Playhead() }
     // El foco va a Play en cuanto existen los botones: al entrar, el chrome
     // ya está visible pero los controles se montan tras el primer frame, y
@@ -422,6 +441,8 @@ private fun ControlsBlock(
             )
             .padding(start = CHROME_PADDING, end = CHROME_PADDING, bottom = CHROME_BOTTOM, top = CONTROLS_TOP_FADE),
     ) {
+        EndsAtRow(playhead = playhead)
+        Spacer(Modifier.height(4.dp))
         SeekBar(
             playhead = playhead,
             onSeek   = { delta ->
@@ -430,48 +451,85 @@ private fun ControlsBlock(
             },
         )
         Spacer(Modifier.height(2.dp))
-        TimeRow(playhead = playhead)
+        ElapsedRow(playhead = playhead)
         Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            val playing = playerState.isPlaying
+        ControlButtons(info, playerState, playFocus, actions, callbacks, sheetOpen)
+    }
+}
+
+/** Fila de botones: play/pausa, −30, +30, siguiente episodio, audio, subtítulos. */
+@Composable
+private fun ControlButtons(
+    info:        VodChromeInfo,
+    playerState: PlayerState,
+    playFocus:   FocusRequester,
+    actions:     VodChromeActions,
+    callbacks:   ControlsCallbacks,
+    sheetOpen:   Boolean,
+) {
+    val onSeek       = callbacks.onSeek
+    val onTogglePlay = callbacks.onTogglePlay
+    val onInteract   = callbacks.onInteract
+    // Al cerrar la hoja, el foco vuelve al icono que la abrió (audio o
+    // subtítulos), no a Play: así se abren las dos seguidas sin navegar.
+    val audioFocus = remember { FocusRequester() }
+    val subsFocus  = remember { FocusRequester() }
+    var opener by remember { mutableStateOf<FocusRequester?>(null) }
+    LaunchedEffect(sheetOpen) {
+        if (!sheetOpen) opener?.let { runCatching { it.requestFocus() } }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        val playing = playerState.isPlaying
+        HeroIconButton(
+            icon               = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+            contentDescription = stringResource(if (playing) R.string.player_pause else R.string.player_play),
+            onClick            = onTogglePlay,
+            modifier           = Modifier.focusRequester(playFocus).onFocusChanged { if (it.isFocused) onInteract() },
+            size               = CONTROL_BUTTON,
+        )
+        HeroIconButton(
+            icon               = Icons.Filled.Replay30,
+            contentDescription = stringResource(R.string.player_rewind_30),
+            onClick            = { onSeek(-SEEK_STEP_MS) },
+            modifier           = Modifier.onFocusChanged { if (it.isFocused) onInteract() },
+            size               = CONTROL_BUTTON,
+        )
+        HeroIconButton(
+            icon               = Icons.Filled.Forward30,
+            contentDescription = stringResource(R.string.player_forward_30),
+            onClick            = { onSeek(SEEK_STEP_MS) },
+            modifier           = Modifier.onFocusChanged { if (it.isFocused) onInteract() },
+            size               = CONTROL_BUTTON,
+        )
+        if (info.hasNext) {
             HeroIconButton(
-                icon               = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                contentDescription = stringResource(if (playing) R.string.player_pause else R.string.player_play),
-                onClick            = onTogglePlay,
-                modifier           = Modifier.focusRequester(playFocus).onFocusChanged { if (it.isFocused) onInteract() },
-                size               = CONTROL_BUTTON,
-            )
-            HeroIconButton(
-                icon               = Icons.Filled.Replay10,
-                contentDescription = stringResource(R.string.player_rewind_10),
-                onClick            = { onSeek(-SEEK_STEP_MS) },
-                modifier           = Modifier.onFocusChanged { if (it.isFocused) onInteract() },
-                size               = CONTROL_BUTTON,
-            )
-            HeroIconButton(
-                icon               = Icons.Filled.Forward10,
-                contentDescription = stringResource(R.string.player_forward_10),
-                onClick            = { onSeek(SEEK_STEP_MS) },
-                modifier           = Modifier.onFocusChanged { if (it.isFocused) onInteract() },
-                size               = CONTROL_BUTTON,
-            )
-            if (info.hasNext) {
-                HeroIconButton(
-                    icon               = Icons.Filled.SkipNext,
-                    contentDescription = stringResource(R.string.player_next_episode_label),
-                    onClick            = actions.onNextEpisode,
-                    modifier           = Modifier.onFocusChanged { if (it.isFocused) onInteract() },
-                    size               = CONTROL_BUTTON,
-                )
-            }
-            HeroIconButton(
-                icon               = Icons.Outlined.ClosedCaption,
-                contentDescription = stringResource(R.string.player_audio_subtitles),
-                onClick            = actions.onOpenTracks,
+                icon               = Icons.Filled.SkipNext,
+                contentDescription = stringResource(R.string.player_next_episode_label),
+                onClick            = actions.onNextEpisode,
                 modifier           = Modifier.onFocusChanged { if (it.isFocused) onInteract() },
                 size               = CONTROL_BUTTON,
             )
         }
+        HeroIconButton(
+            icon               = Icons.Outlined.Audiotrack,
+            contentDescription = stringResource(R.string.player_section_audio),
+            onClick            = {
+                opener = audioFocus
+                actions.onOpenAudio()
+            },
+            modifier           = Modifier.focusRequester(audioFocus).onFocusChanged { if (it.isFocused) onInteract() },
+            size               = CONTROL_BUTTON,
+        )
+        HeroIconButton(
+            icon               = Icons.Outlined.Subtitles,
+            contentDescription = stringResource(R.string.player_section_subtitles),
+            onClick            = {
+                opener = subsFocus
+                actions.onOpenSubtitles()
+            },
+            modifier           = Modifier.focusRequester(subsFocus).onFocusChanged { if (it.isFocused) onInteract() },
+            size               = CONTROL_BUTTON,
+        )
     }
 }
 
@@ -580,23 +638,26 @@ private fun SeekBar(playhead: Playhead, onSeek: (Long) -> Unit) {
     }
 }
 
-/** `55:36` a la izquierda; `1:39:25 · Termina 1:52` a la derecha. */
+/** Encima de la barra, a la derecha: `Termina 1:52`. */
 @Composable
-private fun TimeRow(playhead: Playhead) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(text = formatTime(playhead.positionMs), color = TextPrimary, fontSize = 13.sp)
+private fun EndsAtRow(playhead: Playhead) {
+    val duration = playhead.durationMs
+    Row(modifier = Modifier.fillMaxWidth().height(TIME_ROW_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.weight(1f))
-        val duration = playhead.durationMs
         if (duration > 0) {
             val remaining = (duration - playhead.positionMs).coerceAtLeast(0L)
             val endsAt = LocalTime.now().plusSeconds(remaining / MS_PER_SECOND).format(END_TIME_FORMAT)
-            Text(
-                text     = "${formatTime(duration)}  ·  ${stringResource(R.string.player_ends_at, endsAt)}",
-                color    = TextSecondary,
-                fontSize = 13.sp,
-            )
+            Text(text = stringResource(R.string.player_ends_at, endsAt), color = TextSecondary, fontSize = 13.sp)
         }
     }
+}
+
+/** Debajo de la barra, a la izquierda: `55:36 / 1:39:25`. */
+@Composable
+private fun ElapsedRow(playhead: Playhead) {
+    val duration = playhead.durationMs
+    val text = if (duration > 0) "${formatTime(playhead.positionMs)} / ${formatTime(duration)}" else formatTime(playhead.positionMs)
+    Text(text = text, color = TextPrimary, fontSize = 13.sp)
 }
 
 /** `h:mm:ss` a partir de una hora, `mm:ss` por debajo. */
@@ -611,7 +672,7 @@ internal fun formatTime(ms: Long): String {
 // ─── Constantes ─────────────────────────────────────────────────────────────
 
 private const val AUTO_HIDE_MS = 4_500L
-private const val SEEK_STEP_MS = 10_000L
+private const val SEEK_STEP_MS = 30_000L
 
 /** Teclas que, con el chrome oculto, solo lo enseñan. */
 private val SHOW_KEYS = setOf(Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.DirectionUp, Key.DirectionDown)
@@ -620,10 +681,11 @@ private const val MS_PER_SECOND = 1_000L
 private const val SECONDS_PER_MINUTE = 60L
 private const val SECONDS_PER_HOUR = 3_600L
 
-private const val FADE_IN_MS = 220
-private const val FADE_OUT_MS = 180
-private const val SLIDE_MS = 260
-private const val SLIDE_FRACTION = 6
+private const val FADE_IN_MS = 240
+private const val SLIDE_MS = 320
+private const val HIDE_MS = 380
+private const val SLIDE_FRACTION = 4
+private const val HIDE_SCALE = 0.96f
 private const val BACKDROP_FADE_OUT_MS = 500
 
 private const val LOADING_TOP_ALPHA = 0.35f
@@ -636,7 +698,8 @@ private const val BUFFERED_ALPHA = 0.35f
 private const val BUFFER_SPINNER_ALPHA = 0.75f
 
 private val CHROME_PADDING = 48.dp
-private val CHROME_TOP = 36.dp
+private val CHROME_TOP = 24.dp
+private val TIME_ROW_HEIGHT = 20.dp
 private val CHROME_BOTTOM = 32.dp
 private val CONTROLS_TOP_FADE = 72.dp
 private val CONTROL_BUTTON = 40.dp
