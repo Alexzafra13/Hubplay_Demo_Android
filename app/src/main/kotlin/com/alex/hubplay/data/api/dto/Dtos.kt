@@ -155,6 +155,7 @@ data class MediaStreamDto(
     @Json(name = "stream_type")  val streamType:  String? = null,
     val codec:                                     String? = null,
     @Json(name = "is_default")   val isDefault:   Boolean = false,
+    @Json(name = "is_forced")    val isForced:    Boolean = false,
     val channels:                                  Int?    = null,
     val language:                                  String? = null,
     val title:                                     String? = null,

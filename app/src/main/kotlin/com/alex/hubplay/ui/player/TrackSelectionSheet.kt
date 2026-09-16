@@ -56,9 +56,9 @@ fun TrackSelectionSheet(
     /** Qué lista enseñar: el chrome tiene un icono para audio y otro para subtítulos. */
     section:   TrackSection = TrackSection.Both,
     /** Pistas del fichero según el servidor; si hay, mandan sobre las que ve ExoPlayer (el HLS solo lleva una). */
-    serverAudio:         List<AudioTrackOption> = emptyList(),
-    selectedServerAudio: Int = -1,
-    onSelectServerAudio: (Int) -> Unit = {},
+    server:    ServerTracks = ServerTracks(),
+    onSelectServerAudio:    (Int) -> Unit = {},
+    onSelectServerSubtitle: (Int) -> Unit = {},
 ) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // The Tracks snapshot is captured into Compose state so changing
@@ -78,54 +78,30 @@ fun TrackSelectionSheet(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (section != TrackSection.Subtitles) {
-            SectionHeader(stringResource(R.string.player_section_audio))
-            if (serverAudio.isNotEmpty()) {
-                ServerAudioRows(serverAudio, selectedServerAudio) { ordinal ->
-                    onSelectServerAudio(ordinal)
-                    onDismiss()
+                SectionHeader(stringResource(R.string.player_section_audio))
+                if (server.audio.isNotEmpty()) {
+                    ServerAudioRows(server.audio, server.selectedAudio) { ordinal ->
+                        onSelectServerAudio(ordinal)
+                        onDismiss()
+                    }
+                } else if (audioGroups.isEmpty()) {
+                    EmptyRow(stringResource(R.string.player_no_extra_audio))
+                } else {
+                    ExoAudioRows(player, audioGroups) { tracks = player.currentTracks }
                 }
-            } else if (audioGroups.isEmpty()) {
-                EmptyRow(stringResource(R.string.player_no_extra_audio))
-            } else {
-                ExoAudioRows(player, audioGroups) { tracks = player.currentTracks }
-            }
             }
 
             if (section != TrackSection.Audio) {
-            if (section == TrackSection.Both) Spacer(Modifier.height(16.dp))
-            SectionHeader(stringResource(R.string.player_section_subtitles))
-            TrackRow(
-                label    = stringResource(R.string.player_subtitles_disabled),
-                selected = subtitleGroups.none { group ->
-                    (0 until group.length).any { group.isTrackSelected(it) }
-                },
-                onClick  = {
-                    player.trackSelectionParameters = player.trackSelectionParameters
-                        .buildUpon()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                        .build()
-                    tracks = player.currentTracks
-                },
-            )
-            subtitleGroups.forEach { group ->
-                repeat(group.length) { idx ->
-                    val format = group.getTrackFormat(idx)
-                    TrackRow(
-                        label    = formatSubtitleLabel(format),
-                        selected = group.isTrackSelected(idx),
-                        onClick  = {
-                            player.trackSelectionParameters = player.trackSelectionParameters
-                                .buildUpon()
-                                .setOverrideForType(
-                                    TrackSelectionOverride(group.mediaTrackGroup, idx),
-                                )
-                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                                .build()
-                            tracks = player.currentTracks
-                        },
-                    )
+                if (section == TrackSection.Both) Spacer(Modifier.height(16.dp))
+                SectionHeader(stringResource(R.string.player_section_subtitles))
+                if (server.subtitles.isNotEmpty()) {
+                    ServerSubtitleRows(server.subtitles, server.selectedSubtitle) { ordinal ->
+                        onSelectServerSubtitle(ordinal)
+                        onDismiss()
+                    }
+                } else {
+                    ExoSubtitleRows(player, subtitleGroups) { tracks = player.currentTracks }
                 }
-            }
             }
             Spacer(Modifier.height(16.dp))
         }
@@ -134,6 +110,82 @@ fun TrackSelectionSheet(
 
 /** Qué enseña [TrackSelectionSheet]. */
 enum class TrackSection { Audio, Subtitles, Both }
+
+/** Pistas según el servidor (`media_streams` de la ficha) y lo elegido; -1 = por defecto / desactivados. */
+@androidx.compose.runtime.Immutable
+data class ServerTracks(
+    val audio:            List<AudioTrackOption>    = emptyList(),
+    val selectedAudio:    Int                       = -1,
+    val subtitles:        List<SubtitleTrackOption> = emptyList(),
+    val selectedSubtitle: Int                       = -1,
+)
+
+/** Subtítulos que ve ExoPlayer (direct play sin lista del servidor): "Desactivados" + una fila por pista. */
+@OptIn(UnstableApi::class)
+@Composable
+private fun ExoSubtitleRows(
+    player:         ExoPlayer,
+    subtitleGroups: List<androidx.media3.common.Tracks.Group>,
+    onChanged:      () -> Unit,
+) {
+    TrackRow(
+        label    = stringResource(R.string.player_subtitles_disabled),
+        selected = subtitleGroups.none { group ->
+            (0 until group.length).any { group.isTrackSelected(it) }
+        },
+        onClick  = {
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                .build()
+            onChanged()
+        },
+    )
+    subtitleGroups.forEach { group ->
+        repeat(group.length) { idx ->
+            val format = group.getTrackFormat(idx)
+            TrackRow(
+                label    = formatSubtitleLabel(format),
+                selected = group.isTrackSelected(idx),
+                onClick  = {
+                    player.trackSelectionParameters = player.trackSelectionParameters
+                        .buildUpon()
+                        .setOverrideForType(
+                            TrackSelectionOverride(group.mediaTrackGroup, idx),
+                        )
+                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        .build()
+                    onChanged()
+                },
+            )
+        }
+    }
+}
+
+/**
+ * Subtítulos según el servidor: "Desactivados" (marcado al empezar) y una
+ * fila por pista. Elegir la ya marcada no hace nada.
+ */
+@Composable
+private fun ServerSubtitleRows(
+    tracks:   List<SubtitleTrackOption>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+) {
+    TrackRow(
+        label    = stringResource(R.string.player_subtitles_disabled),
+        selected = selected < 0,
+        onClick  = { if (selected >= 0) onSelect(-1) },
+    )
+    tracks.forEach { track ->
+        val isSelected = track.ordinal == selected
+        TrackRow(
+            label    = track.label,
+            selected = isSelected,
+            onClick  = { if (!isSelected) onSelect(track.ordinal) },
+        )
+    }
+}
 
 /** Pistas de audio que ve ExoPlayer (direct play: el fichero lleva todas). */
 @OptIn(UnstableApi::class)

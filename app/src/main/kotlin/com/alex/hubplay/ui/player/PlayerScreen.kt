@@ -102,7 +102,7 @@ fun PlayerScreen(
     // tearing down the ExoPlayer.
     LaunchedEffect(ui.startParams) {
         ui.startParams?.let {
-            player.play(it.streamUrl, it.resumePosSec, it.isHls)
+            player.play(it.streamUrl, it.resumePosSec, it.isHls, it.subtitles)
         }
     }
 
@@ -203,15 +203,31 @@ fun PlayerScreen(
             )
             trackSection?.let { section ->
                 TrackSelectionSheet(
-                    player              = player.exoPlayer,
-                    onDismiss           = { trackSection = null },
-                    section             = section,
-                    serverAudio         = ui.audioTracks,
-                    selectedServerAudio = ui.selectedAudio,
-                    onSelectServerAudio = { ordinal ->
+                    player                 = player.exoPlayer,
+                    onDismiss              = { trackSection = null },
+                    section                = section,
+                    server                 = ServerTracks(
+                        audio            = ui.audioTracks,
+                        selectedAudio    = ui.selectedAudio,
+                        subtitles        = ui.subtitleTracks,
+                        selectedSubtitle = ui.selectedSubtitle,
+                    ),
+                    onSelectServerAudio    = { ordinal ->
                         viewModel.selectAudio(ordinal, positionSec = player.exoPlayer.currentPosition / MS_PER_SECOND)
                     },
+                    onSelectServerSubtitle = { ordinal ->
+                        viewModel.selectSubtitle(ordinal, positionSec = player.exoPlayer.currentPosition / MS_PER_SECOND)
+                    },
                 )
+            }
+            // Subtítulos: el de texto elegido es una pista aparte (WebVTT) que
+            // se localiza por su Format.id; sin elección el texto va apagado,
+            // también el que el fichero traiga marcado por defecto. Con burn-in
+            // el subtítulo ya viene dentro del vídeo y el texto sigue apagado.
+            if (ui.subtitleTracks.isNotEmpty()) {
+                LaunchedEffect(ui.activeSubtitleId, ui.startParams, playerState.isReady) {
+                    applySubtitleSelection(player.exoPlayer, ui.activeSubtitleId)
+                }
             }
             // Direct play: el fichero lleva todas las pistas, la elegida se
             // aplica en ExoPlayer (N-ésimo grupo de audio) cuando hay pistas.
@@ -261,6 +277,41 @@ fun PlayerScreen(
             )
         }
     }
+}
+
+/**
+ * Activa en ExoPlayer la pista de texto cuyo `Format.id` es [wantedId]
+ * (la carga aparte de [HubplayPlayer.play]) o apaga el texto si es null o
+ * la pista aún no está anunciada (antes de READY; se vuelve a intentar).
+ */
+@OptIn(UnstableApi::class)
+private fun applySubtitleSelection(exo: androidx.media3.exoplayer.ExoPlayer, wantedId: String?) {
+    val textGroups = exo.currentTracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
+    // MergingMediaSource antepone el índice de la fuente al id ("1:hubplay-sub-4").
+    val group = wantedId?.let { id ->
+        textGroups.firstOrNull { g ->
+            (0 until g.length).any { i ->
+                val formatId = g.getTrackFormat(i).id
+                formatId == id || formatId?.endsWith(":$id") == true
+            }
+        }
+    }
+    if (wantedId != null) {
+        android.util.Log.d(
+            "PlayerScreen",
+            "subtitle wanted=$wantedId found=${group != null} ids=${textGroups.map { it.getTrackFormat(0).id }}",
+        )
+    }
+    exo.trackSelectionParameters = exo.trackSelectionParameters
+        .buildUpon()
+        .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
+        .apply {
+            if (group != null) {
+                setOverrideForType(androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, 0))
+            }
+        }
+        .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, group == null)
+        .build()
 }
 
 /**

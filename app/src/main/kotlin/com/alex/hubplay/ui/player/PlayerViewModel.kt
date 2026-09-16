@@ -12,6 +12,7 @@ import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.dto.ItemDetailDto
 import com.alex.hubplay.data.api.dto.ItemSummaryDto
 import com.alex.hubplay.player.ClientCapabilities
+import com.alex.hubplay.player.SideloadedSubtitle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,34 +80,43 @@ class PlayerViewModel(
         val item = itemResult.getOrNull()
 
         val infoResult = runCatching { api.getStreamInfo(targetItemId, capabilities).data }
-        val audioTracks = item?.let(::audioTracksFrom).orEmpty()
         val info       = infoResult.getOrNull()
         val infoErr    = infoResult.exceptionOrNull()
         val infoCode   = (infoErr as? HttpException)?.code()
 
         if (info != null) {
             // ── Item path (movies / episodes) ─────────────────────────────
-            val isDirectPlay = info.method == "direct_play"
-            val streamUrl    = if (isDirectPlay) "/api/v1/stream/$targetItemId/direct"
-                               else              "/api/v1/stream/$targetItemId/master.m3u8"
+            val isDirectPlay   = info.method == "direct_play"
+            val streamUrl      = if (isDirectPlay) {
+                "/api/v1/stream/$targetItemId/direct"
+            } else {
+                TrackOptions.masterUrl(targetItemId, audio = -1, burnSub = -1)
+            }
+            val subtitleTracks = item?.let { TrackOptions.subtitles(it.mediaStreams) }.orEmpty()
             // VOD items report progress. Live channels are constructed
             // farther down with reporter = null because /me/progress
             // makes no sense for an endless live stream.
             progressReporter = ProgressReporter(api, viewModelScope, targetItemId)
             _ui.update {
                 it.copy(
-                    mode        = PlayerMode.Vod,
-                    title       = item?.title ?: "Reproduciendo…",
-                    subtitle    = item?.let(::subtitleFor),
-                    backdropUrl = item?.backdropUrl ?: item?.posterUrl,
-                    logoUrl     = item?.logoUrl,
-                    audioTracks = audioTracks,
-                    startParams = PlayerStartParams(
+                    mode               = PlayerMode.Vod,
+                    title              = item?.title ?: "Reproduciendo…",
+                    subtitle           = item?.let(::subtitleFor),
+                    backdropUrl        = item?.backdropUrl ?: item?.posterUrl,
+                    logoUrl            = item?.logoUrl,
+                    audioTracks        = item?.let { d -> TrackOptions.audio(d.mediaStreams) }.orEmpty(),
+                    subtitleTracks     = subtitleTracks,
+                    // Otro fichero, otras pistas: las elecciones no se arrastran.
+                    selectedAudio      = -1,
+                    directAudioOrdinal = null,
+                    selectedSubtitle   = -1,
+                    startParams        = PlayerStartParams(
                         streamUrl    = streamUrl,
                         resumePosSec = resumeSec,
                         isHls        = !isDirectPlay,
+                        subtitles    = TrackOptions.sideloaded(targetItemId, subtitleTracks),
                     ),
-                    error       = null,
+                    error              = null,
                 )
             }
             if (item != null && item.type == "episode") maybeResolveNextEpisode(item)
@@ -395,65 +405,64 @@ class PlayerViewModel(
      * Cambia la pista de audio a la [ordinal]-ésima del fichero y sigue
      * desde [positionSec]. El backend transcodifica UNA pista por sesión
      * (`-map 0:a:N`), así que con HLS hay que pedir otro master con
-     * `?audio=N`; el /info se vuelve a consultar porque la decisión puede
-     * cambiar (una pista DTS fuerza transcode aunque la default fuese AAC).
-     * En direct play el fichero lleva todas las pistas: se elige en ExoPlayer
-     * (`directAudioOrdinal`, lo aplica la pantalla).
+     * `?audio=N`. En direct play el fichero lleva todas las pistas: se
+     * elige en ExoPlayer (`directAudioOrdinal`, lo aplica la pantalla).
      */
     fun selectAudio(ordinal: Int, positionSec: Long) {
         val current = _ui.value
         if (current.mode != PlayerMode.Vod || ordinal !in current.audioTracks.indices) return
-        viewModelScope.launch {
-            val caps = ClientCapabilities.probe()
-            val info = runCatching { api.getStreamInfo(itemId, caps, audio = ordinal).data }.getOrNull()
-            val isDirectPlay = info?.method == "direct_play"
-            _ui.update {
-                if (isDirectPlay) {
-                    it.copy(selectedAudio = ordinal, directAudioOrdinal = ordinal)
-                } else {
-                    it.copy(
-                        selectedAudio      = ordinal,
-                        directAudioOrdinal = null,
-                        startParams        = PlayerStartParams(
-                            streamUrl    = "/api/v1/stream/$itemId/master.m3u8?audio=$ordinal",
-                            resumePosSec = positionSec,
-                            isHls        = true,
-                        ),
-                    )
-                }
-            }
-        }
+        _ui.update { it.copy(selectedAudio = ordinal) }
+        restartVod(positionSec, audio = ordinal, burnSub = current.burnSubtitleOrdinal)
     }
 
-    /** Pistas de audio del fichero, en el orden que ffmpeg entiende como `0:a:N`. */
-    private fun audioTracksFrom(item: ItemDetailDto): List<AudioTrackOption> =
-        item.mediaStreams
-            .filter { it.streamType == "audio" }
-            .sortedBy { it.streamIndex }
-            .mapIndexed { ordinal, s ->
-                val channels = when (s.channels) {
-                    null, 0              -> null
-                    1                    -> "Mono"
-                    2                    -> "Estéreo"
-                    CHANNELS_SURROUND    -> "5.1"
-                    CHANNELS_SURROUND_71 -> "7.1"
-                    else                 -> "${s.channels} canales"
-                }
-                val name = languageName(s.language) ?: s.title?.takeIf { it.isNotBlank() } ?: "Audio ${ordinal + 1}"
-                AudioTrackOption(
-                    ordinal   = ordinal,
-                    label     = listOfNotNull(name, channels, s.codec?.uppercase()).joinToString(" · "),
-                    isDefault = s.isDefault,
+    /**
+     * Elige el subtítulo [ordinal] (-1 = desactivados). Los de texto van
+     * aparte como WebVTT y la pantalla los activa en ExoPlayer sin cortar
+     * la reproducción; los de imagen (PGS/DVD/ASS) los quema el servidor,
+     * así que hay que pedir otro master con `?subtitle=N` desde
+     * [positionSec]. Dejar un subtítulo quemado también relanza (sin él).
+     */
+    fun selectSubtitle(ordinal: Int, positionSec: Long) {
+        val current = _ui.value
+        if (current.mode != PlayerMode.Vod || ordinal == current.selectedSubtitle) return
+        val next = current.subtitleTracks.firstOrNull { it.ordinal == ordinal }
+        if (ordinal >= 0 && next == null) return
+        val wasBurned = current.burnSubtitleOrdinal >= 0
+        _ui.update { it.copy(selectedSubtitle = ordinal) }
+        val burnNow = if (next?.burnIn == true) ordinal else -1
+        if (burnNow >= 0 || wasBurned) restartVod(positionSec, audio = current.selectedAudio, burnSub = burnNow)
+    }
+
+    /**
+     * Recalcula cómo reproducir con la pista de audio [audio] y el subtítulo
+     * quemado [burnSub] (-1 = ninguno) y sigue desde [positionSec]. Con
+     * burn-in siempre HLS (el servidor transcodifica). Sin él se repide
+     * /info porque la decisión depende de la pista de audio (una DTS fuerza
+     * transcode aunque la default fuese AAC); si sale direct play y ya se
+     * estaba en direct play no se recarga nada: la pista se elige en
+     * ExoPlayer.
+     */
+    private fun restartVod(positionSec: Long, audio: Int, burnSub: Int) {
+        viewModelScope.launch {
+            val id = _ui.value.itemId
+            val direct = burnSub < 0 && runCatching {
+                api.getStreamInfo(id, ClientCapabilities.probe(), audio = audio.takeIf { it >= 0 }).data
+            }.getOrNull()?.method == "direct_play"
+            _ui.update { state ->
+                val alreadyDirect = direct && state.startParams?.isHls == false
+                val streamUrl = if (direct) "/api/v1/stream/$id/direct" else TrackOptions.masterUrl(id, audio, burnSub)
+                val restarted = PlayerStartParams(
+                    streamUrl    = streamUrl,
+                    resumePosSec = positionSec,
+                    isHls        = !direct,
+                    subtitles    = TrackOptions.sideloaded(id, state.subtitleTracks),
+                )
+                state.copy(
+                    directAudioOrdinal = audio.takeIf { direct && it >= 0 },
+                    startParams        = if (alreadyDirect) state.startParams else restarted,
                 )
             }
-
-    private fun languageName(tag: String?): String? {
-        if (tag.isNullOrBlank() || tag == "und") return null
-        return runCatching { java.util.Locale.forLanguageTag(tag).getDisplayLanguage(java.util.Locale("es")) }
-            .getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?.replaceFirstChar { it.uppercase() }
-            ?: tag.uppercase()
+        }
     }
 
     /** "Serie · T1 · E3" para episodios; nada para el resto (bajo el logo solo va el logo). */
@@ -483,9 +492,6 @@ class PlayerViewModel(
     )
 
     companion object {
-        private const val CHANNELS_SURROUND = 6
-        private const val CHANNELS_SURROUND_71 = 8
-
         private const val TAG = "PlayerViewModel"
 
         fun factory(
@@ -505,14 +511,6 @@ class PlayerViewModel(
 
 enum class PlayerMode { Unknown, Vod, Live }
 
-/** Una pista de audio del fichero para el selector: `ordinal` es el `N` de `?audio=N`. */
-@androidx.compose.runtime.Immutable
-data class AudioTrackOption(
-    val ordinal:   Int,
-    val label:     String,
-    val isDefault: Boolean,
-)
-
 @androidx.compose.runtime.Immutable
 data class PlayerUiState(
     val itemId:          String,
@@ -531,6 +529,10 @@ data class PlayerUiState(
     val selectedAudio:   Int = -1,
     /** En direct play, ordinal de audio a aplicar en ExoPlayer (la pantalla lo hace). */
     val directAudioOrdinal: Int? = null,
+    /** Subtítulos del fichero (texto y de imagen). */
+    val subtitleTracks:  List<SubtitleTrackOption> = emptyList(),
+    /** Ordinal del subtítulo elegido; -1 = desactivados (también al empezar). */
+    val selectedSubtitle: Int = -1,
     /** Episode to auto-play when this one ends. Null = end of series / not an episode. */
     val nextEpisode:     NextEpisodeInfo? = null,
     // ── Live-mode extras ─────────────────────────────────────────────────
@@ -547,6 +549,21 @@ data class PlayerUiState(
     /** True when the currently playing live channel is in the user's favourites. */
     val isCurrentChannelFavorite: Boolean
         get() = liveChannel?.id?.let { it in favorites } == true
+
+    /** El subtítulo elegido, si hay. */
+    private val selectedSubtitleTrack: SubtitleTrackOption?
+        get() = subtitleTracks.firstOrNull { it.ordinal == selectedSubtitle }
+
+    /** Ordinal del subtítulo quemado por el servidor en el stream actual; -1 = ninguno. */
+    val burnSubtitleOrdinal: Int
+        get() = selectedSubtitleTrack?.takeIf { it.burnIn }?.ordinal ?: -1
+
+    /**
+     * `Format.id` de la pista de texto que ExoPlayer debe activar; null =
+     * texto apagado (sin subtítulo, o uno quemado que ya va en el vídeo).
+     */
+    val activeSubtitleId: String?
+        get() = selectedSubtitleTrack?.takeIf { !it.burnIn }?.let { TrackOptions.sideloadId(it.streamIndex) }
 
     /**
      * 1-based position of the current channel in the library list,
@@ -602,4 +619,6 @@ data class PlayerStartParams(
     val streamUrl:    String,
     val resumePosSec: Long,
     val isHls:        Boolean,
+    /** Subtítulos de texto que ExoPlayer carga aparte (solo VOD). */
+    val subtitles:    List<SideloadedSubtitle> = emptyList(),
 )
