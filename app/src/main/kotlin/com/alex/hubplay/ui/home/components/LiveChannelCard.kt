@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import com.alex.hubplay.data.Content
 
 @Composable
@@ -66,25 +67,7 @@ fun LiveChannelCard(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        if (!item.logoUrl.isNullOrBlank()) {
-            AsyncImage(
-                model              = item.logoUrl,
-                contentDescription = item.title,
-                contentScale       = ContentScale.Fit,
-                modifier           = Modifier
-                    .fillMaxSize()
-                    .padding(20.dp),
-            )
-        } else {
-            Text(
-                text       = (item.logoInitials ?: initialsFromName(item.title)).take(3),
-                style      = MaterialTheme.typography.headlineLarge,
-                color      = parseHex(item.logoFg) ?: Color.White,
-                fontSize   = 42.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign  = TextAlign.Center,
-            )
-        }
+        ChannelArt(item)
 
         // Channel name overlay at bottom
         Box(
@@ -120,6 +103,35 @@ fun LiveChannelCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * Logo del canal o sus iniciales. Muchos logos IPTV dan 404 en el
+ * servidor: si falla la carga, iniciales en vez de un rectángulo vacío.
+ */
+@Composable
+private fun ChannelArt(item: Content.LiveChannel) {
+    var logoFailed by remember(item.id) { mutableStateOf(false) }
+    if (!item.logoUrl.isNullOrBlank() && !logoFailed) {
+        AsyncImage(
+            model              = item.logoUrl,
+            contentDescription = item.title,
+            contentScale       = ContentScale.Fit,
+            onState            = { if (it is AsyncImagePainter.State.Error) logoFailed = true },
+            modifier           = Modifier
+                .fillMaxSize()
+                .padding(20.dp),
+        )
+    } else {
+        Text(
+            text       = (item.logoInitials ?: initialsFromName(item.title)).take(3),
+            style      = MaterialTheme.typography.headlineLarge,
+            color      = parseHex(item.logoFg) ?: Color.White,
+            fontSize   = 42.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign  = TextAlign.Center,
+        )
     }
 }
 

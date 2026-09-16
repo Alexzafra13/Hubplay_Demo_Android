@@ -78,6 +78,7 @@ import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.HeroInfo
 import com.alex.hubplay.ui.home.components.HomeBackdrop
 import com.alex.hubplay.ui.home.components.HomeRail
+import com.alex.hubplay.ui.home.components.LiveChannelHeroFallback
 import com.alex.hubplay.ui.home.components.LiveNowRail
 import com.alex.hubplay.ui.home.components.RAIL_CARD_HEIGHT
 import com.alex.hubplay.ui.home.components.Tab
@@ -421,7 +422,7 @@ fun HomeScreen(
                             authState    = authState,
                             okHttpClient = okHttpClient,
                             modifier     = Modifier.fillMaxSize(),
-                            fallback     = {},
+                            fallback     = { LiveChannelHeroFallback(liveChannelItem) },
                         )
                     }
                     // El trailer YouTube ya NO se monta aquí — lo dibuja el

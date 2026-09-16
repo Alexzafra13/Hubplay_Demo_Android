@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import com.alex.hubplay.R
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.ui.theme.Accent
@@ -132,27 +133,7 @@ fun HeroInfo(
                 },
             ) { displayItem ->
                 Column {
-                    // Title — large and bold like Prime Video
-                    if (!displayItem.logoUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = displayItem.logoUrl,
-                            contentDescription = displayItem.title,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .heightIn(min = 48.dp, max = 90.dp)
-                                .widthIn(max = 400.dp),
-                        )
-                    } else {
-                        Text(
-                            text = displayItem.title,
-                            style = MaterialTheme.typography.displayLarge,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            lineHeight = 52.sp,
-                        )
-                    }
+                    HeroTitle(displayItem)
                     Spacer(Modifier.height(10.dp))
 
                     // Meta row: genre · duration · year · rating
@@ -267,6 +248,36 @@ fun HeroInfo(
                 }
             }
         }
+    }
+}
+
+/**
+ * Logo del item o, si no hay o no carga (los de canales IPTV dan 404 a
+ * menudo), el título en grande. Antes un logo roto dejaba el hero sin nada.
+ */
+@Composable
+private fun HeroTitle(item: Content) {
+    var logoFailed by remember(item.id) { mutableStateOf(false) }
+    if (!item.logoUrl.isNullOrBlank() && !logoFailed) {
+        AsyncImage(
+            model = item.logoUrl,
+            contentDescription = item.title,
+            contentScale = ContentScale.Fit,
+            onState = { if (it is AsyncImagePainter.State.Error) logoFailed = true },
+            modifier = Modifier
+                .heightIn(min = 48.dp, max = 90.dp)
+                .widthIn(max = 400.dp),
+        )
+    } else {
+        Text(
+            text = item.title,
+            style = MaterialTheme.typography.displayLarge,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 52.sp,
+        )
     }
 }
 
