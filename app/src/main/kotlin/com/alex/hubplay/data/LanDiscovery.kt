@@ -89,9 +89,13 @@ class LanDiscovery(
                 val url = "http://$host:$port"
                 val key = "${serviceInfo.serviceName}|$host:$port"
                 if (seen.add(key)) {
+                    val id = serviceInfo.attributes?.get("id")
+                        ?.let { String(it, Charsets.UTF_8) }
+                        ?.takeIf { it.isNotBlank() }
                     trySend(LanServer(
                         displayName = serviceInfo.serviceName.ifBlank { "HubPlay" },
                         url         = url,
+                        serverId    = id,
                     ))
                 }
             }
@@ -166,4 +170,18 @@ class LanDiscovery(
 data class LanServer(
     val displayName: String,
     val url:         String,
-)
+    /**
+     * Identificador estable de la instalación (`server.instance_id` del
+     * backend), el mismo por mDNS (TXT `id`), UDP (`id`) y `/health`
+     * (`server_id`). Null con servidores antiguos que no lo anuncian.
+     */
+    val serverId:    String? = null,
+) {
+    /**
+     * Mismo servidor si coincide la URL o, cuando ambos lo anuncian, el
+     * id: un host con dos IPs (Wi-Fi + cable, Docker + host) contesta por
+     * las dos y antes salía dos veces en "Servidores en tu red".
+     */
+    fun sameServerAs(other: LanServer): Boolean =
+        url == other.url || (serverId != null && serverId == other.serverId)
+}

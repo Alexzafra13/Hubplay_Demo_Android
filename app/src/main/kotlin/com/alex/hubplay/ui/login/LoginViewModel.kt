@@ -194,7 +194,7 @@ class LoginViewModel(
             _uiState.update { it.copy(lanSearching = true) }
             lanDiscovery.discover().collect { entry ->
                 _uiState.update { state ->
-                    if (state.lanDiscovery.any { it.url == entry.url }) state
+                    if (state.lanDiscovery.any { it.sameServerAs(entry) }) state
                     else state.copy(lanDiscovery = state.lanDiscovery + entry)
                 }
             }

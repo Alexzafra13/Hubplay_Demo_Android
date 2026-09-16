@@ -47,6 +47,31 @@ class LanProbeTest {
     }
 
     @Test
+    fun `udp reply and health carry the server id when the backend announces it`() {
+        val server = LanProbe.parseUdpReply(
+            """{"product":"hubplay","name":"Salón","port":8097,"id":"a1b2c3d4e5f60718"}""",
+            fromHost = "192.168.1.100",
+        )
+        assertEquals("a1b2c3d4e5f60718", server?.serverId)
+        assertNull(LanProbe.parseUdpReply("""{"product":"hubplay","port":8097}""", "10.0.0.2")?.serverId)
+        assertEquals("a1b2c3d4e5f60718", LanProbe.healthServerId("""{"product":"hubplay","server_id":"a1b2c3d4e5f60718"}"""))
+        assertNull(LanProbe.healthServerId("""{"product":"hubplay","status":"ok"}"""))
+    }
+
+    @Test
+    fun `same server is recognised by url or by announced id`() {
+        val wifi  = LanServer("Salón · 192.168.1.100", "http://192.168.1.100:8097", serverId = "id-1")
+        val cable = LanServer("Salón · 192.168.1.101", "http://192.168.1.101:8097", serverId = "id-1")
+        val other = LanServer("Otro · 192.168.1.102", "http://192.168.1.102:8097", serverId = "id-2")
+        val legacy = LanServer("HubPlay · 192.168.1.100:8097", "http://192.168.1.100:8097")
+        val legacyCable = LanServer("HubPlay · 192.168.1.101:8097", "http://192.168.1.101:8097")
+        assertTrue(wifi.sameServerAs(cable))
+        assertFalse(wifi.sameServerAs(other))
+        assertTrue(wifi.sameServerAs(legacy))
+        assertFalse(legacy.sameServerAs(legacyCable))
+    }
+
+    @Test
     fun `health signature accepts marker and legacy body`() {
         assertTrue(LanProbe.looksLikeHubplayHealth("""{"product":"hubplay","status":"ok"}"""))
         assertTrue(

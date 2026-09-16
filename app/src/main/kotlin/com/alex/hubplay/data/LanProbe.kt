@@ -120,7 +120,7 @@ class LanProbe(
             httpClient.newCall(request).execute().use { resp ->
                 val body = resp.body?.string().orEmpty()
                 if (resp.isSuccessful && looksLikeHubplayHealth(body)) {
-                    LanServer(displayName = "HubPlay · $host:$port", url = url)
+                    LanServer(displayName = "HubPlay · $host:$port", url = url, serverId = healthServerId(body))
                 } else {
                     null
                 }
@@ -179,14 +179,21 @@ class LanProbe(
             val port = (map["port"] as? Number)?.toInt() ?: return null
             if (port <= 0 || fromHost.isBlank()) return null
             val name = (map["name"] as? String)?.takeIf { it.isNotBlank() } ?: "HubPlay"
+            val id = (map["id"] as? String)?.takeIf { it.isNotBlank() }
             // URL explícita (servidor detrás de proxy TLS): manda sobre ip:port.
             val explicit = (map["url"] as? String)?.trim()
                 ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
                 ?.trimEnd('/')
             return when (explicit) {
-                null -> LanServer(displayName = "$name · $fromHost", url = "http://$fromHost:$port")
-                else -> LanServer(displayName = "$name · $explicit", url = explicit)
+                null -> LanServer(displayName = "$name · $fromHost", url = "http://$fromHost:$port", serverId = id)
+                else -> LanServer(displayName = "$name · $explicit", url = explicit, serverId = id)
             }
+        }
+
+        /** `server_id` del `/api/v1/health` (backends desde 2026-09-16); null si no lo trae. */
+        fun healthServerId(body: String): String? {
+            val map = runCatching { mapAdapter.fromJson(body) }.getOrNull() ?: return null
+            return (map["server_id"] as? String)?.takeIf { it.isNotBlank() }
         }
 
         /** ¿Es este cuerpo el `/api/v1/health` de un HubPlay? */

@@ -11,7 +11,8 @@
   Backend hermano: `Alexzafra13/HubPlay_demo` (dev local en
   `http://192.168.1.100:8097`).
 - Funciona en la Mi TV real: login/emparejado, Inicio, catálogo, ficha
-  (película y serie), reproductor VOD con chrome propio, TV en directo,
+  (película y serie), reproductor VOD con chrome propio (audio y
+  subtítulos del servidor), TV en directo,
   buscar, colecciones, salvapantallas, intro, Ajustes → Inicio.
 - Sin probar: móvil/tablet, release firmada real, tests de Compose UI.
 
@@ -67,6 +68,19 @@
   backdrop con Ken Burns y línea fina. Pistas de audio desde
   `media_streams` de la ficha: elegir una repide `/info?audio=N` y el
   master `?audio=N` en la posición (el backend transcodifica una pista).
+- **Subtítulos** (`ui/player/TrackOptions.kt`, 2026-09-16): lista según
+  `media_streams`. Texto (SRT…) → `SingleSampleMediaSource` con el WebVTT de
+  `/stream/{id}/subtitles/{stream_index}`, mezclado con `MergingMediaSource`
+  (el `HlsMediaSource.Factory` ignora `subtitleConfigurations`); se activa
+  por `Format.id`, que ExoPlayer prefija con el índice de fuente
+  ("1:hubplay-sub-4"). Media3 1.5 exige `experimentalSetLegacyDecodingEnabled`
+  en el `TextRenderer` para VTT crudo (`LegacyTextRenderersFactory`); se
+  usa SingleSample a propósito porque no descarga nada hasta elegir la pista.
+  Imagen (PGS/DVD/ASS) → `?subtitle=N` en el master (el servidor quema).
+  El VTT lo extrae ffmpeg leyendo el fichero entero (~40 s en frío en un
+  MKV grande): cliente con timeout de 180 s y "warm-up" de la primera pista
+  al arrancar para que el backend (con caché desde 2026-09-16) tenga todas
+  listas. Apagados al empezar; elección no se arrastra al siguiente episodio.
 - **Tráiler**: protocolo real del IFrame API (`infoDelivery` cada ~270 ms,
   fin 1,5 s antes por tiempo), watchdog lee `host.revealed`, lo que capture
   el bridge JS debe ser un objeto estable.
@@ -94,10 +108,20 @@
 1. Rails nuevos para Ajustes → Inicio (backend + app): canales favoritos,
    colecciones, recomendado, estrenos, por género, "para terminar hoy".
    Ideas propuestas al usuario el 2026-09-16, sin decidir.
-2. Reproductor: subtítulos desde `media_streams` (`?sub=N`) como el audio;
-   velocidad/calidad si se quiere; TV en directo sin tocar.
-3. Hero con canal en directo enfocado queda vacío hasta la preview.
-4. Un host con dos IPs sale dos veces en "Servidores en tu red".
+2. Reproductor: velocidad/calidad si se quiere; TV en directo sin tocar.
+   Subtítulos HECHO (2026-09-16); el servidor de la TV (`192.168.1.100`)
+   aún corre un backend sin la caché de VTT: desplegar.
+3. ~~Hero con canal en directo enfocado queda vacío hasta la preview~~ —
+   HECHO 2026-09-16: `LiveChannelHeroFallback` (tinte con `logoBg` + logo o
+   iniciales arriba a la derecha) como `fallback` del `ChannelPreviewPlayer`
+   de Inicio, y `HeroInfo`/`LiveChannelCard` caen a título/iniciales si el
+   logo no carga (muchos `/channels/{id}/logo` dan 404 en el servidor).
+4. ~~Un host con dos IPs sale dos veces en "Servidores en tu red"~~ — HECHO
+   2026-09-16 en app + backend: el servidor anuncia un id estable
+   (`server.instance_id`) por mDNS (TXT `id`), UDP (`id`) y `/health`
+   (`server_id`); `LanServer.serverId` + `sameServerAs` deduplican en
+   `LoginViewModel`. Con backends antiguos (sin id) se sigue comparando
+   por URL. Sin probar en real hasta desplegar el backend.
 5. Estudio Lucasfilm devuelve 0 títulos (backend). Detalle sin artwork,
    `CollectionDetailScreen`, probar en móvil.
 6. Largo plazo: Baseline Profile, EPG grid, tests de Compose UI en CI.
