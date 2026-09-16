@@ -47,7 +47,7 @@ fun LiveChannelCard(
 
     Box(
         modifier = modifier
-            .width(240.dp)
+            .width(LIVE_CARD_WIDTH)
             .aspectRatio(16f / 9f)
             .clip(shape)
             .background(parseHex(item.logoBg) ?: MaterialTheme.colorScheme.surfaceVariant)
@@ -147,3 +147,6 @@ private fun parseHex(s: String?): Color? {
         null
     }
 }
+
+/** 320 × 180: misma altura que el resto de cards de Inicio (ver HomeScreen). */
+private val LIVE_CARD_WIDTH = 320.dp

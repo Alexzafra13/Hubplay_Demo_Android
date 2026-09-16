@@ -11,6 +11,6 @@ k() {
 launch() {
   adb -s "$D" shell am force-stop com.alex.hubplay.debug
   adb -s "$D" shell am start -n com.alex.hubplay.debug/com.alex.hubplay.MainActivity >/dev/null 2>&1
-  for i in $(seq 1 12); do sleep 1; [ "$(front)" != "0" ] && { sleep 9; echo "HubPlay en primer plano"; return 0; }; done
+  for i in $(seq 1 25); do sleep 1; [ "$(front)" != "0" ] && { sleep 9; echo "HubPlay en primer plano"; return 0; }; done
   echo "!! HubPlay no llegó al primer plano"; return 1
 }

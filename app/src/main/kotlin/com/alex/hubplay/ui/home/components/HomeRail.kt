@@ -54,6 +54,7 @@ fun <T : Content> HomeRail(
         MediaCard(
             item      = item,
             style     = style,
+            slotWidth = railCardWidth(style),
             onFocused = { onItemFocused(item) },
             onClick   = { onClick(item) },
             modifier  = mod,

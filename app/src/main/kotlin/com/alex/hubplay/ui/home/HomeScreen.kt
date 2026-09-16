@@ -42,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -49,6 +50,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -66,11 +73,13 @@ import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.components.SIDEBAR_WIDTH
 import com.alex.hubplay.ui.components.TvShell
 import com.alex.hubplay.ui.components.trailerBackdropAlphaSpec
+import com.alex.hubplay.ui.home.components.CARD_CAPTION_HEIGHT
 import com.alex.hubplay.ui.home.components.CardStyle
 import com.alex.hubplay.ui.home.components.HeroInfo
 import com.alex.hubplay.ui.home.components.HomeBackdrop
 import com.alex.hubplay.ui.home.components.HomeRail
 import com.alex.hubplay.ui.home.components.LiveNowRail
+import com.alex.hubplay.ui.home.components.RAIL_CARD_HEIGHT
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.livetv.ChannelPreviewPlayer
 import com.alex.hubplay.ui.theme.BgBase
@@ -94,18 +103,16 @@ private const val HERO_AUTOROTATE_MS = 8000L
  *    "Recientes" / "Tendencias": la CARÁTULA es lo que identifica una
  *    peli o serie; el poster va más estrecho que en el catálogo para
  *    que quepan hero reducido + rail entero en 540dp. */
-private val RailHeightLandscape = 228.dp
-private val RailHeightPortrait  = 285.dp
-
-private fun railStyle(type: HomeRailType?): CardStyle = when (type) {
-    HomeRailType.Trending, HomeRailType.LatestInLibrary -> CardStyle.PosterCompact
-    else -> CardStyle.Landscape
-}
-
-private fun railHeightFor(type: HomeRailType?): Dp = when {
-    railStyle(type).isPortrait -> RailHeightPortrait
-    else                       -> RailHeightLandscape
-}
+/**
+ * Todas las cards de Inicio miden lo MISMO de alto (2026-09-16, pedido
+ * por el usuario): carátulas 2:3 y fotogramas 16:9 se alinean en la misma
+ * línea base y solo cambia el ancho (120 dp frente a 320 dp). Antes cada
+ * rail tenía su altura (228 / 285 dp) y al pasar de "Continuar viendo" a
+ * "Lo último" la página daba un salto y las tarjetas bailaban.
+ * Rail = cabecera 46 + artwork 180 + caption 40 + aire 7 = 273 dp; cabe
+ * bajo el hero reducido (540 × 0,54 = 292).
+ */
+private val RailHeight: Dp = 46.dp + RAIL_CARD_HEIGHT + CARD_CAPTION_HEIGHT + 7.dp
 
 /** Fracción del alto de pantalla que ocupa el hero cuando el foco está
  *  en los rails. 0.46 deja 292dp bajo el hero: cabe un rail de posters
@@ -159,6 +166,25 @@ fun HomeScreen(
     // al botón Reproducir en lugar de quedarse atascado (focus engine
     // por defecto no encuentra el camino cuando el hero está reducido).
     val playFocusRequester = remember { FocusRequester() }
+
+    // ↑ desde el primer rail: los botones del hero NO existen mientras el
+    // foco está en los rails (`showControls = isLanding`), así que el
+    // `focusProperties { up }` no tenía adónde ir y el usuario "no podía
+    // volver". Se fuerza el modo hero, se espera a que los botones se
+    // compongan y se pide el foco a Reproducir.
+    var wantHeroFocus by remember { mutableStateOf(false) }
+    // Con el foco en Reproducir/Detalles, el hero vuelve a ser el carrusel
+    // propio (puntos, rotación): antes se quedaba clavado en la última
+    // card enfocada y "no se podía volver".
+    LaunchedEffect(heroButtonsFocused) {
+        if (heroButtonsFocused) viewModel.onHeroFocused()
+    }
+    LaunchedEffect(wantHeroFocus, isLanding) {
+        if (!wantHeroFocus || !isLanding) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { playFocusRequester.requestFocus() }
+        wantHeroFocus = false
+    }
 
     // El hero rinde un item del carousel propio (data.hero, los 5 trending)
     // SALVO que el usuario haya movido el foco a un rail de abajo — en ese
@@ -266,6 +292,7 @@ fun HomeScreen(
                 // foco en los rails (no en el sidebar) y deja que el chain
                 // de `focusRestorer`s elija el item correcto dentro.
                 val railFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
+                val railHeightPx = with(LocalDensity.current) { RailHeight.toPx() }
 
                 DisposableEffect(Unit) {
                     // La "puerta del primer foco" solo debe tragarse el
@@ -326,7 +353,21 @@ fun HomeScreen(
                     // animación de cientos de pixels sería ruido visual.
                     val target = listState.layoutInfo.visibleItemsInfo
                         .firstOrNull { it.index == activeRailIndex }
-                    if (target == null) {
+                    val first = listState.firstVisibleItemIndex
+                    if (target == null && activeRailIndex < first) {
+                        // Subiendo a un rail que quedó por encima de la
+                        // ventana: como todos miden lo mismo, su distancia es
+                        // exacta y se anima igual que al bajar (antes era un
+                        // salto seco, "al subir no se anima").
+                        val distance = listState.firstVisibleItemScrollOffset + (first - activeRailIndex) * railHeightPx
+                        listState.animateScrollBy(
+                            value         = -distance,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness    = Spring.StiffnessMedium,
+                            ),
+                        )
+                    } else if (target == null) {
                         listState.scrollToItem(activeRailIndex)
                     } else if (target.offset != 0) {
                         listState.animateScrollBy(
@@ -434,14 +475,14 @@ fun HomeScreen(
                         // como peek), y rails con altura fija evita
                         // cards aplastados durante la animación.
                         val available        = maxHeight
-                        val heroFullHeight    = available - railHeightFor(rails.firstOrNull()?.type)
+                        val heroFullHeight    = available - RailHeight
                         val heroReducedHeight = available * HERO_REDUCED_FRACTION
                         // El último rail también debe poder subir hasta el
                         // borde del hero: sin este padding inferior el
                         // LazyColumn se queda sin recorrido y el rail
                         // anterior asomaba (sus captions "en medio").
                         val railsViewport  = available - heroReducedHeight
-                        val lastRailHeight = railHeightFor(rails.lastOrNull()?.type)
+                        val lastRailHeight = RailHeight
                         val railsBottomPad = (railsViewport - lastRailHeight).coerceAtLeast(0.dp)
                         val heroHeight by animateDpAsState(
                             targetValue = if (isLanding) heroFullHeight else heroReducedHeight,
@@ -507,8 +548,18 @@ fun HomeScreen(
                                             .getOrPut(config.id) { FocusRequester() }
                                         Box(
                                             modifier = Modifier
-                                                .height(railHeightFor(config.type))
+                                                .height(RailHeight)
                                                 .fillMaxWidth()
+                                                .onPreviewKeyEvent { event ->
+                                                    val up = index == 0 &&
+                                                        event.type == KeyEventType.KeyDown &&
+                                                        event.key == Key.DirectionUp
+                                                    if (up) {
+                                                        heroButtonsFocused = true
+                                                        wantHeroFocus = true
+                                                    }
+                                                    up
+                                                }
                                                 .focusGroup()
                                                 // Quitamos `focusRestorer()` exterior: tener dos
                                                 // capas de focusRestorer (Box + LazyRow dentro)

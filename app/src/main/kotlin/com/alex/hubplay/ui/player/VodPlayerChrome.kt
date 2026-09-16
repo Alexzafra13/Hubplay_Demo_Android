@@ -242,6 +242,14 @@ private fun BoxScope.ChromeOverlay(
     }
     AnimatedVisibility(
         visible  = shown,
+        enter    = fadeIn(animationSpec = tween(FADE_IN_MS)),
+        exit     = fadeOut(animationSpec = tween(HIDE_MS)),
+        modifier = Modifier.align(Alignment.TopEnd),
+    ) {
+        ClockCorner()
+    }
+    AnimatedVisibility(
+        visible  = shown,
         enter    = fadeIn(animationSpec = tween(FADE_IN_MS)) +
             slideInVertically(animationSpec = tween(SLIDE_MS, easing = FastOutSlowInEasing)) { it / SLIDE_FRACTION },
         exit     = fadeOut(animationSpec = tween(HIDE_MS)) +
@@ -441,8 +449,6 @@ private fun ControlsBlock(
             )
             .padding(start = CHROME_PADDING, end = CHROME_PADDING, bottom = CHROME_BOTTOM, top = CONTROLS_TOP_FADE),
     ) {
-        EndsAtRow(playhead = playhead)
-        Spacer(Modifier.height(4.dp))
         SeekBar(
             playhead = playhead,
             onSeek   = { delta ->
@@ -451,7 +457,7 @@ private fun ControlsBlock(
             },
         )
         Spacer(Modifier.height(2.dp))
-        ElapsedRow(playhead = playhead)
+        TimeRow(playhead = playhead)
         Spacer(Modifier.height(8.dp))
         ControlButtons(info, playerState, playFocus, actions, callbacks, sheetOpen)
     }
@@ -481,17 +487,17 @@ private fun ControlButtons(
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         val playing = playerState.isPlaying
         HeroIconButton(
-            icon               = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-            contentDescription = stringResource(if (playing) R.string.player_pause else R.string.player_play),
-            onClick            = onTogglePlay,
-            modifier           = Modifier.focusRequester(playFocus).onFocusChanged { if (it.isFocused) onInteract() },
-            size               = CONTROL_BUTTON,
-        )
-        HeroIconButton(
             icon               = Icons.Filled.Replay30,
             contentDescription = stringResource(R.string.player_rewind_30),
             onClick            = { onSeek(-SEEK_STEP_MS) },
             modifier           = Modifier.onFocusChanged { if (it.isFocused) onInteract() },
+            size               = CONTROL_BUTTON,
+        )
+        HeroIconButton(
+            icon               = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+            contentDescription = stringResource(if (playing) R.string.player_pause else R.string.player_play),
+            onClick            = onTogglePlay,
+            modifier           = Modifier.focusRequester(playFocus).onFocusChanged { if (it.isFocused) onInteract() },
             size               = CONTROL_BUTTON,
         )
         HeroIconButton(
@@ -638,11 +644,13 @@ private fun SeekBar(playhead: Playhead, onSeek: (Long) -> Unit) {
     }
 }
 
-/** Encima de la barra, a la derecha: `Termina 1:52`. */
+/** Debajo de la barra: `55:36 / 1:39:25` a la izquierda y `Termina 1:52` a la derecha. */
 @Composable
-private fun EndsAtRow(playhead: Playhead) {
+private fun TimeRow(playhead: Playhead) {
     val duration = playhead.durationMs
+    val elapsed = if (duration > 0) "${formatTime(playhead.positionMs)} / ${formatTime(duration)}" else formatTime(playhead.positionMs)
     Row(modifier = Modifier.fillMaxWidth().height(TIME_ROW_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
+        Text(text = elapsed, color = TextPrimary, fontSize = 13.sp)
         Spacer(Modifier.weight(1f))
         if (duration > 0) {
             val remaining = (duration - playhead.positionMs).coerceAtLeast(0L)
@@ -652,12 +660,22 @@ private fun EndsAtRow(playhead: Playhead) {
     }
 }
 
-/** Debajo de la barra, a la izquierda: `55:36 / 1:39:25`. */
+/** Hora actual, sutil, en la esquina superior derecha; se actualiza cada medio minuto. */
 @Composable
-private fun ElapsedRow(playhead: Playhead) {
-    val duration = playhead.durationMs
-    val text = if (duration > 0) "${formatTime(playhead.positionMs)} / ${formatTime(duration)}" else formatTime(playhead.positionMs)
-    Text(text = text, color = TextPrimary, fontSize = 13.sp)
+private fun ClockCorner(modifier: Modifier = Modifier) {
+    var now by remember { mutableStateOf(LocalTime.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = LocalTime.now()
+            delay(CLOCK_TICK_MS)
+        }
+    }
+    Text(
+        text     = now.format(END_TIME_FORMAT),
+        color    = Color.White.copy(alpha = CLOCK_ALPHA),
+        fontSize = 15.sp,
+        modifier = modifier.padding(top = CHROME_TOP, end = CHROME_PADDING),
+    )
 }
 
 /** `h:mm:ss` a partir de una hora, `mm:ss` por debajo. */
@@ -672,6 +690,8 @@ internal fun formatTime(ms: Long): String {
 // ─── Constantes ─────────────────────────────────────────────────────────────
 
 private const val AUTO_HIDE_MS = 4_500L
+private const val CLOCK_TICK_MS = 30_000L
+private const val CLOCK_ALPHA = 0.7f
 private const val SEEK_STEP_MS = 30_000L
 
 /** Teclas que, con el chrome oculto, solo lo enseñan. */

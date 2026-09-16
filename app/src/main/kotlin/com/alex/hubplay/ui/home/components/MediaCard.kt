@@ -68,6 +68,13 @@ private const val FOCUSED_SCALE = 1.07f
  *  Constante pública para que los rails de Home dimensionen sus filas. */
 val CARD_CAPTION_HEIGHT = 40.dp
 
+/** Alto del artwork de TODAS las cards de los rails de Inicio: carátulas
+ *  2:3 y fotogramas 16:9 comparten línea base y solo cambia el ancho. */
+val RAIL_CARD_HEIGHT = 180.dp
+
+/** Ancho de una card de rail de Inicio para el [style] dado. */
+fun railCardWidth(style: CardStyle): androidx.compose.ui.unit.Dp = RAIL_CARD_HEIGHT * style.aspect
+
 /**
  * Tarjeta de contenido (rails de Home, rejillas de catálogo, sagas).
  *

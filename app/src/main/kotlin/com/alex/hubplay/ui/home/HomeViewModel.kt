@@ -396,6 +396,11 @@ class HomeViewModel(
      */
     fun resetFirstFocusGate() { firstFocusConsumed = false }
 
+    /** El foco ha vuelto a los botones del hero: ninguna card manda, vuelve el carrusel. */
+    fun onHeroFocused() {
+        focusBus.tryEmit(null)
+    }
+
     fun onCardFocused(item: Content?) {
         if (!firstFocusConsumed) {
             firstFocusConsumed = true
