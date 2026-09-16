@@ -40,3 +40,8 @@ adb -s $D shell cmd package compile -m speed -f com.alex.hubplay.debug
 adb -s $D shell am start -W -n com.alex.hubplay.debug/com.alex.hubplay.MainActivity | grep TotalTime
 adb -s $D shell am start -W --start-profiler /data/local/tmp/s.trace --sampling 500 -n com.alex.hubplay.debug/com.alex.hubplay.MainActivity
 ```
+
+**Teclas seguras**: `source tools/tvperf/tvkeys.sh; launch; k KEYCODE_DPAD_DOWN 1.5`.
+`k` solo envía la tecla si HubPlay está en primer plano (si no, avisa y
+falla); `launch` arranca la app y espera a que suba. Sin esto, una tecla
+puede acabar en Play Store o en un diálogo del sistema.

@@ -201,9 +201,27 @@ fun PlayerScreen(
             )
             if (showTrackSheet) {
                 TrackSelectionSheet(
-                    player    = player.exoPlayer,
-                    onDismiss = { showTrackSheet = false },
+                    player              = player.exoPlayer,
+                    onDismiss           = { showTrackSheet = false },
+                    serverAudio         = ui.audioTracks,
+                    selectedServerAudio = ui.selectedAudio,
+                    onSelectServerAudio = { ordinal ->
+                        viewModel.selectAudio(ordinal, positionSec = player.exoPlayer.currentPosition / MS_PER_SECOND)
+                    },
                 )
+            }
+            // Direct play: el fichero lleva todas las pistas, la elegida se
+            // aplica en ExoPlayer (N-ésimo grupo de audio) cuando hay pistas.
+            LaunchedEffect(ui.directAudioOrdinal, playerState.isReady) {
+                val ordinal = ui.directAudioOrdinal ?: return@LaunchedEffect
+                val exo = player.exoPlayer
+                val group = exo.currentTracks.groups
+                    .filter { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }
+                    .getOrNull(ordinal) ?: return@LaunchedEffect
+                exo.trackSelectionParameters = exo.trackSelectionParameters
+                    .buildUpon()
+                    .setOverrideForType(androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, 0))
+                    .build()
             }
 
             // ── Auto-play siguiente episodio ─────────────────────────

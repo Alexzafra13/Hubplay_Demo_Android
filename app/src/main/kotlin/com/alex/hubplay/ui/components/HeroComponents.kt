@@ -161,6 +161,7 @@ fun HeroIconButton(
     onClick:            () -> Unit,
     enabled:            Boolean = true,
     modifier:           Modifier = Modifier,
+    size:               androidx.compose.ui.unit.Dp = ICON_BUTTON_SIZE,
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -174,7 +175,7 @@ fun HeroIconButton(
     Box(
         modifier         = modifier
             .scale(scale)
-            .size(ICON_BUTTON_SIZE)
+            .size(size)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f))
             .onFocusChanged { focused = it.isFocused }

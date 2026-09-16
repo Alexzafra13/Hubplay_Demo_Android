@@ -139,6 +139,8 @@ data class ItemDetailDto(
     @Json(name = "season_number")    val seasonNumber:    Int?    = null,
     @Json(name = "episode_number")   val episodeNumber:   Int?    = null,
     @Json(name = "user_data")        val userData:        UserDataDto? = null,
+    /** Pistas del fichero (vídeo/audio/subtítulos). El reproductor lista las de audio. */
+    @Json(name = "media_streams")    val mediaStreams:    List<MediaStreamDto> = emptyList(),
 )
 
 /**
@@ -146,6 +148,18 @@ data class ItemDetailDto(
  * "writer" (lowercase, from TMDb); `character` only present for actors;
  * `image_url` is a server-relative thumb path, omitted when no photo.
  */
+/** Una pista del fichero, tal y como la expone `GET /items/{id}` en `media_streams`. */
+@JsonClass(generateAdapter = true)
+data class MediaStreamDto(
+    @Json(name = "stream_index") val streamIndex: Int     = 0,
+    @Json(name = "stream_type")  val streamType:  String? = null,
+    val codec:                                     String? = null,
+    @Json(name = "is_default")   val isDefault:   Boolean = false,
+    val channels:                                  Int?    = null,
+    val language:                                  String? = null,
+    val title:                                     String? = null,
+)
+
 @JsonClass(generateAdapter = true)
 data class PersonRefDto(
     val id:                                            String,

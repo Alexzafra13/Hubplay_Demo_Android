@@ -53,6 +53,10 @@ import com.alex.hubplay.R
 fun TrackSelectionSheet(
     player:    ExoPlayer,
     onDismiss: () -> Unit,
+    /** Pistas del fichero según el servidor; si hay, mandan sobre las que ve ExoPlayer (el HLS solo lleva una). */
+    serverAudio:         List<AudioTrackOption> = emptyList(),
+    selectedServerAudio: Int = -1,
+    onSelectServerAudio: (Int) -> Unit = {},
 ) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // The Tracks snapshot is captured into Compose state so changing
@@ -72,29 +76,15 @@ fun TrackSelectionSheet(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             SectionHeader(stringResource(R.string.player_section_audio))
-            if (audioGroups.isEmpty()) {
+            if (serverAudio.isNotEmpty()) {
+                ServerAudioRows(serverAudio, selectedServerAudio) { ordinal ->
+                    onSelectServerAudio(ordinal)
+                    onDismiss()
+                }
+            } else if (audioGroups.isEmpty()) {
                 EmptyRow(stringResource(R.string.player_no_extra_audio))
             } else {
-                audioGroups.forEach { group ->
-                    repeat(group.length) { idx ->
-                        val format = group.getTrackFormat(idx)
-                        val label  = formatAudioLabel(format)
-                        TrackRow(
-                            label    = label,
-                            selected = group.isTrackSelected(idx),
-                            onClick  = {
-                                player.trackSelectionParameters = player.trackSelectionParameters
-                                    .buildUpon()
-                                    .setOverrideForType(
-                                        TrackSelectionOverride(group.mediaTrackGroup, idx),
-                                    )
-                                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
-                                    .build()
-                                tracks = player.currentTracks
-                            },
-                        )
-                    }
-                }
+                ExoAudioRows(player, audioGroups) { tracks = player.currentTracks }
             }
 
             Spacer(Modifier.height(16.dp))
@@ -133,6 +123,58 @@ fun TrackSelectionSheet(
             }
             Spacer(Modifier.height(16.dp))
         }
+    }
+}
+
+/** Pistas de audio que ve ExoPlayer (direct play: el fichero lleva todas). */
+@OptIn(UnstableApi::class)
+@Composable
+private fun ExoAudioRows(
+    player:      ExoPlayer,
+    audioGroups: List<androidx.media3.common.Tracks.Group>,
+    onChanged:   () -> Unit,
+) {
+    audioGroups.forEach { group ->
+        repeat(group.length) { idx ->
+            val format = group.getTrackFormat(idx)
+            TrackRow(
+                label    = formatAudioLabel(format),
+                selected = group.isTrackSelected(idx),
+                onClick  = {
+                    player.trackSelectionParameters = player.trackSelectionParameters
+                        .buildUpon()
+                        .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, idx))
+                        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                        .build()
+                    onChanged()
+                },
+            )
+        }
+    }
+}
+
+/**
+ * Pistas de audio según el servidor. Sin elección explícita, marcada la
+ * `is_default` del fichero (o la primera). Elegir la ya marcada no hace nada.
+ */
+@Composable
+private fun ServerAudioRows(
+    tracks:   List<AudioTrackOption>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+) {
+    val hasDefault = tracks.any { it.isDefault }
+    tracks.forEach { track ->
+        val isSelected = when {
+            selected >= 0 -> track.ordinal == selected
+            hasDefault    -> track.isDefault
+            else          -> track.ordinal == 0
+        }
+        TrackRow(
+            label    = track.label,
+            selected = isSelected,
+            onClick  = { if (!isSelected) onSelect(track.ordinal) },
+        )
     }
 }
 

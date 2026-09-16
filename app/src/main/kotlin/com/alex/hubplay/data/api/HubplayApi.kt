@@ -174,6 +174,8 @@ interface HubplayApi {
     suspend fun getStreamInfo(
         @Path("itemId") itemId: String,
         @Header("X-Hubplay-Client-Capabilities") capabilities: String,
+        /** Pista de audio elegida (índice 0-based entre las de audio); null = la del fichero. */
+        @Query("audio") audio: Int? = null,
     ): StreamInfoResponse
 
     // ─── IPTV: channels + EPG + favorites ───────────────────────────────────

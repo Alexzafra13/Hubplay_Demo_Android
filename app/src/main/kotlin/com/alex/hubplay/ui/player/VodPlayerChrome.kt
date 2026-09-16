@@ -1,6 +1,8 @@
 package com.alex.hubplay.ui.player
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -49,6 +51,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -178,34 +181,63 @@ fun VodPlayerLayer(
             },
     ) {
         LoadingAndBuffering(info = info, showBackdrop = showBackdrop, buffering = playerState.isBuffering)
+        ChromeOverlay(
+            shown       = visible && !showBackdrop,
+            info        = info,
+            exo         = exo,
+            playerState = playerState,
+            playFocus   = playFocus,
+            actions     = actions,
+            callbacks   = ControlsCallbacks(
+                onSeek = { delta ->
+                    seek(delta)
+                    touch()
+                },
+                onTogglePlay = {
+                    togglePlay()
+                    touch()
+                },
+                onInteract = ::touch,
+            ),
+        )
+    }
+}
 
-        AnimatedVisibility(
-            visible  = visible && !showBackdrop,
-            enter    = fadeIn(animationSpec = tween(FADE_IN_MS)) +
-                slideInVertically(animationSpec = tween(SLIDE_MS), initialOffsetY = { it / SLIDE_FRACTION }),
-            exit     = fadeOut(animationSpec = tween(FADE_OUT_MS)) +
-                slideOutVertically(animationSpec = tween(SLIDE_MS), targetOffsetY = { it / SLIDE_FRACTION }),
-            modifier = Modifier.align(Alignment.BottomStart),
-        ) {
-            ControlsBlock(
-                info        = info,
-                exo         = exo,
-                playerState = playerState,
-                playFocus   = playFocus,
-                actions     = actions,
-                callbacks   = ControlsCallbacks(
-                    onSeek = { delta ->
-                        seek(delta)
-                        touch()
-                    },
-                    onTogglePlay = {
-                        togglePlay()
-                        touch()
-                    },
-                    onInteract = ::touch,
-                ),
-            )
-        }
+/** Título arriba a la izquierda y controles abajo, con sus fundidos. */
+@Composable
+private fun BoxScope.ChromeOverlay(
+    shown:       Boolean,
+    info:        VodChromeInfo,
+    exo:         ExoPlayer,
+    playerState: PlayerState,
+    playFocus:   FocusRequester,
+    actions:     VodChromeActions,
+    callbacks:   ControlsCallbacks,
+) {
+    AnimatedVisibility(
+        visible  = shown,
+        enter    = fadeIn(animationSpec = tween(FADE_IN_MS)),
+        exit     = fadeOut(animationSpec = tween(FADE_OUT_MS)),
+        modifier = Modifier.align(Alignment.TopStart),
+    ) {
+        TopTitle(info = info)
+    }
+    AnimatedVisibility(
+        visible  = shown,
+        enter    = fadeIn(animationSpec = tween(FADE_IN_MS)) +
+            slideInVertically(animationSpec = tween(SLIDE_MS), initialOffsetY = { it / SLIDE_FRACTION }),
+        exit     = fadeOut(animationSpec = tween(FADE_OUT_MS)) +
+            slideOutVertically(animationSpec = tween(SLIDE_MS), targetOffsetY = { it / SLIDE_FRACTION }),
+        modifier = Modifier.align(Alignment.BottomStart),
+    ) {
+        ControlsBlock(
+            info        = info,
+            exo         = exo,
+            playerState = playerState,
+            playFocus   = playFocus,
+            actions     = actions,
+            callbacks   = callbacks,
+        )
     }
 }
 
@@ -280,13 +312,24 @@ private fun BoxScope.LoadingAndBuffering(info: VodChromeInfo, showBackdrop: Bool
 /** Backdrop del item con título y una línea de progreso fina mientras arranca. */
 @Composable
 private fun LoadingBackdrop(info: VodChromeInfo) {
+    // Zoom lentísimo del backdrop (Ken Burns) mientras carga: una capa
+    // gráfica, sin recomponer. Da vida a la espera sin distraer.
+    val zoom = remember { Animatable(1f) }
+    LaunchedEffect(Unit) {
+        zoom.animateTo(KEN_BURNS_SCALE, tween(KEN_BURNS_MS, easing = LinearEasing))
+    }
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (info.backdropUrl != null) {
             AsyncImage(
                 model              = info.backdropUrl,
                 contentDescription = null,
                 contentScale       = ContentScale.Crop,
-                modifier           = Modifier.fillMaxSize(),
+                modifier           = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = zoom.value
+                        scaleY = zoom.value
+                    },
             )
         }
         Box(
@@ -300,13 +343,12 @@ private fun LoadingBackdrop(info: VodChromeInfo) {
                     ),
                 ),
         )
+        TopTitle(info = info)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = CHROME_PADDING, bottom = CHROME_PADDING, end = CHROME_PADDING),
+                .padding(start = CHROME_PADDING, bottom = CHROME_BOTTOM, end = CHROME_PADDING),
         ) {
-            TitleBlock(info = info)
-            Spacer(Modifier.height(18.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 LinearProgressIndicator(
                     color      = Accent,
@@ -358,6 +400,10 @@ private fun ControlsBlock(
     val onTogglePlay = callbacks.onTogglePlay
     val onInteract   = callbacks.onInteract
     val playhead = remember { Playhead() }
+    // El foco va a Play en cuanto existen los botones: al entrar, el chrome
+    // ya está visible pero los controles se montan tras el primer frame, y
+    // la petición de foco anterior se había perdido en el vacío.
+    LaunchedEffect(Unit) { runCatching { playFocus.requestFocus() } }
     LaunchedEffect(Unit) {
         while (true) {
             playhead.read(exo)
@@ -374,10 +420,8 @@ private fun ControlsBlock(
                     1f to Color.Black.copy(alpha = CONTROLS_SCRIM_ALPHA),
                 ),
             )
-            .padding(start = CHROME_PADDING, end = CHROME_PADDING, bottom = CHROME_PADDING, top = CONTROLS_TOP_FADE),
+            .padding(start = CHROME_PADDING, end = CHROME_PADDING, bottom = CHROME_BOTTOM, top = CONTROLS_TOP_FADE),
     ) {
-        TitleBlock(info = info)
-        Spacer(Modifier.height(14.dp))
         SeekBar(
             playhead = playhead,
             onSeek   = { delta ->
@@ -385,28 +429,31 @@ private fun ControlsBlock(
                 playhead.read(exo)
             },
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(2.dp))
         TimeRow(playhead = playhead)
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             val playing = playerState.isPlaying
             HeroIconButton(
                 icon               = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                 contentDescription = stringResource(if (playing) R.string.player_pause else R.string.player_play),
                 onClick            = onTogglePlay,
                 modifier           = Modifier.focusRequester(playFocus).onFocusChanged { if (it.isFocused) onInteract() },
+                size               = CONTROL_BUTTON,
             )
             HeroIconButton(
                 icon               = Icons.Filled.Replay10,
                 contentDescription = stringResource(R.string.player_rewind_10),
                 onClick            = { onSeek(-SEEK_STEP_MS) },
                 modifier           = Modifier.onFocusChanged { if (it.isFocused) onInteract() },
+                size               = CONTROL_BUTTON,
             )
             HeroIconButton(
                 icon               = Icons.Filled.Forward10,
                 contentDescription = stringResource(R.string.player_forward_10),
                 onClick            = { onSeek(SEEK_STEP_MS) },
                 modifier           = Modifier.onFocusChanged { if (it.isFocused) onInteract() },
+                size               = CONTROL_BUTTON,
             )
             if (info.hasNext) {
                 HeroIconButton(
@@ -414,6 +461,7 @@ private fun ControlsBlock(
                     contentDescription = stringResource(R.string.player_next_episode_label),
                     onClick            = actions.onNextEpisode,
                     modifier           = Modifier.onFocusChanged { if (it.isFocused) onInteract() },
+                    size               = CONTROL_BUTTON,
                 )
             }
             HeroIconButton(
@@ -421,12 +469,21 @@ private fun ControlsBlock(
                 contentDescription = stringResource(R.string.player_audio_subtitles),
                 onClick            = actions.onOpenTracks,
                 modifier           = Modifier.onFocusChanged { if (it.isFocused) onInteract() },
+                size               = CONTROL_BUTTON,
             )
         }
     }
 }
 
-/** Logo del item (o título) y subtítulo. Compartido por la carga y el chrome. */
+/** Logo/título y subtítulo en la esquina superior izquierda (carga y chrome). */
+@Composable
+private fun TopTitle(info: VodChromeInfo) {
+    Column(modifier = Modifier.padding(start = CHROME_PADDING, top = CHROME_TOP, end = CHROME_PADDING)) {
+        TitleBlock(info = info)
+    }
+}
+
+/** Logo del item (o título) y subtítulo. */
 @Composable
 private fun TitleBlock(info: VodChromeInfo) {
     if (!info.logoUrl.isNullOrBlank()) {
@@ -527,7 +584,7 @@ private fun SeekBar(playhead: Playhead, onSeek: (Long) -> Unit) {
 @Composable
 private fun TimeRow(playhead: Playhead) {
     Row(modifier = Modifier.fillMaxWidth()) {
-        Text(text = formatTime(playhead.positionMs), color = TextPrimary, fontSize = 14.sp)
+        Text(text = formatTime(playhead.positionMs), color = TextPrimary, fontSize = 13.sp)
         Spacer(Modifier.weight(1f))
         val duration = playhead.durationMs
         if (duration > 0) {
@@ -536,7 +593,7 @@ private fun TimeRow(playhead: Playhead) {
             Text(
                 text     = "${formatTime(duration)}  ·  ${stringResource(R.string.player_ends_at, endsAt)}",
                 color    = TextSecondary,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
             )
         }
     }
@@ -579,12 +636,19 @@ private const val BUFFERED_ALPHA = 0.35f
 private const val BUFFER_SPINNER_ALPHA = 0.75f
 
 private val CHROME_PADDING = 48.dp
-private val CONTROLS_TOP_FADE = 120.dp
+private val CHROME_TOP = 36.dp
+private val CHROME_BOTTOM = 32.dp
+private val CONTROLS_TOP_FADE = 72.dp
+private val CONTROL_BUTTON = 40.dp
 private val LOADING_BAR_WIDTH = 220.dp
-private val LOGO_HEIGHT = 64.dp
-private val LOGO_MAX_WIDTH = 360.dp
-private val SEEK_BAR_HEIGHT = 4.dp
-private val SEEK_BAR_FOCUSED = 6.dp
-private val SEEK_HIT_HEIGHT = 20.dp
-private val SEEK_THUMB = 14.dp
+private val LOGO_HEIGHT = 56.dp
+private val LOGO_MAX_WIDTH = 320.dp
+private val SEEK_BAR_HEIGHT = 3.dp
+private val SEEK_BAR_FOCUSED = 5.dp
+private val SEEK_HIT_HEIGHT = 14.dp
+private val SEEK_THUMB = 12.dp
+
+/** Zoom lento del backdrop durante la carga. */
+private const val KEN_BURNS_SCALE = 1.08f
+private const val KEN_BURNS_MS = 12_000
 private val END_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("H:mm")

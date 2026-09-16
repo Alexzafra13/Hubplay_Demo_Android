@@ -297,13 +297,36 @@ el backdrop al 70 % superior, aligerar `MediaCard`, probar Baseline Profile.
   backend; `absoluteImage` en PlayerScreen las absolutiza con `?w=`).
 - Verificado en la Mi TV: carga con backdrop, mostrar/ocultar, pausa,
   saltos exactos en pausa, foco estable al pulsar, Back oculta y Back sale.
-- Pendiente del reproductor: el panel de audio/subtítulos sigue siendo un
-  `ModalBottomSheet` (probar en TV), botón de velocidad/calidad si se
-  quiere (Jellyfin los tiene), y el directo (`LivePlayerChrome`) no se ha
-  tocado.
-- Trampa de pruebas: el salvapantallas del sistema de la TV (dreamx)
-  puede entrar entre pasos y las teclas acaban en diálogos del sistema;
-  comprobar `mCurrentFocus` antes de cada secuencia larga.
+- **Segunda vuelta (2026-09-16 noche, feedback del usuario)**: logo/título
+  arriba a la izquierda (carga y chrome), controles compactos (botones de
+  40 dp, barra de 3 dp, tiempos a 13 sp), Ken Burns lento del backdrop
+  mientras carga, y el foco va a Play en cuanto se montan los controles
+  (`LaunchedEffect(Unit)` en `ControlsBlock`: antes se pedía antes de
+  existir y al entrar no se podía navegar hasta que el chrome reaparecía).
+- **Pistas de audio**: el backend transcodifica UNA pista por sesión
+  (`-map 0:a:N`), así que el HLS solo expone una y ExoPlayer solo veía esa.
+  Jellyfin enseña todas porque las lee de la ficha. Ahora igual:
+  `ItemDetailDto.mediaStreams` (`media_streams` de `GET /items/{id}`) →
+  `PlayerUiState.audioTracks` ("Español · 5.1 · EAC3"), el selector las
+  lista y elegir una llama a `selectAudio(ordinal, posSec)`: nuevo
+  `/stream/{id}/info?audio=N` (la decisión puede cambiar) y, si no es direct
+  play, nuevo master `?audio=N` reanudando en la posición; en direct play se
+  aplica en ExoPlayer (N-ésimo grupo de audio). `N` es el índice 0-based
+  entre las pistas de audio (lo que ffmpeg entiende), igual que el web.
+  Verificado: Capitán América (2025) lista 3 pistas, elegir "Inglés" pide
+  `info?audio=2` + `master.m3u8?audio=2` y sigue donde iba.
+- Pendiente del reproductor: los subtítulos siguen siendo los que ve
+  ExoPlayer (el HLS lleva los que ffmpeg extrae); podrían listarse también
+  desde `media_streams` con `?sub=N`. Velocidad/calidad si se quiere. El
+  directo (`LivePlayerChrome`) no se ha tocado.
+- **Trampa de pruebas (grave)**: si HubPlay no está en primer plano (el
+  salvapantallas del sistema, el launcher tras un `am start` que tarda
+  6 s en subir, Play Store…) las teclas caen donde sea: el 2026-09-16 un
+  CENTER instaló una app de Play Store y otro escribió en un campo de
+  contraseña de Google. Enviar teclas SOLO con `tools/tvperf/tvkeys.sh`
+  (`k KEY` comprueba `mCurrentFocus` antes; `launch` espera a que suba).
+  Con el chrome del reproductor, pausar primero: si no, el auto-ocultado
+  de 4,5 s se dispara entre dumps (cada `uiautomator dump` tarda 2-3 s).
 
 ## 4b. Arranque en frío (medido 2026-09-16, debug, Mi TV)
 

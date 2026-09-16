@@ -79,6 +79,7 @@ class PlayerViewModel(
         val item = itemResult.getOrNull()
 
         val infoResult = runCatching { api.getStreamInfo(targetItemId, capabilities).data }
+        val audioTracks = item?.let(::audioTracksFrom).orEmpty()
         val info       = infoResult.getOrNull()
         val infoErr    = infoResult.exceptionOrNull()
         val infoCode   = (infoErr as? HttpException)?.code()
@@ -99,6 +100,7 @@ class PlayerViewModel(
                     subtitle    = item?.let(::subtitleFor),
                     backdropUrl = item?.backdropUrl ?: item?.posterUrl,
                     logoUrl     = item?.logoUrl,
+                    audioTracks = audioTracks,
                     startParams = PlayerStartParams(
                         streamUrl    = streamUrl,
                         resumePosSec = resumeSec,
@@ -389,6 +391,71 @@ class PlayerViewModel(
         }
     }
 
+    /**
+     * Cambia la pista de audio a la [ordinal]-ésima del fichero y sigue
+     * desde [positionSec]. El backend transcodifica UNA pista por sesión
+     * (`-map 0:a:N`), así que con HLS hay que pedir otro master con
+     * `?audio=N`; el /info se vuelve a consultar porque la decisión puede
+     * cambiar (una pista DTS fuerza transcode aunque la default fuese AAC).
+     * En direct play el fichero lleva todas las pistas: se elige en ExoPlayer
+     * (`directAudioOrdinal`, lo aplica la pantalla).
+     */
+    fun selectAudio(ordinal: Int, positionSec: Long) {
+        val current = _ui.value
+        if (current.mode != PlayerMode.Vod || ordinal !in current.audioTracks.indices) return
+        viewModelScope.launch {
+            val caps = ClientCapabilities.probe()
+            val info = runCatching { api.getStreamInfo(itemId, caps, audio = ordinal).data }.getOrNull()
+            val isDirectPlay = info?.method == "direct_play"
+            _ui.update {
+                if (isDirectPlay) {
+                    it.copy(selectedAudio = ordinal, directAudioOrdinal = ordinal)
+                } else {
+                    it.copy(
+                        selectedAudio      = ordinal,
+                        directAudioOrdinal = null,
+                        startParams        = PlayerStartParams(
+                            streamUrl    = "/api/v1/stream/$itemId/master.m3u8?audio=$ordinal",
+                            resumePosSec = positionSec,
+                            isHls        = true,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    /** Pistas de audio del fichero, en el orden que ffmpeg entiende como `0:a:N`. */
+    private fun audioTracksFrom(item: ItemDetailDto): List<AudioTrackOption> =
+        item.mediaStreams
+            .filter { it.streamType == "audio" }
+            .sortedBy { it.streamIndex }
+            .mapIndexed { ordinal, s ->
+                val channels = when (s.channels) {
+                    null, 0              -> null
+                    1                    -> "Mono"
+                    2                    -> "Estéreo"
+                    CHANNELS_SURROUND    -> "5.1"
+                    CHANNELS_SURROUND_71 -> "7.1"
+                    else                 -> "${s.channels} canales"
+                }
+                val name = languageName(s.language) ?: s.title?.takeIf { it.isNotBlank() } ?: "Audio ${ordinal + 1}"
+                AudioTrackOption(
+                    ordinal   = ordinal,
+                    label     = listOfNotNull(name, channels, s.codec?.uppercase()).joinToString(" · "),
+                    isDefault = s.isDefault,
+                )
+            }
+
+    private fun languageName(tag: String?): String? {
+        if (tag.isNullOrBlank() || tag == "und") return null
+        return runCatching { java.util.Locale.forLanguageTag(tag).getDisplayLanguage(java.util.Locale("es")) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.replaceFirstChar { it.uppercase() }
+            ?: tag.uppercase()
+    }
+
     /** "Serie · T1 · E3" para episodios; el año para el resto (o nada). */
     private fun subtitleFor(item: ItemDetailDto): String? {
         if (item.type == "episode") {
@@ -416,6 +483,9 @@ class PlayerViewModel(
     )
 
     companion object {
+        private const val CHANNELS_SURROUND = 6
+        private const val CHANNELS_SURROUND_71 = 8
+
         private const val TAG = "PlayerViewModel"
 
         fun factory(
@@ -435,6 +505,14 @@ class PlayerViewModel(
 
 enum class PlayerMode { Unknown, Vod, Live }
 
+/** Una pista de audio del fichero para el selector: `ordinal` es el `N` de `?audio=N`. */
+@androidx.compose.runtime.Immutable
+data class AudioTrackOption(
+    val ordinal:   Int,
+    val label:     String,
+    val isDefault: Boolean,
+)
+
 @androidx.compose.runtime.Immutable
 data class PlayerUiState(
     val itemId:          String,
@@ -447,6 +525,12 @@ data class PlayerUiState(
     val logoUrl:         String? = null,
     val startParams:     PlayerStartParams? = null,
     val error:           String? = null,
+    /** Pistas de audio del fichero (todas, aunque el HLS solo lleve una). */
+    val audioTracks:     List<AudioTrackOption> = emptyList(),
+    /** Ordinal elegido por el usuario; -1 = la pista por defecto del fichero. */
+    val selectedAudio:   Int = -1,
+    /** En direct play, ordinal de audio a aplicar en ExoPlayer (la pantalla lo hace). */
+    val directAudioOrdinal: Int? = null,
     /** Episode to auto-play when this one ends. Null = end of series / not an episode. */
     val nextEpisode:     NextEpisodeInfo? = null,
     // ── Live-mode extras ─────────────────────────────────────────────────
