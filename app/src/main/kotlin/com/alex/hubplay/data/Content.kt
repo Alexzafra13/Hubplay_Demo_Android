@@ -161,6 +161,43 @@ sealed interface Content {
     }
 
     /**
+     * Película o serie que comparte un servidor amigo (federación). Vive en
+     * SU catálogo: el [id] es el del amigo y todo se pide por
+     * `/me/peers/{peerId}/…`. Solo trae lo que el amigo comparte (título,
+     * año, sinopsis, póster); el póster hace también de fondo. El progreso
+     * es el nuestro, guardado en nuestro servidor.
+     */
+    @Immutable
+    data class Shared(
+        override val id:           String,
+        override val title:        String,
+        override val subtitle:     String?      = null,
+        override val posterUrl:    String?      = null,
+        override val backdropUrl:  String?      = null,
+        override val logoUrl:      String?      = null,
+        override val overview:     String?      = null,
+        override val genres:       List<String> = emptyList(),
+        override val rating:       Float?       = null,
+        override val year:         Int?         = null,
+        override val progressPct:  Float        = 0f,
+        override val resumePosSec: Long         = 0L,
+        override val durationSec:  Long         = 0L,
+        val peerId:                String,
+        val peerName:              String,
+        val libraryId:             String?      = null,
+        /** Movie o Series en el servidor del amigo. */
+        val remoteKind:            MediaKind    = MediaKind.Movie,
+    ) : Resumable {
+        override val kind: MediaKind get() = MediaKind.Shared
+
+        /** Las series compartidas no traen episodios: no se pueden reproducir. */
+        val isPlayable: Boolean get() = remoteKind != MediaKind.Series
+
+        /** Clave única entre amigos (dos servidores podrían repetir id). */
+        val key: String get() = "$peerId:$id"
+    }
+
+    /**
      * Fallback for `type` values the client doesn't recognise yet
      * (forward-compat with new server enums). Rails render them with
      * the common fields; deeper screens that depend on variant-specific
@@ -189,7 +226,8 @@ sealed interface Content {
  * no Content instance yet — e.g. on a deep link or a saved nav back stack.
  */
 enum class MediaKind {
-    Movie, Series, Season, Episode, LiveChannel, Unknown;
+    /** [Shared] = item de un servidor amigo; nunca sale de [from]. */
+    Movie, Series, Season, Episode, LiveChannel, Shared, Unknown;
 
     companion object {
         fun from(s: String?): MediaKind = when (s) {

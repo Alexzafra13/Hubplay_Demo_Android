@@ -140,17 +140,18 @@ private val SuppressVerticalBringIntoView = object : BringIntoViewSpec {
 @Composable
 fun HomeScreen(
     viewModel:       HomeViewModel,
-    onOpenItem:      (itemId: String, kind: MediaKind) -> Unit,
-    onPlayItem:      (itemId: String, resumePosSec: Long) -> Unit,
-    onNavigateToTab: (Tab) -> Unit,
-    onLogOut:        () -> Unit,
-    onOpenSettings:  () -> Unit = {},
+    actions:         HomeActions,
     profileName:     String?   = null,
     authState:       AuthState? = null,
     okHttpClient:    okhttp3.OkHttpClient? = null,
     idleController:  IdleController? = null,
 ) {
+    val onNavigateToTab = actions.onNavigateToTab
+    val onOpenSettings  = actions.onOpenSettings
     val ui by viewModel.ui.collectAsState()
+    // Al volver del reproductor o de una ficha: "Seguir viendo de tus
+    // amigos" no llega por SSE, se repide (consulta local, barata).
+    LaunchedEffect(Unit) { viewModel.refreshSharedContinue() }
     // focusedItemForUi (150ms debounce) drive heroItem + backdrop —
     // se siente snappy. focusedItem (500ms debounce) sigue siendo el
     // que activa el trailer fetch, evitando spam durante navegación rápida.
@@ -505,11 +506,8 @@ fun HomeScreen(
                             // ── Hero info — altura animada ────────────
                             HeroInfo(
                                 item = heroItem,
-                                onPlay = { it?.let { item ->
-                                    val resumeSec = (item as? Content.Resumable)?.resumePosSec ?: 0L
-                                    onPlayItem(item.id, resumeSec)
-                                } },
-                                onDetails = { it?.let { item -> onOpenItem(item.id, item.kind) } },
+                                onPlay = { it?.let(actions::play) },
+                                onDetails = { it?.let(actions::open) },
                                 showControls = isLanding,
                                 // Si volvemos de Detail con un rail con foco
                                 // guardado, dejamos que ese rail gane la
@@ -603,8 +601,7 @@ fun HomeScreen(
                                                     activeRailIndex = index
                                                     perRailFocused[config.id] = item.id
                                                 },
-                                                onOpenItem = onOpenItem,
-                                                onPlayItem = onPlayItem,
+                                                actions = actions,
                                             )
                                         }
                                     }
@@ -633,56 +630,80 @@ private fun RenderRail(
     config:               HomeRailConfig,
     data:                 HomeData,
     onCardFocused:        (Content) -> Unit,
-    onOpenItem:           (String, MediaKind) -> Unit,
-    onPlayItem:           (String, Long) -> Unit,
+    actions:              HomeActions,
     initialFocusedItemId: String? = null,
     railFocusRequester:   FocusRequester? = null,
 ) {
-    when (config.type) {
-        HomeRailType.ContinueWatching -> HomeRail(
-            title = config.title,
-            items = data.continueWatching,
-            style = CardStyle.Landscape,
-            onFocused = onCardFocused,
-            onClick = { onPlayItem(it.id, it.resumePosSec) },
-            initialFocusedItemId = initialFocusedItemId,
-            railFocusRequester = railFocusRequester,
+    // Todo rail que no es "En directo" se pinta igual: solo cambian los
+    // items, la forma de la tarjeta y qué hace OK.
+    val (items, style, onClick) = when (config.type) {
+        HomeRailType.ContinueWatching -> RailSpec(data.continueWatching, CardStyle.Landscape, actions::play)
+        HomeRailType.NextUp           -> RailSpec(data.nextUp, CardStyle.Landscape) { actions.onPlayItem(it.id, 0L) }
+        HomeRailType.Trending         -> RailSpec(data.trending, CardStyle.PosterCompact, actions::open)
+        HomeRailType.LatestInLibrary  -> RailSpec(
+            data.latestByRailId[config.id].orEmpty(), CardStyle.PosterCompact, actions::open,
         )
-        HomeRailType.NextUp -> HomeRail(
-            title = config.title,
-            items = data.nextUp,
-            style = CardStyle.Landscape,
-            onFocused = onCardFocused,
-            onClick = { onPlayItem(it.id, 0L) },
-            initialFocusedItemId = initialFocusedItemId,
-            railFocusRequester = railFocusRequester,
-        )
-        HomeRailType.Trending -> HomeRail(
-            title = config.title,
-            items = data.trending,
-            style = CardStyle.PosterCompact,
-            onFocused = onCardFocused,
-            onClick = { onOpenItem(it.id, it.kind) },
-            initialFocusedItemId = initialFocusedItemId,
-            railFocusRequester = railFocusRequester,
-        )
-        HomeRailType.LatestInLibrary -> HomeRail(
-            title = config.title,
-            items = data.latestByRailId[config.id].orEmpty(),
-            style = CardStyle.PosterCompact,
-            onFocused = onCardFocused,
-            onClick = { onOpenItem(it.id, it.kind) },
-            initialFocusedItemId = initialFocusedItemId,
-            railFocusRequester = railFocusRequester,
-        )
-        HomeRailType.LiveNow -> LiveNowRail(
-            title = config.title,
-            items = data.liveNow,
-            onFocused = onCardFocused,
-            onClick = { onPlayItem(it.id, 0L) },
-            initialFocusedItemId = initialFocusedItemId,
-            railFocusRequester = railFocusRequester,
-        )
+        HomeRailType.SharedContinue   -> RailSpec(data.sharedContinue, CardStyle.PosterCompact, actions::play)
+        HomeRailType.SharedRecent     -> RailSpec(data.sharedRecent, CardStyle.PosterCompact, actions::open)
+        HomeRailType.LiveNow          -> {
+            LiveNowRail(
+                title = config.title,
+                items = data.liveNow,
+                onFocused = onCardFocused,
+                onClick = { actions.onPlayChannel(it.id) },
+                initialFocusedItemId = initialFocusedItemId,
+                railFocusRequester = railFocusRequester,
+            )
+            return
+        }
+    }
+    HomeRail(
+        title = config.title,
+        items = items,
+        style = style,
+        onFocused = onCardFocused,
+        onClick = onClick,
+        initialFocusedItemId = initialFocusedItemId,
+        railFocusRequester = railFocusRequester,
+    )
+}
+
+/** Items, forma de tarjeta y acción de OK de un rail de Inicio. */
+private data class RailSpec(
+    val items:   List<Content>,
+    val style:   CardStyle,
+    val onClick: (Content) -> Unit,
+)
+
+/**
+ * Lo que Inicio puede hacer al elegir algo. Reproducir y abrir distinguen
+ * el tipo (canal, item de un amigo o de nuestro catálogo) en un solo
+ * sitio, para el hero y para los rails.
+ */
+@androidx.compose.runtime.Immutable
+class HomeActions(
+    val onOpenItem:      (itemId: String, kind: MediaKind) -> Unit,
+    val onPlayItem:      (itemId: String, resumePosSec: Long) -> Unit,
+    val onPlayChannel:   (channelId: String) -> Unit,
+    val onOpenShared:    (Content.Shared) -> Unit,
+    val onPlayShared:    (Content.Shared, Long) -> Unit,
+    val onNavigateToTab: (Tab) -> Unit,
+    val onOpenSettings:  () -> Unit = {},
+) {
+    fun play(item: Content) {
+        when (item) {
+            is Content.Shared      -> onPlayShared(item, item.resumePosSec)
+            is Content.LiveChannel -> onPlayChannel(item.id)
+            else                   -> onPlayItem(item.id, (item as? Content.Resumable)?.resumePosSec ?: 0L)
+        }
+    }
+
+    fun open(item: Content) {
+        when (item) {
+            is Content.Shared      -> onOpenShared(item)
+            is Content.LiveChannel -> onPlayChannel(item.id)
+            else                   -> onOpenItem(item.id, item.kind)
+        }
     }
 }
 

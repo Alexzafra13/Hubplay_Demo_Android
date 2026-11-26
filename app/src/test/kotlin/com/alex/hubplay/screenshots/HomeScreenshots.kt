@@ -2,6 +2,7 @@ package com.alex.hubplay.screenshots
 
 import android.view.KeyEvent.KEYCODE_DPAD_DOWN
 import android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+import com.alex.hubplay.ui.home.HomeActions
 import com.alex.hubplay.ui.home.HomeScreen
 import com.alex.hubplay.ui.home.HomeViewModel
 import kotlinx.coroutines.flow.emptyFlow
@@ -14,10 +15,14 @@ class HomeScreenshots : ScreenshotTest() {
         setTvContent {
             HomeScreen(
                 viewModel = vm,
-                onOpenItem = { _, _ -> },
-                onPlayItem = { _, _ -> },
-                onNavigateToTab = {},
-                onLogOut = {},
+                actions = HomeActions(
+                    onOpenItem = { _, _ -> },
+                    onPlayItem = { _, _ -> },
+                    onPlayChannel = {},
+                    onOpenShared = {},
+                    onPlayShared = { _, _ -> },
+                    onNavigateToTab = {},
+                ),
                 profileName = "Alex",
             )
         }

@@ -91,6 +91,30 @@ class ProgressReporterTest {
     }
 
     @Test
+    fun `sink receives the last known duration on writes and on completion`() = runTest(UnconfinedTestDispatcher()) {
+        val writes = mutableListOf<Triple<Long, Long, Boolean>>()
+        var markedAt = -1L
+        val sink = object : ProgressSink {
+            override val label = "peer:item"
+            override suspend fun write(positionSec: Long, durationSec: Long, completed: Boolean) {
+                writes += Triple(positionSec, durationSec, completed)
+            }
+            override suspend fun markPlayed(durationSec: Long) { markedAt = durationSec }
+        }
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val reporter = ProgressReporter(sink, scope)
+
+        reporter.reportPosition(positionSec = 30, durationSec = 6000, isPlaying = true)
+        // El flush de salida no trae duración: se usa la última conocida.
+        reporter.flush(positionSec = 45)
+        reporter.reportPosition(positionSec = 5800, durationSec = 6000, isPlaying = true)
+
+        assertThat(writes).containsExactly(Triple(30L, 6000L, false), Triple(45L, 6000L, false)).inOrder()
+        assertThat(markedAt).isEqualTo(6000L)
+        scope.cancel()
+    }
+
+    @Test
     fun `paused player never writes regardless of position changes`() = runTest(UnconfinedTestDispatcher()) {
         val api = FakeApi()
         val scope = CoroutineScope(Dispatchers.Unconfined)
@@ -236,6 +260,8 @@ class ProgressReporterTest {
         override suspend fun getStudio(slug: String): StudioDetailResponse = TODO()
         override suspend fun getNextUp(): NextUpResponse                      = TODO()
         override suspend fun getStreamInfo(itemId: String, capabilities: String, audio: Int?): StreamInfoResponse = TODO()
+        override suspend fun stopStreamSession(itemId: String) = TODO()
+        override suspend fun leaveChannelViewer(channelId: String, viewerId: String) = TODO()
         override suspend fun listChannels(libraryId: String, active: Boolean, includeHidden: Boolean): ChannelsResponse = TODO()
         override suspend fun listChannelGroups(libraryId: String): GroupsResponse = TODO()
         override suspend fun replaceChannelOrder(body: ChannelOrderRequest): StatusResponse = TODO()

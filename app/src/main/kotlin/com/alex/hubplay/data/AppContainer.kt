@@ -5,6 +5,7 @@ import com.alex.hubplay.BuildConfig
 import com.alex.hubplay.data.api.AuthApi
 import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.NullToEmptyListAdapterFactory
+import com.alex.hubplay.data.api.dto.RefreshRequest
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -189,6 +190,7 @@ class AppContainer(context: Context) {
         mainOkHttp
         sseOkHttp
         externalOkHttp
+        com.alex.hubplay.player.ClientCapabilities.probe()
     }
 
     val deviceCodeRepository: DeviceCodeRepository = DeviceCodeRepository(
@@ -207,6 +209,47 @@ class AppContainer(context: Context) {
     val hubplayApi: HubplayApi = retrofit.create(HubplayApi::class.java)
 
     val homeRepository: HomeRepository = HomeRepositoryImpl(hubplayApi, tokenStore)
+
+    /**
+     * Cierra la sesión también en el servidor: revoca el refresh token (y la
+     * sesión sale de "Tus dispositivos"). Antes la app solo borraba sus
+     * tokens y el refresh seguía valiendo 30 días. Se llama justo ANTES de
+     * borrarlos: captura token y servidor y la petición sale en segundo
+     * plano (un fallo de red no impide cerrar sesión en la TV).
+     */
+    fun revokeServerSession() {
+        val state   = tokenStore.snapshotNow()
+        val refresh = state.refreshToken?.takeIf { it.isNotBlank() } ?: return
+        val access  = state.accessToken?.takeIf { it.isNotBlank() } ?: return
+        val server  = state.serverUrl?.trimEnd('/')?.takeIf { it.isNotBlank() } ?: return
+        appScope.launch {
+            // Cliente SIN AuthInterceptor: con el access caducado, el
+            // interceptor refrescaría y volvería a guardar tokens después
+            // de haberlos borrado (sesión resucitada).
+            runCatching {
+                refreshAuthApi.logout("$server/api/v1/auth/logout", "Bearer $access", RefreshRequest(refresh))
+            }
+                .onFailure { android.util.Log.w("AppContainer", "logout en el servidor: ${it.message}") }
+        }
+    }
+
+    /** Libera sesiones de ffmpeg (VOD y directo) al dejar de reproducir. */
+    val streamSessions: StreamSessions = StreamSessions(hubplayApi, appScope)
+
+    /** "Compartido contigo": catálogos de servidores amigos (`/me/peers/…`). */
+    val peersRepository: PeersRepository =
+        PeersRepository(retrofit.create(com.alex.hubplay.data.api.PeersApi::class.java), tokenStore)
+
+    /** Dependencias del reproductor (VOD, directo y items de amigos). */
+    val playerDeps: com.alex.hubplay.ui.player.PlayerDeps by lazy {
+        com.alex.hubplay.ui.player.PlayerDeps(
+            api             = hubplayApi,
+            liveTvRepo      = liveTvRepository,
+            sessions        = streamSessions,
+            peers           = peersRepository,
+            backgroundScope = appScope,
+        )
+    }
 
     /**
      * Per-library channel order + hidden-set persistence. Used by the
@@ -240,6 +283,10 @@ class AppContainer(context: Context) {
      */
     val collectionsAvailability: CollectionsAvailability =
         CollectionsAvailability(homeRepository, authStateFlow, appScope)
+
+    /** Si hay servidores amigos emparejados (enseña "Compartido" y sus rails). */
+    val sharedAvailability: SharedAvailability =
+        SharedAvailability(peersRepository, authStateFlow, appScope)
 
     /** Idle detection driving the in-app screensaver. */
     val idleController: IdleController = IdleController(appScope)

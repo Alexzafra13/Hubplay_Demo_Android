@@ -7,7 +7,9 @@ import com.alex.hubplay.data.api.dto.DeviceStartRequest
 import com.alex.hubplay.data.api.dto.DeviceStartResponse
 import com.alex.hubplay.data.api.dto.RefreshRequest
 import retrofit2.http.Body
+import retrofit2.http.Header
 import retrofit2.http.POST
+import retrofit2.http.Url
 
 /**
  * Hand-written Retrofit interface for the authentication endpoints.
@@ -44,4 +46,17 @@ interface AuthApi {
      */
     @POST("auth/device/poll")
     suspend fun devicePoll(@Body body: DevicePollRequest): DevicePollResponse
+
+    /**
+     * POST /api/v1/auth/logout — revoca el refresh token en el servidor
+     * (la sesión desaparece de "Tus dispositivos"). URL y Bearer explícitos:
+     * se lanza justo cuando la app borra sus tokens (y, al olvidar el
+     * servidor, también su URL), así que los interceptores ya no los tienen.
+     */
+    @POST
+    suspend fun logout(
+        @Url url: String,
+        @Header("Authorization") bearer: String,
+        @Body body: RefreshRequest,
+    )
 }

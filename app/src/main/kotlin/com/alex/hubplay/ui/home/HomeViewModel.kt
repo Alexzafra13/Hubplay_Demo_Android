@@ -6,10 +6,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeData
+import com.alex.hubplay.data.HomeRailConfig
 import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.MeEvent
 import com.alex.hubplay.data.MeEventsStream
+import com.alex.hubplay.data.PeersRepository
+import com.alex.hubplay.data.homeRailTitle
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -31,6 +34,8 @@ import kotlinx.coroutines.supervisorScope
 class HomeViewModel(
     private val repository:  HomeRepository,
     private val eventsFlow:  Flow<MeEvent>,
+    /** Federación; null en tests y capturas (sin rails de amigos). */
+    private val peers:       PeersRepository? = null,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(HomeUiState(isLoading = true))
@@ -183,7 +188,9 @@ class HomeViewModel(
     }
 
     private fun fetchTrailerInfo(item: Content?) {
-        if (item == null) {
+        // Los items de un amigo no tienen ficha en nuestro servidor
+        // (`/items/{id}` daría 404) ni tráiler que buscar.
+        if (item == null || item is Content.Shared) {
             _trailerInfo.value = null
             return
         }
@@ -257,6 +264,7 @@ class HomeViewModel(
                 val latestAll   = async {
                     safeFetch("latestAll") { repository.fetchLatest(limit = HERO_POOL_SIZE) }
                 }
+                val shared = async { fetchShared() }
 
                 val layout    = layoutDef.await()
                 val libraries = librariesDef.await()
@@ -282,19 +290,23 @@ class HomeViewModel(
                     trending    = trendingItems,
                     recommended = recommendedItems,
                 )
+                val (sharedCwItems, sharedRecentItems) = shared.await()
                 HomeData(
                     hero             = heroSlots,
                     continueWatching = cw.await(),
                     nextUp           = nextUp.await(),
                     trending         = trendingItems,
                     liveNow          = liveNow.await(),
-                    rails            = layout,
+                    rails            = layout + sharedRails(sharedCwItems, sharedRecentItems),
                     latestByRailId   = latestByRailId,
+                    sharedContinue   = sharedCwItems,
+                    sharedRecent     = sharedRecentItems,
                 )
             }
             val hasContent = data.trending.isNotEmpty() || data.continueWatching.isNotEmpty()
                 || data.nextUp.isNotEmpty() || data.liveNow.isNotEmpty()
                 || data.latestByRailId.values.any { it.isNotEmpty() }
+                || data.sharedContinue.isNotEmpty() || data.sharedRecent.isNotEmpty()
             _ui.value = if (hasContent) {
                 HomeUiState(isLoading = false, data = data)
             } else {
@@ -304,6 +316,56 @@ class HomeViewModel(
                     error = "No se pudo cargar el contenido. Comprueba tu conexión e inténtalo de nuevo.",
                 )
             }
+        }
+    }
+
+    /**
+     * Rails de amigos ("seguir viendo" y novedades), en paralelo. Sin amigos
+     * emparejados el servidor responde vacío al momento; un servidor sin
+     * federación da 404 → vacío.
+     */
+    private suspend fun fetchShared(): Pair<List<Content.Shared>, List<Content.Shared>> {
+        val repo = peers ?: return emptyList<Content.Shared>() to emptyList()
+        return supervisorScope {
+            val cw     = async { safeFetch("sharedContinue") { repo.continueWatching() } }
+            val recent = async { safeFetch("sharedRecent") { repo.recent() } }
+            cw.await() to recent.await()
+        }
+    }
+
+    /** Rails de amigos al final de Inicio, solo si tienen algo. */
+    private fun sharedRails(cw: List<Content.Shared>, recent: List<Content.Shared>): List<HomeRailConfig> =
+        buildList {
+            if (cw.isNotEmpty()) add(clientRail(SHARED_CONTINUE_ID, HomeRailType.SharedContinue))
+            if (recent.isNotEmpty()) add(clientRail(SHARED_RECENT_ID, HomeRailType.SharedRecent))
+        }
+
+    private fun clientRail(id: String, type: HomeRailType) =
+        HomeRailConfig(id = id, type = type, libraryId = null, title = homeRailTitle(type, null))
+
+    /**
+     * Al volver a Inicio (del reproductor o de una ficha): el progreso en
+     * items de amigos no llega por SSE, así que se repide "Seguir viendo de
+     * tus amigos" (consulta local en nuestro servidor). Si el rail aparece
+     * o desaparece se recoloca al final.
+     */
+    fun refreshSharedContinue() {
+        val repo = peers ?: return
+        val current = _ui.value
+        if (current.isLoading || current.error != null) return
+        viewModelScope.launch {
+            val cw = runCatching { repo.continueWatching() }.getOrNull() ?: return@launch
+            val state = _ui.value
+            if (state.isLoading || cw == state.data.sharedContinue) return@launch
+            val serverRails = state.data.rails.filter {
+                it.type != HomeRailType.SharedContinue && it.type != HomeRailType.SharedRecent
+            }
+            _ui.value = state.copy(
+                data = state.data.copy(
+                    sharedContinue = cw,
+                    rails          = serverRails + sharedRails(cw, state.data.sharedRecent),
+                ),
+            )
         }
     }
 
@@ -465,11 +527,14 @@ class HomeViewModel(
          */
         private const val HERO_POOL_SIZE = 12
 
-        fun factory(repository: HomeRepository, meEventsStream: MeEventsStream) =
+        private const val SHARED_CONTINUE_ID = "client-shared-continue"
+        private const val SHARED_RECENT_ID   = "client-shared-recent"
+
+        fun factory(repository: HomeRepository, meEventsStream: MeEventsStream, peers: PeersRepository? = null) =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return HomeViewModel(repository, meEventsStream.events()) as T
+                    return HomeViewModel(repository, meEventsStream.events(), peers) as T
                 }
             }
     }

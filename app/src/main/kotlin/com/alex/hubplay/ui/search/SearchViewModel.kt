@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeRepository
+import com.alex.hubplay.data.PeersRepository
 import com.alex.hubplay.ui.friendlyError
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +32,8 @@ import kotlinx.coroutines.launch
 @OptIn(FlowPreview::class)
 class SearchViewModel(
     private val repository: HomeRepository,
+    /** Federación: también se busca en los amigos (null = no). */
+    private val peers:      PeersRepository? = null,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(SearchUiState())
@@ -53,7 +56,10 @@ class SearchViewModel(
     fun onQueryChange(text: String) {
         _ui.update {
             if (text.trim().length < MIN_QUERY_LEN) {
-                it.copy(query = text, results = emptyList(), isSearching = false, error = null, canLoadMore = false)
+                it.copy(
+                    query = text, results = emptyList(), sharedResults = emptyList(),
+                    isSearching = false, error = null, canLoadMore = false,
+                )
             } else {
                 it.copy(query = text, isSearching = true, error = null)
             }
@@ -96,6 +102,7 @@ class SearchViewModel(
         val rid = ++requestSeq
         currentOffset = 0
         hasMore = false
+        searchPeers(text, rid)
         viewModelScope.launch {
             runCatching { repository.searchItems(text, limit = PAGE_SIZE) }
                 .onSuccess { hits ->
@@ -118,16 +125,32 @@ class SearchViewModel(
         }
     }
 
+    /**
+     * En paralelo a la búsqueda propia: el servidor pregunta a cada amigo
+     * (2 s máx. por amigo), así que llega después y no la retrasa. Un fallo
+     * solo deja la sección vacía.
+     */
+    private fun searchPeers(text: String, rid: Long) {
+        val repo = peers ?: return
+        _ui.update { it.copy(sharedResults = emptyList()) }
+        viewModelScope.launch {
+            val hits = runCatching { repo.search(text) }
+                .onFailure { Log.d(TAG, "peer search failed: ${it.message}") }
+                .getOrDefault(emptyList())
+            if (rid == requestSeq) _ui.update { it.copy(sharedResults = hits) }
+        }
+    }
+
     companion object {
         private const val TAG = "SearchViewModel"
         private const val DEBOUNCE_MS = 300L
         private const val MIN_QUERY_LEN = 2
         private const val PAGE_SIZE = 60
 
-        fun factory(repository: HomeRepository) = object : ViewModelProvider.Factory {
+        fun factory(repository: HomeRepository, peers: PeersRepository? = null) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return SearchViewModel(repository) as T
+                return SearchViewModel(repository, peers) as T
             }
         }
     }
@@ -137,6 +160,8 @@ class SearchViewModel(
 data class SearchUiState(
     val query:         String           = "",
     val results:       List<Content>    = emptyList(),
+    /** Coincidencias en los servidores de los amigos (sección aparte). */
+    val sharedResults: List<Content.Shared> = emptyList(),
     val isSearching:   Boolean          = false,
     val isLoadingMore: Boolean          = false,
     val canLoadMore:   Boolean          = false,

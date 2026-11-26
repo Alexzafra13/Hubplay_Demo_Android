@@ -289,4 +289,21 @@
     <string name="identify_empty">Sin resultados</string>
     <string name="identify_applying">Aplicando…</string>
     <string name="identify_close">Cerrar</string>
+    <!-- Compartido contigo (federación) -->
+    <string name="nav_tab_shared">Compartido</string>
+    <string name="shared_title">Compartido contigo</string>
+    <string name="shared_subtitle">Lo que comparten los servidores HubPlay de tus amigos</string>
+    <string name="shared_empty">Ningún servidor amigo comparte nada todavía.</string>
+    <string name="shared_continue">Seguir viendo de tus amigos</string>
+    <string name="shared_recent">Novedades de tus amigos</string>
+    <string name="shared_library_title">%1$s · %2$s</string>
+    <string name="shared_by">Compartido por %1$s</string>
+    <string name="shared_offline">%1$s no responde: se muestra lo último guardado</string>
+    <string name="shared_library_error">No se pudo cargar esta biblioteca</string>
+    <string name="shared_play_from_start">Desde el principio</string>
+    <string name="shared_series_unavailable">Las series compartidas aún no se pueden reproducir</string>
+    <string name="shared_not_found">Este título ya no está disponible</string>
+    <string name="shared_movie">Película</string>
+    <string name="shared_series">Serie</string>
+    <string name="search_shared_section">De tus amigos</string>
 </resources>

@@ -3,12 +3,16 @@ package com.alex.hubplay.ui.home
 import com.alex.hubplay.data.CollectionDetail
 import com.alex.hubplay.data.CollectionSummary
 import com.alex.hubplay.data.Content
+import com.alex.hubplay.data.FakePeersApi
 import com.alex.hubplay.data.HomeRailConfig
+import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.IdentifyCandidate
 import com.alex.hubplay.data.MeEvent
+import com.alex.hubplay.data.PeersRepository
 import com.alex.hubplay.data.PersonDetail
 import com.alex.hubplay.data.StudioDetail
+import com.alex.hubplay.data.api.dto.PeerItemDto
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -171,6 +175,75 @@ class HomeViewModelTest {
         assertThat(vm.trailerCurrentTimeSec.value).isEqualTo(42L)
     }
 
+    @Test
+    fun `friends rails are appended after the server layout only when they have items`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val layout = listOf(HomeRailConfig("cw", HomeRailType.ContinueWatching, null, "Continuar viendo"))
+        val peers = PeersRepository(
+            FakePeersApi(
+                recent = listOf(PeerItemDto(id = "m1", type = "movie", title = "Dune", peerId = "p1", peerName = "Pedro")),
+            ),
+        ) { "https://hub.example" }
+        val vm = HomeViewModel(
+            FakeHomeRepository(trending = listOf(movie("t1")), layout = layout),
+            emptyFlow(),
+            peers,
+        )
+        advanceUntilIdle()
+
+        val data = vm.ui.value.data
+        // "Seguir viendo de tus amigos" está vacío: no sale ese rail.
+        assertThat(data.rails.map { it.type })
+            .containsExactly(HomeRailType.ContinueWatching, HomeRailType.SharedRecent).inOrder()
+        assertThat(data.sharedRecent.single().peerName).isEqualTo("Pedro")
+    }
+
+    @Test
+    fun `focusing a friend's item never asks our server for its detail`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val repo = FakeHomeRepository(trending = listOf(movie("t1")))
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+        vm.onCardFocused(movie("t1")) // la primera la traga la puerta del primer foco
+
+        vm.onCardFocused(Content.Shared(id = "m1", title = "Dune", peerId = "p1", peerName = "Pedro"))
+        advanceUntilIdle()
+
+        // `/items/{id}` de un item de un amigo daría 404 en nuestro servidor.
+        assertThat(repo.detailRequests).doesNotContain("m1")
+        assertThat(vm.trailerInfo.value).isNull()
+    }
+
+    @Test
+    fun `home actions route channels, friends' items and our catalogue`() {
+        val calls = mutableListOf<String>()
+        val actions = HomeActions(
+            onOpenItem      = { id, _ -> calls += "open:$id" },
+            onPlayItem      = { id, pos -> calls += "play:$id@$pos" },
+            onPlayChannel   = { id -> calls += "channel:$id" },
+            onOpenShared    = { calls += "openShared:${it.peerId}/${it.id}" },
+            onPlayShared    = { item, pos -> calls += "playShared:${item.peerId}/${item.id}@$pos" },
+            onNavigateToTab = {},
+        )
+        val shared = Content.Shared(id = "m1", title = "Dune", resumePosSec = 90, peerId = "p1", peerName = "Pedro")
+
+        actions.play(shared)
+        actions.open(shared)
+        actions.play(Content.LiveChannel(id = "c1", title = "La 1"))
+        actions.open(Content.LiveChannel(id = "c1", title = "La 1"))
+        actions.play(Content.Movie(id = "mv", title = "X", resumePosSec = 30))
+        actions.open(Content.Movie(id = "mv", title = "X"))
+
+        assertThat(calls).containsExactly(
+            "playShared:p1/m1@90",
+            "openShared:p1/m1",
+            "channel:c1",
+            "channel:c1",
+            "play:mv@30",
+            "open:mv",
+        ).inOrder()
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────
 
     private fun viewModel(repo: HomeRepository) =
@@ -226,7 +299,12 @@ class HomeViewModelTest {
             if (throwOnAll) throw RuntimeException("network")
             return emptyList()
         }
+
+        /** Ids pedidos a `/items/{id}` (lo usa la búsqueda de tráiler). */
+        val detailRequests = mutableListOf<String>()
+
         override suspend fun fetchItemDetail(itemId: String): Content {
+            detailRequests += itemId
             if (throwOnAll) throw RuntimeException("network")
             return trending.firstOrNull { it.id == itemId }
                 ?: throw RuntimeException("not found")

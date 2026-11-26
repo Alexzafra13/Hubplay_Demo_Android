@@ -178,6 +178,8 @@ class HeroHeader(
 class HeroToggles(
     val showWatched:     Boolean,
     val canEditMetadata: Boolean,
+    /** Items de un amigo: sin favorito (no hay dónde guardarlo). */
+    val showFavorite:    Boolean = true,
 )
 
 /** Acciones sobre el item. `onToggleWatched` a null oculta el icono de visto. */
@@ -726,16 +728,13 @@ private fun ExpandableOverview(text: String) {
 @Composable
 private fun QuickActions(config: HeroDetailConfig, width: Dp, identifyFocus: FocusRequester) {
     val item = config.item
-    val isFavorite = (item as? Content.Movie)?.isFavorite
-        ?: (item as? Content.Series)?.isFavorite
-        ?: (item as? Content.Episode)?.isFavorite
-        ?: false
-    val watched = (item as? Content.Movie)?.watched
-        ?: (item as? Content.Series)?.watched
-        ?: (item as? Content.Episode)?.watched
+    val isFavorite = item.favoriteFlag()
+    val watched = item.watchedFlag()
     val onToggleWatched = config.actions.onToggleWatched
         ?.takeIf { config.toggles.showWatched && watched != null }
     val canIdentify = item is Content.Movie || item is Content.Series
+    val showIdentify = config.toggles.canEditMetadata && canIdentify
+    if (!config.toggles.showFavorite && onToggleWatched == null && !showIdentify) return
 
     // Se guarda QUÉ icono tiene el foco, no su texto: así la línea cambia
     // sola al alternar favorito/visto.
@@ -746,12 +745,14 @@ private fun QuickActions(config: HeroDetailConfig, width: Dp, identifyFocus: Foc
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuickActionIcon(
-                icon    = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                label   = favoriteLabel,
-                onClick = config.actions.onToggleFavorite,
-                onFocus = focus.handler(QuickAction.Favorite),
-            )
+            if (config.toggles.showFavorite) {
+                QuickActionIcon(
+                    icon    = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    label   = favoriteLabel,
+                    onClick = config.actions.onToggleFavorite,
+                    onFocus = focus.handler(QuickAction.Favorite),
+                )
+            }
             if (onToggleWatched != null) {
                 QuickActionIcon(
                     icon    = if (watched == true) Icons.Default.Check else Icons.Outlined.VisibilityOff,
@@ -760,7 +761,7 @@ private fun QuickActions(config: HeroDetailConfig, width: Dp, identifyFocus: Foc
                     onFocus = focus.handler(QuickAction.Watched),
                 )
             }
-            if (config.toggles.canEditMetadata && canIdentify) {
+            if (showIdentify) {
                 QuickActionIcon(
                     icon     = Icons.Outlined.Edit,
                     label    = R.string.detail_action_metadata,
@@ -778,6 +779,22 @@ private fun QuickActions(config: HeroDetailConfig, width: Dp, identifyFocus: Foc
             modifier = Modifier.width(width).height(QUICK_ACTION_CAPTION_HEIGHT),
         )
     }
+}
+
+/** Favorito del item (false en los tipos que no lo tienen). */
+private fun Content.favoriteFlag(): Boolean = when (this) {
+    is Content.Movie   -> isFavorite
+    is Content.Series  -> isFavorite
+    is Content.Episode -> isFavorite
+    else               -> false
+}
+
+/** Visto del item; null = el tipo no lo tiene (no se ofrece el icono). */
+private fun Content.watchedFlag(): Boolean? = when (this) {
+    is Content.Movie   -> watched
+    is Content.Series  -> watched
+    is Content.Episode -> watched
+    else               -> null
 }
 
 private enum class QuickAction { Favorite, Watched, Metadata }

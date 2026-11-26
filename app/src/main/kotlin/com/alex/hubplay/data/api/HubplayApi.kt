@@ -191,6 +191,27 @@ interface HubplayApi {
         @Query("audio") audio: Int? = null,
     ): StreamInfoResponse
 
+    /**
+     * DELETE /api/v1/stream/{itemId}/session — libera YA las sesiones de
+     * ffmpeg del usuario para ese item. Sin esto el servidor las mantiene
+     * hasta el reaper (90 s) ocupando el cupo de transcode por usuario
+     * (1 sin aceleración): el siguiente episodio podía dar 503. 204.
+     */
+    @DELETE("stream/{itemId}/session")
+    suspend fun stopStreamSession(@Path("itemId") itemId: String)
+
+    /**
+     * DELETE /api/v1/channels/{channelId}/hls/viewer?v= — baja del viewer en
+     * la sesión de transmux del canal (PB-28). Cuando sale el último, el
+     * servidor corta ffmpeg y la conexión al proveedor IPTV al momento en
+     * vez de a los 30 s del reaper. 204 aunque no exista.
+     */
+    @DELETE("channels/{channelId}/hls/viewer")
+    suspend fun leaveChannelViewer(
+        @Path("channelId") channelId: String,
+        @Query("v") viewerId: String,
+    )
+
     // ─── IPTV: channels + EPG + favorites ───────────────────────────────────
 
     /**

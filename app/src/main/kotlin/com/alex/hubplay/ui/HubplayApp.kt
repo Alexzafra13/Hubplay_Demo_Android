@@ -21,6 +21,7 @@ import androidx.compose.ui.zIndex
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.alex.hubplay.data.AppContainer
+import com.alex.hubplay.data.LocalStreamSessions
 import com.alex.hubplay.data.LocalTrailerHost
 import com.alex.hubplay.data.TrailerHost
 import com.alex.hubplay.ui.components.BrandIntro
@@ -58,6 +59,7 @@ fun HubplayApp(container: AppContainer) {
     val slides                by container.screensaverImageSource.slides.collectAsState()
     val pendingCertChallenge  by container.certChallengeBus.pending.collectAsState()
     val collectionsAvailable  by container.collectionsAvailability.hasAny.collectAsState()
+    val hasPeers              by container.sharedAvailability.hasPeers.collectAsState()
 
     // Trigger the availability fetch on first paint of any TopNav-
     // bearing screen — cheap, idempotent thanks to ensureLoaded().
@@ -67,9 +69,15 @@ fun HubplayApp(container: AppContainer) {
 
     // Hide the Collections tab when the server has no sagas. Set
     // recomputes only when the boolean flips, so TopNav doesn't churn.
-    val visibleTabs = androidx.compose.runtime.remember(collectionsAvailable) {
-        if (collectionsAvailable) Tab.entries.toSet()
-        else                       Tab.entries.toSet() - Tab.Collections
+    // Y "Compartido" solo con algún servidor amigo emparejado.
+    val visibleTabs = androidx.compose.runtime.remember(collectionsAvailable, hasPeers) {
+        Tab.entries.filterTo(mutableSetOf()) { tab ->
+            when (tab) {
+                Tab.Collections -> collectionsAvailable
+                Tab.Shared      -> hasPeers
+                else            -> true
+            }
+        }
     }
 
     // Three-state startup gate:
@@ -121,7 +129,10 @@ fun HubplayApp(container: AppContainer) {
         CompositionLocalProvider(LocalTrailerHost provides trailerHost) {
             TrailerHostOverlay(modifier = Modifier.fillMaxSize())
 
-            CompositionLocalProvider(LocalVisibleTabs provides visibleTabs) {
+            CompositionLocalProvider(
+                LocalVisibleTabs provides visibleTabs,
+                LocalStreamSessions provides container.streamSessions,
+            ) {
                 HubplayNavGraph(
                     navController = navController,
                     startRoute    = startRoute,
