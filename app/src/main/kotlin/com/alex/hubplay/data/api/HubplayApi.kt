@@ -84,6 +84,16 @@ interface HubplayApi {
     @GET("me/home/recommended")
     suspend fun getRecommended(@Query("limit") limit: Int = 5): RecommendedResponse
 
+    /** GET /api/v1/me/home/because-you-watched — "Porque viste X" (máx. 30). */
+    @GET("me/home/because-you-watched")
+    suspend fun getBecauseYouWatched(
+        @Query("limit") limit: Int = 12,
+    ): com.alex.hubplay.data.api.dto.BecauseYouWatchedResponse
+
+    /** GET /api/v1/favorites/channels — canales con estrella, completos (rail de Inicio). */
+    @GET("favorites/channels")
+    suspend fun listFavoriteChannels(): ChannelsResponse
+
     /**
      * GET /api/v1/items/latest — newest items in a library.
      *

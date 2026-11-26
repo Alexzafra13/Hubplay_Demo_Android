@@ -265,6 +265,8 @@ class ProfileRepositoryTest {
         override suspend fun getStreamInfo(itemId: String, capabilities: String, audio: Int?): StreamInfoResponse = TODO()
         override suspend fun stopStreamSession(itemId: String) = TODO()
         override suspend fun removeFromContinueWatching(itemId: String) = TODO()
+        override suspend fun getBecauseYouWatched(limit: Int): com.alex.hubplay.data.api.dto.BecauseYouWatchedResponse = TODO()
+        override suspend fun listFavoriteChannels(): ChannelsResponse = TODO()
         override suspend fun listMySessions(refreshToken: String?): com.alex.hubplay.data.api.dto.MySessionsResponse = TODO()
         override suspend fun revokeMySession(sessionId: String) = TODO()
         override suspend fun reportChannelFailure(channelId: String, body: com.alex.hubplay.data.api.dto.PlaybackFailureRequest) = TODO()

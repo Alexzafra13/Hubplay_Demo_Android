@@ -789,3 +789,20 @@ data class MySessionDto(
 
 @JsonClass(generateAdapter = true)
 data class MySessionsResponse(val data: List<MySessionDto>? = null)
+
+/** Título semilla de "Porque viste X". */
+@JsonClass(generateAdapter = true)
+data class BecauseSeedDto(
+    val id:    String,
+    val title: String? = null,
+)
+
+/** `GET /me/home/because-you-watched` → `{data:{seed, items}}` (seed null en frío). */
+@JsonClass(generateAdapter = true)
+data class BecauseYouWatchedPayload(
+    val seed:  BecauseSeedDto? = null,
+    val items: List<RecommendedItemDto> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class BecauseYouWatchedResponse(val data: BecauseYouWatchedPayload? = null)

@@ -56,6 +56,12 @@ interface HomeRepository {
     /** Quita un item de Continuar viendo sin marcarlo como visto. */
     suspend fun removeFromContinueWatching(itemId: String) = Unit
 
+    /** "Porque viste X": recomendaciones a partir del último título terminado (null = sin semilla). */
+    suspend fun fetchBecauseYouWatched(limit: Int = RAIL_LIMIT): BecauseYouWatched? = null
+
+    /** Canales marcados con la estrella (rail "Canales favoritos"). */
+    suspend fun fetchFavoriteChannels(): List<Content.LiveChannel> = emptyList()
+
     /** `true` si el usuario del token puede editar metadatos (admin o permiso explícito). */
     suspend fun fetchCanEditMetadata(): Boolean
     suspend fun refreshItemMetadata(itemId: String)
@@ -154,24 +160,11 @@ class HomeRepositoryImpl(
                         id        = section.id,
                         type      = type,
                         libraryId = section.libraryId,
-                        title     = railTitle(type, section.libraryName),
+                        title     = homeRailTitle(type, section.libraryName),
                     )
                 }
             }
     }
-
-    private fun railTitle(type: HomeRailType, libraryName: String?): String = homeRailTitle(type, libraryName)
-
-    /**
-     * Server-side fallback default — used when /me/home/layout returns
-     * a null or empty payload (cold-start user, network blip).
-     */
-    private fun defaultHomeLayout(): List<HomeRailConfig> = listOf(
-        HomeRailConfig("default-cw",       HomeRailType.ContinueWatching,   null, "Continuar viendo"),
-        HomeRailConfig("default-latest",   HomeRailType.LatestInLibrary,    null, "Lo último"),
-        HomeRailConfig("default-trending", HomeRailType.Trending,           null, "Tendencias"),
-        HomeRailConfig("default-live",     HomeRailType.LiveNow,            null, "En directo ahora"),
-    )
 
     /**
      * /items/{id}/children — seasons of a series, or episodes of a season.
@@ -353,6 +346,7 @@ class HomeRepositoryImpl(
             )
             MediaKind.LiveChannel,
             MediaKind.Shared,
+            MediaKind.Collection,
             MediaKind.Unknown -> Content.Unknown(
                 id          = data.id,
                 title       = data.title.orEmpty(),
@@ -397,6 +391,16 @@ class HomeRepositoryImpl(
     private val metadataTools = MetadataTools(api, tokenStore)
 
     override suspend fun removeFromContinueWatching(itemId: String) = api.removeFromContinueWatching(itemId)
+
+    override suspend fun fetchBecauseYouWatched(limit: Int): BecauseYouWatched? {
+        val server = serverUrl()
+        return api.getBecauseYouWatched(limit).data?.toDomain { it.toContent(server) }
+    }
+
+    override suspend fun fetchFavoriteChannels(): List<Content.LiveChannel> {
+        val server = serverUrl()
+        return api.listFavoriteChannels().data.orEmpty().map { it.toFavorite(absolutize(it.logoUrl, server)) }
+    }
 
     override suspend fun fetchCanEditMetadata(): Boolean = metadataTools.fetchCanEditMetadata()
     override suspend fun refreshItemMetadata(itemId: String) = metadataTools.refreshItemMetadata(itemId)
@@ -527,9 +531,6 @@ class HomeRepositoryImpl(
         }
     }
 
-    /** Logo del episodio o, lo normal, el de su serie (hero de Inicio). */
-    private fun ContinueWatchingEntryDto.episodeLogoPath(): String? = logoUrl ?: seriesLogoUrl
-
     /**
      * /me/next-up entries are sparse — no overview, no images — but they
      * carry the episode id + series_id we need to play and to match in
@@ -652,6 +653,7 @@ class HomeRepositoryImpl(
             )
             MediaKind.LiveChannel,
             MediaKind.Shared,
+            MediaKind.Collection,
             MediaKind.Unknown -> Content.Unknown(
                 id          = id,
                 title       = title.orEmpty(),
@@ -870,10 +872,24 @@ class HomeRepositoryImpl(
         val sep = if (cleanPath.contains('?')) '&' else '?'
         return "$server$cleanPath${sep}w=$width"
     }
-
-    /** .NET ticks → seconds. 10_000_000 ticks per second (100ns each). */
-    private fun ticksToSeconds(ticks: Long): Long = ticks / 10_000_000L
 }
+
+/** .NET ticks → seconds. 10_000_000 ticks per second (100ns each). */
+private fun ticksToSeconds(ticks: Long): Long = ticks / TICKS_PER_SECOND
+
+/** Logo del episodio o, lo normal, el de su serie (hero de Inicio). */
+private fun ContinueWatchingEntryDto.episodeLogoPath(): String? = logoUrl ?: seriesLogoUrl
+
+/**
+ * Server-side fallback default — used when /me/home/layout returns
+ * a null or empty payload (cold-start user, network blip).
+ */
+private fun defaultHomeLayout(): List<HomeRailConfig> = listOf(
+    HomeRailConfig("default-cw",       HomeRailType.ContinueWatching,   null, "Continuar viendo"),
+    HomeRailConfig("default-latest",   HomeRailType.LatestInLibrary,    null, "Lo último"),
+    HomeRailConfig("default-trending", HomeRailType.Trending,           null, "Tendencias"),
+    HomeRailConfig("default-live",     HomeRailType.LiveNow,            null, "En directo ahora"),
+)
 
 // Backend image-endpoint thumbnail widths (px). Sized for a 1080p TV so cheap
 // boxes don't download/decode source-resolution artwork into small targets.
@@ -904,7 +920,21 @@ fun homeRailTitle(type: HomeRailType, libraryName: String?): String = when (type
     HomeRailType.LatestInLibrary    -> libraryName?.let { "Lo último en $it" } ?: "Lo último"
     HomeRailType.SharedContinue     -> "Seguir viendo de tus amigos"
     HomeRailType.SharedRecent       -> "Novedades de tus amigos"
+    HomeRailType.BecauseYouWatched  -> libraryName?.let { "Porque viste $it" } ?: "Porque viste"
+    HomeRailType.Recommended        -> "Recomendados para ti"
+    HomeRailType.Collections        -> "Colecciones"
+    HomeRailType.FavoriteChannels   -> "Canales favoritos"
 }
+
+/** Cuántos items pide cada rail de descubrimiento de Inicio. */
+const val RAIL_LIMIT = 12
+
+/** "Porque viste X": el título semilla y lo que se le parece. */
+@androidx.compose.runtime.Immutable
+data class BecauseYouWatched(
+    val seedTitle: String,
+    val items:     List<Content>,
+)
 
 /** Un resultado de TMDb al re-identificar un item (Detalle → Identificar). */
 @androidx.compose.runtime.Immutable
@@ -970,6 +1000,11 @@ data class HomeData(
     /** Federación: items de amigos a medio ver y lo último que han añadido. */
     val sharedContinue:   List<Content.Shared>      = emptyList(),
     val sharedRecent:     List<Content.Shared>      = emptyList(),
+    /** Rails de descubrimiento que la web pinta fuera del layout configurable. */
+    val becauseYouWatched: List<Content>            = emptyList(),
+    val recommended:       List<Content>            = emptyList(),
+    val collections:       List<Content.Collection> = emptyList(),
+    val favoriteChannels:  List<Content.LiveChannel> = emptyList(),
 )
 
 /** A single rail's place in the home layout. */
@@ -991,10 +1026,11 @@ enum class HomeRailType {
     ContinueWatching, NextUp, Trending, LiveNow, LatestInLibrary,
 
     /**
-     * Rails de servidores amigos. No vienen del layout del servidor (no
-     * son configurables todavía): la app los añade al final cuando hay
-     * algo que enseñar, como la web.
+     * Rails que la app añade tras el layout del servidor (no son
+     * configurables todavía), en el orden de la web y solo si tienen algo:
+     * descubrimiento del catálogo propio y, al final, los de amigos.
      */
+    BecauseYouWatched, Recommended, Collections, FavoriteChannels,
     SharedContinue, SharedRecent;
 
     companion object {

@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.alex.hubplay.data.BecauseYouWatched
+import com.alex.hubplay.data.CollectionSummary
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.HomeData
 import com.alex.hubplay.data.HomeRailConfig
@@ -12,6 +14,7 @@ import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.MeEvent
 import com.alex.hubplay.data.MeEventsStream
 import com.alex.hubplay.data.PeersRepository
+import com.alex.hubplay.data.RAIL_LIMIT
 import com.alex.hubplay.data.homeRailTitle
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -191,7 +194,7 @@ class HomeViewModel(
     private fun fetchTrailerInfo(item: Content?) {
         // Los items de un amigo no tienen ficha en nuestro servidor
         // (`/items/{id}` daría 404) ni tráiler que buscar.
-        if (item == null || item is Content.Shared) {
+        if (item == null || item is Content.Shared || item is Content.Collection) {
             _trailerInfo.value = null
             return
         }
@@ -256,7 +259,7 @@ class HomeViewModel(
                 val cw          = async { safeFetch("continueWatching") { repository.fetchContinueWatching() } }
                 val nextUp      = async { safeFetch("nextUp")           { repository.fetchNextUp() } }
                 val trending    = async { safeFetch("trending")         { repository.fetchTrending() } }
-                val recommended = async { safeFetch("recommended")      { repository.fetchRecommended() } }
+                val recommended = async { safeFetch("recommended")      { repository.fetchRecommended(RAIL_LIMIT) } }
                 val liveNow     = async { safeFetch("liveNow")          { repository.fetchLiveNow() } }
                 // Latest "globally" for the hero — pulled without library
                 // filter (server returns newest items across libraries) so
@@ -265,7 +268,7 @@ class HomeViewModel(
                 val latestAll   = async {
                     safeFetch("latestAll") { repository.fetchLatest(limit = HERO_POOL_SIZE) }
                 }
-                val shared = async { fetchShared() }
+                val extras = async { fetchExtras() }
 
                 val layout    = layoutDef.await()
                 val libraries = librariesDef.await()
@@ -291,23 +294,20 @@ class HomeViewModel(
                     trending    = trendingItems,
                     recommended = recommendedItems,
                 )
-                val (sharedCwItems, sharedRecentItems) = shared.await()
                 HomeData(
                     hero             = heroSlots,
                     continueWatching = cw.await(),
                     nextUp           = nextUp.await(),
                     trending         = trendingItems,
                     liveNow          = liveNow.await(),
-                    rails            = layout + sharedRails(sharedCwItems, sharedRecentItems),
+                    rails            = layout,
                     latestByRailId   = latestByRailId,
-                    sharedContinue   = sharedCwItems,
-                    sharedRecent     = sharedRecentItems,
-                )
+                ).withExtras(extras.await().copy(recommended = recommendedItems))
             }
             val hasContent = data.trending.isNotEmpty() || data.continueWatching.isNotEmpty()
                 || data.nextUp.isNotEmpty() || data.liveNow.isNotEmpty()
                 || data.latestByRailId.values.any { it.isNotEmpty() }
-                || data.sharedContinue.isNotEmpty() || data.sharedRecent.isNotEmpty()
+                || data.rails.any { it.type in CLIENT_RAILS }
             _ui.value = if (hasContent) {
                 HomeUiState(isLoading = false, data = data)
             } else {
@@ -321,18 +321,45 @@ class HomeViewModel(
     }
 
     /**
-     * Rails de amigos ("seguir viendo" y novedades), en paralelo. Sin amigos
-     * emparejados el servidor responde vacío al momento; un servidor sin
-     * federación da 404 → vacío.
+     * Lo que la app añade tras el layout del servidor, en paralelo:
+     * "Porque viste X", colecciones, canales favoritos y los rails de
+     * amigos. Cada uno es opcional: un fallo (o un servidor antiguo sin el
+     * endpoint) solo deja ese rail vacío. Sin amigos emparejados el
+     * servidor responde vacío al momento.
      */
-    private suspend fun fetchShared(): Pair<List<Content.Shared>, List<Content.Shared>> {
-        val repo = peers ?: return emptyList<Content.Shared>() to emptyList()
-        return supervisorScope {
-            val cw     = async { safeFetch("sharedContinue") { repo.continueWatching() } }
-            val recent = async { safeFetch("sharedRecent") { repo.recent() } }
-            cw.await() to recent.await()
-        }
+    private suspend fun fetchExtras(): HomeExtras = supervisorScope {
+        val because   = async { runCatching { repository.fetchBecauseYouWatched() }.getOrNull() }
+        val sagas     = async { runCatching { repository.fetchCollections() }.getOrDefault(emptyList()) }
+        val favorites = async { safeFetch("favoriteChannels") { repository.fetchFavoriteChannels() } }
+        val sharedCw  = async { safeFetch("sharedContinue") { peers?.continueWatching().orEmpty() } }
+        val recent    = async { safeFetch("sharedRecent") { peers?.recent().orEmpty() } }
+        HomeExtras(
+            because          = because.await(),
+            collections      = sagas.await().map { it.toContent() },
+            favoriteChannels = favorites.await(),
+            sharedContinue   = sharedCw.await(),
+            sharedRecent     = recent.await(),
+        )
     }
+
+    /** Rellena los rails de [extras] y los añade al final del layout, solo si tienen algo. */
+    private fun HomeData.withExtras(extras: HomeExtras): HomeData = copy(
+        becauseYouWatched = extras.because?.items.orEmpty(),
+        recommended       = extras.recommended,
+        collections       = extras.collections,
+        favoriteChannels  = extras.favoriteChannels,
+        sharedContinue    = extras.sharedContinue,
+        sharedRecent      = extras.sharedRecent,
+        rails             = rails + buildList {
+            extras.because?.takeIf { it.items.isNotEmpty() }?.let {
+                val title = homeRailTitle(HomeRailType.BecauseYouWatched, it.seedTitle)
+                add(HomeRailConfig(id = BYW_ID, type = HomeRailType.BecauseYouWatched, libraryId = null, title = title))
+            }
+            if (extras.recommended.isNotEmpty()) add(clientRail(RECOMMENDED_ID, HomeRailType.Recommended))
+            if (extras.collections.isNotEmpty()) add(clientRail(COLLECTIONS_ID, HomeRailType.Collections))
+            if (extras.favoriteChannels.isNotEmpty()) add(clientRail(FAVORITES_ID, HomeRailType.FavoriteChannels))
+        } + sharedRails(extras.sharedContinue, extras.sharedRecent),
+    )
 
     /**
      * Quita [item] de Continuar viendo: optimista (desaparece ya) y, si el
@@ -357,6 +384,14 @@ class HomeViewModel(
             if (cw.isNotEmpty()) add(clientRail(SHARED_CONTINUE_ID, HomeRailType.SharedContinue))
             if (recent.isNotEmpty()) add(clientRail(SHARED_RECENT_ID, HomeRailType.SharedRecent))
         }
+
+    private fun CollectionSummary.toContent() = Content.Collection(
+        id          = id,
+        title       = name,
+        subtitle    = itemCount.takeIf { it > 0 }?.let { "$it películas" },
+        posterUrl   = posterUrl,
+        backdropUrl = backdropUrl ?: posterUrl,
+    )
 
     private fun clientRail(id: String, type: HomeRailType) =
         HomeRailConfig(id = id, type = type, libraryId = null, title = homeRailTitle(type, null))
@@ -545,6 +580,10 @@ class HomeViewModel(
          */
         private const val HERO_POOL_SIZE = 12
 
+        private const val BYW_ID             = "client-because-you-watched"
+        private const val RECOMMENDED_ID     = "client-recommended"
+        private const val COLLECTIONS_ID     = "client-collections"
+        private const val FAVORITES_ID       = "client-favorite-channels"
         private const val SHARED_CONTINUE_ID = "client-shared-continue"
         private const val SHARED_RECENT_ID   = "client-shared-recent"
 
@@ -570,4 +609,20 @@ data class TrailerInfo(
     val itemId: String,
     val key:    String,
     val site:   String,
+)
+
+/** Rails que añade la app (no vienen del layout del servidor). */
+private val CLIENT_RAILS = setOf(
+    HomeRailType.BecauseYouWatched, HomeRailType.Recommended, HomeRailType.Collections,
+    HomeRailType.FavoriteChannels, HomeRailType.SharedContinue, HomeRailType.SharedRecent,
+)
+
+/** Datos de los rails que la app añade tras el layout. */
+private data class HomeExtras(
+    val because:          BecauseYouWatched? = null,
+    val recommended:      List<Content> = emptyList(),
+    val collections:      List<Content.Collection> = emptyList(),
+    val favoriteChannels: List<Content.LiveChannel> = emptyList(),
+    val sharedContinue:   List<Content.Shared> = emptyList(),
+    val sharedRecent:     List<Content.Shared> = emptyList(),
 )

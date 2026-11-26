@@ -111,8 +111,8 @@ class SharedScreenshots : ScreenshotTest() {
         settle(2500)
         press(KEYCODE_DPAD_DOWN) // menú lateral
         press(KEYCODE_DPAD_RIGHT) // hero
-        // Bajar hasta los rails de amigos (al final de Inicio).
-        press(KEYCODE_DPAD_DOWN, times = 7, settleMs = 900)
+        // Bajar hasta los rails de amigos (al final de Inicio, tras Recomendados).
+        press(KEYCODE_DPAD_DOWN, times = 8, settleMs = 900)
         snap("shared_05_home_continue")
         press(KEYCODE_DPAD_DOWN, settleMs = 1200)
         snap("shared_06_home_recent")

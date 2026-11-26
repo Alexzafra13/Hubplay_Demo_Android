@@ -140,11 +140,7 @@ fun HubplayNavGraph(
         // Helper closures shared between Home / Movies / Series / LiveTv
         // so each surface uses the same navigation rules.
         val openItem: (String, MediaKind) -> Unit = { itemId, kind ->
-            val route = if (kind == MediaKind.Series)
-                Route.Series.route(itemId)
-            else
-                Route.Detail.route(itemId)
-            navController.navigate(route)
+            navController.navigate(itemRoute(itemId, kind))
         }
         val playItem: (String, Long) -> Unit = { itemId, resumePosSec ->
             navController.navigate(Route.Player.route(itemId, resumePosSec))
@@ -234,12 +230,8 @@ fun HubplayNavGraph(
             val actions = remember(viewModel) {
                 HomeActions(
                     onOpenItem      = { itemId, kind ->
-                        if (kind == MediaKind.Series) {
-                            navController.navigate(Route.Series.route(itemId))
-                        } else {
-                            val resume = viewModel.trailerCurrentTimeSec.value
-                            navController.navigate(Route.Detail.route(itemId, resume))
-                        }
+                        // El tráiler que sonaba en Inicio sigue en la ficha.
+                        navController.navigate(itemRoute(itemId, kind, viewModel.trailerCurrentTimeSec.value))
                     },
                     onPlayItem      = playItem,
                     onPlayChannel   = playChannel,
@@ -660,3 +652,10 @@ private val SettingsTarget.route: Route
         SettingsTarget.TrustedServers -> Route.TrustedServers
         SettingsTarget.Devices        -> Route.Devices
     }
+
+/** Ficha de un item según su tipo: serie, saga (colección) o película/episodio. */
+private fun itemRoute(itemId: String, kind: MediaKind, trailerResumeSec: Long = 0L): String = when (kind) {
+    MediaKind.Series     -> Route.Series.route(itemId)
+    MediaKind.Collection -> Route.CollectionDetail.route(itemId)
+    else                 -> Route.Detail.route(itemId, trailerResumeSec)
+}

@@ -681,10 +681,14 @@ private fun RenderRail(
         )
         HomeRailType.SharedContinue   -> RailSpec(data.sharedContinue, CardStyle.PosterCompact, actions::play)
         HomeRailType.SharedRecent     -> RailSpec(data.sharedRecent, CardStyle.PosterCompact, actions::open)
-        HomeRailType.LiveNow          -> {
+        HomeRailType.BecauseYouWatched -> RailSpec(data.becauseYouWatched, CardStyle.PosterCompact, actions::open)
+        HomeRailType.Recommended      -> RailSpec(data.recommended, CardStyle.PosterCompact, actions::open)
+        HomeRailType.Collections      -> RailSpec(data.collections, CardStyle.PosterCompact, actions::open)
+        HomeRailType.LiveNow,
+        HomeRailType.FavoriteChannels -> {
             LiveNowRail(
                 title = config.title,
-                items = data.liveNow,
+                items = if (config.type == HomeRailType.LiveNow) data.liveNow else data.favoriteChannels,
                 onFocused = onCardFocused,
                 onClick = { actions.onPlayChannel(it.id) },
                 initialFocusedItemId = initialFocusedItemId,
@@ -733,6 +737,7 @@ class HomeActions(
         when (item) {
             is Content.Shared      -> onPlayShared(item, item.resumePosSec)
             is Content.LiveChannel -> onPlayChannel(item.id)
+            is Content.Collection  -> onOpenItem(item.id, item.kind)
             else                   -> onPlayItem(item.id, (item as? Content.Resumable)?.resumePosSec ?: 0L)
         }
     }

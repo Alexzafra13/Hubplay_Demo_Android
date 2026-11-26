@@ -198,6 +198,26 @@ sealed interface Content {
     }
 
     /**
+     * Saga de TMDb (Star Wars, MCU…) en el rail "Colecciones" de Inicio.
+     * Abrirla lleva a su página (`/collections/{id}`); no se reproduce.
+     */
+    @Immutable
+    data class Collection(
+        override val id:          String,
+        override val title:       String,
+        override val subtitle:    String?      = null,
+        override val posterUrl:   String?      = null,
+        override val backdropUrl: String?      = null,
+        override val logoUrl:     String?      = null,
+        override val overview:    String?      = null,
+        override val genres:      List<String> = emptyList(),
+        override val rating:      Float?       = null,
+        override val year:        Int?         = null,
+    ) : Content {
+        override val kind: MediaKind get() = MediaKind.Collection
+    }
+
+    /**
      * Fallback for `type` values the client doesn't recognise yet
      * (forward-compat with new server enums). Rails render them with
      * the common fields; deeper screens that depend on variant-specific
@@ -226,8 +246,8 @@ sealed interface Content {
  * no Content instance yet — e.g. on a deep link or a saved nav back stack.
  */
 enum class MediaKind {
-    /** [Shared] = item de un servidor amigo; nunca sale de [from]. */
-    Movie, Series, Season, Episode, LiveChannel, Shared, Unknown;
+    /** [Shared] (item de un amigo) y [Collection] (saga) nunca salen de [from]. */
+    Movie, Series, Season, Episode, LiveChannel, Shared, Collection, Unknown;
 
     companion object {
         fun from(s: String?): MediaKind = when (s) {
