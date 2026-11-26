@@ -285,6 +285,17 @@ interface HubplayApi {
     @DELETE("favorites/channels/{channelId}")
     suspend fun removeFavoriteChannel(@Path("channelId") channelId: String): FavoriteToggleResponse
 
+    /**
+     * POST /api/v1/channels/{channelId}/playback-failure — el canal no
+     * arrancó en este reproductor. Suma al contador de salud del canal en
+     * el servidor (`kind`: manifest|network|media|timeout|unknown).
+     */
+    @POST("channels/{channelId}/playback-failure")
+    suspend fun reportChannelFailure(
+        @Path("channelId") channelId: String,
+        @Body body: com.alex.hubplay.data.api.dto.PlaybackFailureRequest,
+    )
+
     /** POST /api/v1/channels/{channelId}/watch — beacon (records last-watched). */
     @POST("channels/{channelId}/watch")
     suspend fun recordChannelWatch(@Path("channelId") channelId: String): WatchBeaconResponse

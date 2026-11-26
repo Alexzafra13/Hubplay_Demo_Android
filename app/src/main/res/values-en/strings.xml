@@ -310,4 +310,8 @@
     <string name="continue_remove_title">Remove from Continue watching?</string>
     <string name="continue_remove_body">“%1$s” will no longer show up in Continue watching. It is not marked as watched.</string>
     <string name="continue_remove_confirm">Remove</string>
+    <string name="player_live_unavailable">This channel is not available right now</string>
+    <string name="player_live_retry_hint">OK to retry · ↑ ↓ to change channel</string>
+    <string name="player_vod_failed">Playback failed</string>
+    <string name="player_retry_hint">OK to retry · Back to exit</string>
 </resources>

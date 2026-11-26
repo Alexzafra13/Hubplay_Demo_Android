@@ -4,8 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,12 +29,14 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.alex.hubplay.R
 import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.data.withImageWidth
 import com.alex.hubplay.player.HubplayPlayer
@@ -130,12 +134,19 @@ fun PlayerScreen(
         }
     }
 
-    val isLive = ui.mode == PlayerMode.Live
     // Encuadre elegido en Opciones; se aplica al PlayerView en `update`.
     var fit by remember { mutableStateOf(VideoFit.Fit) }
 
+    val isLive = ui.mode == PlayerMode.Live
+    // Fallo del stream: el directo avisa al servidor (salud del canal) una
+    // vez por canal; el mensaje y "OK para reintentar" valen para los dos.
+    ReportLiveFailure(playerState, isLive, ui.liveChannel?.id, viewModel::reportLiveFailure)
+
     Box(
-        modifier         = Modifier.fillMaxSize().background(Color.Black),
+        modifier         = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .retryOnSelect(failed = { playerState.error != null }, onRetry = player::retry),
         contentAlignment = Alignment.Center,
     ) {
         AndroidView(
@@ -271,6 +282,13 @@ fun PlayerScreen(
                 BackHandler { autoPlayDismissed = true }
             }
         }
+
+        PlaybackErrorMessage(
+            playerError = playerState.error,
+            screenError = ui.error,
+            isLive      = isLive,
+            modifier    = Modifier.align(Alignment.Center),
+        )
 
         ui.error?.let { err ->
             Text(
@@ -442,3 +460,71 @@ private fun VodOptions(
 ) {
     if (open) PlayerOptionsSheet(player = player, state = state, onFit = onFit, onDismiss = onDismiss)
 }
+
+/**
+ * Qué pasó cuando el stream no arranca o se corta. Antes la pantalla se
+ * quedaba en negro sin decir nada (el error del reproductor no se pintaba).
+ */
+@Composable
+private fun PlaybackErrorMessage(
+    playerError: String?,
+    screenError: String?,
+    isLive:      Boolean,
+    modifier:    Modifier = Modifier,
+) {
+    // El error de la pantalla (no se pudo resolver el item) ya se pinta aparte.
+    if (playerError == null || screenError != null) return
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier            = modifier
+            .padding(24.dp)
+            .background(Color.Black.copy(alpha = ERROR_SCRIM_ALPHA), RoundedCornerShape(16.dp))
+            .padding(horizontal = 28.dp, vertical = 20.dp),
+    ) {
+        Text(
+            text      = stringResource(
+                if (isLive) R.string.player_live_unavailable else R.string.player_vod_failed,
+            ),
+            style     = MaterialTheme.typography.titleMedium,
+            color     = Color.White,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text      = stringResource(
+                if (isLive) R.string.player_live_retry_hint else R.string.player_retry_hint,
+            ),
+            style     = MaterialTheme.typography.bodyMedium,
+            color     = Color.White.copy(alpha = ERROR_HINT_ALPHA),
+            textAlign = TextAlign.Center,
+            modifier  = Modifier.padding(top = 6.dp),
+        )
+    }
+}
+
+/** En directo, avisa al servidor del fallo del canal en curso (una vez por canal). */
+@Composable
+private fun ReportLiveFailure(
+    state:     com.alex.hubplay.player.PlayerState,
+    isLive:    Boolean,
+    channelId: String?,
+    report:    (Int?, String?) -> Unit,
+) {
+    LaunchedEffect(state.errorCode, channelId, isLive) {
+        if (isLive && state.error != null) report(state.errorCode, state.error)
+    }
+}
+
+/** Con el stream caído, OK (centro o Enter) reintenta en vez de llegar al chrome. */
+private fun Modifier.retryOnSelect(failed: () -> Boolean, onRetry: () -> Unit): Modifier =
+    onPreviewKeyEvent { event ->
+        val select = event.key == Key.DirectionCenter || event.key == Key.Enter
+        if (select && event.type == KeyEventType.KeyDown && failed()) {
+            onRetry()
+            true
+        } else {
+            false
+        }
+    }
+
+private const val ERROR_SCRIM_ALPHA = 0.7f
+private const val ERROR_HINT_ALPHA = 0.75f

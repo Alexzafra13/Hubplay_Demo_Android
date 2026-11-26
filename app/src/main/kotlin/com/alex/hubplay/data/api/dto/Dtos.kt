@@ -765,3 +765,10 @@ data class IdentifyRequest(
     val provider:                               String = "tmdb",
     @Json(name = "external_id") val externalId: String,
 )
+
+/** Cuerpo de `POST /channels/{id}/playback-failure` (`details` ≤ 200 caracteres). */
+@JsonClass(generateAdapter = true)
+data class PlaybackFailureRequest(
+    val kind:    String,
+    val details: String? = null,
+)

@@ -310,4 +310,8 @@
     <string name="continue_remove_title">¿Quitar de Continuar viendo?</string>
     <string name="continue_remove_body">«%1$s» dejará de salir en Continuar viendo. No se marca como visto.</string>
     <string name="continue_remove_confirm">Quitar</string>
+    <string name="player_live_unavailable">Este canal no está disponible ahora mismo</string>
+    <string name="player_live_retry_hint">OK para reintentar · ↑ ↓ para cambiar de canal</string>
+    <string name="player_vod_failed">No se pudo reproducir</string>
+    <string name="player_retry_hint">OK para reintentar · Atrás para salir</string>
 </resources>

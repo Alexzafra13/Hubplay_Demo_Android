@@ -1,5 +1,6 @@
 package com.alex.hubplay.ui.studio
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -26,6 +28,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -102,14 +106,24 @@ private fun StudioHeader(studio: StudioDetail, onBack: () -> Unit) {
         BackPill(onBack = onBack)
         Spacer(Modifier.width(20.dp))
         if (!studio.logoUrl.isNullOrBlank()) {
-            AsyncImage(
-                model              = studio.logoUrl,
-                contentDescription = studio.name,
-                contentScale       = ContentScale.Fit,
-                modifier           = Modifier
-                    .heightIn(min = 36.dp, max = 64.dp)
-                    .widthIn(max = 220.dp),
-            )
+            // Placa clara como en la web: los logos de TMDb están pensados
+            // para fondo blanco y el negro de Lucasfilm no se veía.
+            Box(
+                modifier         = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.White.copy(alpha = LOGO_PLATE_ALPHA))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model              = studio.logoUrl,
+                    contentDescription = studio.name,
+                    contentScale       = ContentScale.Fit,
+                    modifier           = Modifier
+                        .heightIn(min = 36.dp, max = 56.dp)
+                        .widthIn(max = 220.dp),
+                )
+            }
         } else {
             Text(
                 text       = studio.name,
@@ -158,3 +172,5 @@ private fun EmptyCatalogue() {
         )
     }
 }
+
+private const val LOGO_PLATE_ALPHA = 0.95f

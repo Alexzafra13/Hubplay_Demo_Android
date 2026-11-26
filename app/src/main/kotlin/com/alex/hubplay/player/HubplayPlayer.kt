@@ -131,7 +131,8 @@ class HubplayPlayer(
             _state.update { it.copy(isPlaying = isPlaying) }
         }
         override fun onPlayerError(error: PlaybackException) {
-            _state.update { it.copy(error = error.errorCodeName) }
+            Log.w(TAG, "playback error ${error.errorCodeName}", error)
+            _state.update { it.copy(error = error.errorCodeName, errorCode = error.errorCode) }
         }
 
         // Diagnóstico de subtítulos: la captura de pantalla de la Mi TV sale
@@ -176,6 +177,8 @@ class HubplayPlayer(
          */
         subtitles:    List<SideloadedSubtitle> = emptyList(),
     ) {
+        // Otro stream: el error del anterior (canal caído) ya no vale.
+        _state.update { it.copy(error = null, errorCode = null) }
         val absoluteUrl = absolutize(streamUrl)
         val mediaItem = MediaItem.fromUri(absoluteUrl)
         val video = if (isHls) {
@@ -194,6 +197,13 @@ class HubplayPlayer(
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
         subtitles.firstOrNull()?.let(::warmSubtitleCache)
+    }
+
+    /** Reintenta el mismo stream tras un error (OK en la pantalla de fallo). */
+    fun retry() {
+        _state.update { it.copy(error = null, errorCode = null) }
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = true
     }
 
     /**
@@ -298,4 +308,6 @@ data class PlayerState(
     val isPlaying:   Boolean = false,
     val isEnded:     Boolean = false,
     val error:       String? = null,
+    /** `PlaybackException.errorCode` del último fallo (para clasificarlo). */
+    val errorCode:   Int?    = null,
 )
