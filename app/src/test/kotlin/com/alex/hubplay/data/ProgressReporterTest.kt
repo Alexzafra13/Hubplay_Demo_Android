@@ -229,6 +229,7 @@ class ProgressReporterTest {
         override suspend fun getLibraries(): LibrariesResponse                = TODO()
         override suspend fun getLiveNow(limit: Int): LiveNowResponse          = TODO()
         override suspend fun getItem(itemId: String): ItemDetailResponse      = TODO()
+        override suspend fun getTrickplay(itemId: String): com.alex.hubplay.data.api.dto.TrickplayManifestDto = TODO()
         override suspend fun getChildren(itemId: String): ChildrenResponse    = TODO()
         override suspend fun getPerson(personId: String): PersonDetailResponse = TODO()
         override suspend fun getRecommendations(itemId: String): ItemRecommendationsResponse = TODO()

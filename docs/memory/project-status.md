@@ -162,8 +162,16 @@ Reproductor VOD (pedido: "como Jellyfin"):
   resolución, fps, canales). `PlayerOptionsSheet.kt`.
 - Sin probar en la TV. Si el servidor no ha detectado segmentos o el
   fichero no trae capítulos, esas partes simplemente no salen.
-- Pendiente del reproductor: miniaturas al avanzar (trickplay, el servidor
-  ya las sirve), calidad/bitrate y tamaño/estilo de subtítulos.
+- **Miniaturas al avanzar** (trickplay): `/items/{id}/trickplay.json`
+  (sin sobre `data`; 503 mientras ffmpeg genera → reintento cada 10 s,
+  10 veces) + `trickplay.png`. La hoja (hasta ~4800×2700) se descarga a
+  `cacheDir/trickplay/` y `BitmapRegionDecoder` recorta solo la miniatura
+  (RGB_565, LRU de 12): nunca se decodifica entera. Se ve 1,5 s tras cada
+  salto, sobre la barra en su posición, con la hora. `TrickplayPreview.kt`.
+  Robolectric no implementa BitmapRegionDecoder (sale negro): las capturas
+  inyectan un recorte en memoria.
+- Pendiente del reproductor: calidad/bitrate y tamaño/estilo/retardo de
+  subtítulos.
 
 Revisado y bien: ficha de película, rails de carátulas, En directo, menú
 lateral, catálogo, buscar. **Sin revisar aún**: reproductor (chrome VOD y

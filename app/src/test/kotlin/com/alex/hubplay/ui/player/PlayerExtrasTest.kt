@@ -2,6 +2,7 @@ package com.alex.hubplay.ui.player
 
 import com.alex.hubplay.data.api.dto.ChapterDto
 import com.alex.hubplay.data.api.dto.SegmentDto
+import com.alex.hubplay.data.api.dto.TrickplayManifestDto
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
@@ -49,5 +50,27 @@ class PlayerExtrasTest {
         assertThat(chapters).containsExactly(PlayerChapter(0, null), PlayerChapter(300_000, "B")).inOrder()
         assertThat(PlayerExtras.currentChapterIndex(chapters, 299_999)).isEqualTo(0)
         assertThat(PlayerExtras.currentChapterIndex(chapters, 300_000)).isEqualTo(1)
+    }
+
+    @Test
+    fun `miniatura en la hoja igual que la web`() {
+        val info = TrickplayInfo.from(
+            "x",
+            TrickplayManifestDto(intervalSec = 10, thumbWidth = 320, thumbHeight = 180, columns = 10, rows = 3, total = 25),
+        )!!
+        assertThat(info.tileAt(0)).isEqualTo(SpriteTile(0, 0, 0, 320, 180))
+        // 125 s → miniatura 12 → columna 2, fila 1
+        assertThat(info.tileAt(125_000)).isEqualTo(SpriteTile(12, 640, 180, 320, 180))
+        // Pasado el final: la última (24 → columna 4, fila 2)
+        assertThat(info.tileAt(9_999_000)).isEqualTo(SpriteTile(24, 1280, 360, 320, 180))
+    }
+
+    @Test
+    fun `manifiesto con sobre data o vacio`() {
+        val wrapped = TrickplayManifestDto(
+            data = TrickplayManifestDto(intervalSec = 5, thumbWidth = 320, thumbHeight = 180, columns = 2, total = 4),
+        )
+        assertThat(TrickplayInfo.from("x", wrapped)?.intervalMs).isEqualTo(5_000)
+        assertThat(TrickplayInfo.from("x", TrickplayManifestDto())).isNull()
     }
 }

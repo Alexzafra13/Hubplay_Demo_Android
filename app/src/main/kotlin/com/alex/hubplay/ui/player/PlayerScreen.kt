@@ -188,6 +188,7 @@ fun PlayerScreen(
                 playerState = playerState,
                 preparing   = ui.startParams == null,
                 sheetOpen   = trackSection != null || optionsOpen,
+                sprite      = rememberTrickplaySprite(ui.trickplay, server, okHttpClient),
                 actions     = VodChromeActions(
                     onOpenAudio     = { trackSection = TrackSection.Audio },
                     onOpenSubtitles = { trackSection = TrackSection.Subtitles },
@@ -418,7 +419,7 @@ private fun LiveLayer(
 /** Lo que el chrome de VOD necesita del estado, con las imágenes ya absolutas. */
 @Composable
 private fun rememberVodChromeInfo(ui: PlayerUiState, server: String?): VodChromeInfo =
-    remember(ui.title, ui.subtitle, ui.backdropUrl, ui.logoUrl, ui.nextEpisode, ui.skipSegments, server) {
+    remember(ui.title, ui.subtitle, ui.backdropUrl, ui.logoUrl, ui.nextEpisode, ui.skipSegments, ui.trickplay, server) {
         VodChromeInfo(
             title        = ui.title,
             subtitle     = ui.subtitle,
@@ -426,6 +427,7 @@ private fun rememberVodChromeInfo(ui: PlayerUiState, server: String?): VodChrome
             logoUrl      = absoluteImage(ui.logoUrl, server, IMG_W_LOGO),
             hasNext      = ui.nextEpisode != null,
             skipSegments = ui.skipSegments,
+            trickplay    = ui.trickplay,
         )
     }
 

@@ -124,6 +124,8 @@ class VodChromeInfo(
     val hasNext:     Boolean,
     /** Intro / resumen / créditos que se pueden saltar. */
     val skipSegments: List<SkipSegment> = emptyList(),
+    /** Miniaturas de la barra (null = el servidor no tiene / aún las genera). */
+    val trickplay:    TrickplayInfo? = null,
 )
 
 /** Acciones del chrome hacia la pantalla. */
@@ -145,6 +147,8 @@ fun VodPlayerLayer(
     actions:     VodChromeActions,
     /** Hoja de audio/subtítulos abierta: el chrome no se oculta y, al cerrarla, el foco vuelve al icono. */
     sheetOpen:   Boolean = false,
+    /** Hoja de miniaturas ya descargada (ver [rememberTrickplaySprite]). */
+    sprite:      TrickplaySprite? = null,
 ) {
     var visible by remember { mutableStateOf(true) }
     var lastInteractionAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -171,10 +175,8 @@ fun VodPlayerLayer(
     LaunchedEffect(playerState.isReady) { if (playerState.isReady) firstFrameShown = true }
     val showBackdrop = preparing || !firstFrameShown
 
-    val seek = { deltaMs: Long ->
-        val dur = exo.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
-        exo.seekTo((exo.currentPosition + deltaMs).coerceIn(0L, dur))
-    }
+    val scrub = remember { ScrubState() }
+    val seek = { deltaMs: Long -> scrub.mark(seekBy(exo, deltaMs)) }
     val togglePlay = { if (exo.isPlaying) exo.pause() else exo.play() }
 
     val skipState = rememberActiveSkip(info, exo)
@@ -210,6 +212,7 @@ fun VodPlayerLayer(
     ) {
         LoadingAndBuffering(info = info, showBackdrop = showBackdrop, buffering = playerState.isBuffering)
         SkipPill(segment = skipState.value.takeIf { !visible && !showBackdrop })
+        TrickplayThumb(scrub, info.trickplay, sprite) { exo.duration }
         ChromeOverlay(
             state       = ChromeVisibility(
                 shown     = visible && !showBackdrop,
@@ -250,6 +253,14 @@ private fun rememberActiveSkip(info: VodChromeInfo, exo: ExoPlayer): androidx.co
         }
     }
     return state
+}
+
+/** Salta [deltaMs] dentro de la duración y devuelve la posición destino. */
+private fun seekBy(exo: ExoPlayer, deltaMs: Long): Long {
+    val dur = exo.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
+    val target = (exo.currentPosition + deltaMs).coerceIn(0L, dur)
+    exo.seekTo(target)
+    return target
 }
 
 /** OK con un tramo saltable pendiente: salta y consume la tecla. */

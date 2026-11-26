@@ -6,6 +6,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import com.alex.hubplay.R
 import com.alex.hubplay.data.api.dto.ChapterDto
 import com.alex.hubplay.data.api.dto.SegmentDto
+import com.alex.hubplay.data.api.dto.TrickplayManifestDto
 
 // Extras del reproductor de VOD que el servidor ya da en /items/{id} y
 // la web ya usa: saltar intro/resumen/créditos y capítulos. Más las
@@ -86,3 +87,50 @@ data class PlayerOptionsState(
     /** direct_play | direct_stream | transcode */
     val method:   String?,
 )
+
+/** Rectángulo (px) de una miniatura dentro de la hoja. */
+@Immutable
+data class SpriteTile(val index: Int, val left: Int, val top: Int, val width: Int, val height: Int)
+
+/**
+ * Miniaturas de la barra (trickplay): una hoja PNG de `columns` de ancho con
+ * una miniatura cada [intervalMs]. Misma cuenta que la web (useTrickplay.ts).
+ */
+@Immutable
+data class TrickplayInfo(
+    val itemId:      String,
+    val intervalMs:  Long,
+    val thumbWidth:  Int,
+    val thumbHeight: Int,
+    val columns:     Int,
+    val total:       Int,
+) {
+    /** La miniatura que corresponde a [positionMs] (la última si se pasa del final). */
+    fun tileAt(positionMs: Long): SpriteTile {
+        val index = (positionMs.coerceAtLeast(0L) / intervalMs).toInt().coerceAtMost(total - 1)
+        val col = index % columns
+        val row = index / columns
+        return SpriteTile(index, col * thumbWidth, row * thumbHeight, thumbWidth, thumbHeight)
+    }
+
+    val spritePath: String get() = "/api/v1/items/$itemId/trickplay.png"
+
+    companion object {
+        private const val MS_PER_SECOND = 1000L
+
+        /** null si el manifiesto no sirve (campos a 0). */
+        fun from(itemId: String, dto: TrickplayManifestDto): TrickplayInfo? {
+            val m = dto.unwrap()
+            val valid = m.intervalSec > 0 && m.thumbWidth > 0 && m.thumbHeight > 0 && m.columns > 0 && m.total > 0
+            if (!valid) return null
+            return TrickplayInfo(
+                itemId      = itemId,
+                intervalMs  = m.intervalSec * MS_PER_SECOND,
+                thumbWidth  = m.thumbWidth,
+                thumbHeight = m.thumbHeight,
+                columns     = m.columns,
+                total       = m.total,
+            )
+        }
+    }
+}

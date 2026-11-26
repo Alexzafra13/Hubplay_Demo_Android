@@ -149,6 +149,24 @@ data class ItemDetailDto(
     val segments:                                          List<SegmentDto> = emptyList(),
 )
 
+/**
+ * /items/{id}/trickplay.json (imaging.TrickplayManifest). El servidor lo
+ * sirve tal cual del disco, SIN el sobre `{data: …}`; se acepta también con
+ * sobre por si se unifica ([unwrap]).
+ */
+@JsonClass(generateAdapter = true)
+data class TrickplayManifestDto(
+    @Json(name = "interval_sec") val intervalSec: Int = 0,
+    @Json(name = "thumb_width")  val thumbWidth:  Int = 0,
+    @Json(name = "thumb_height") val thumbHeight: Int = 0,
+    val columns: Int = 0,
+    val rows:    Int = 0,
+    val total:   Int = 0,
+    val data:    TrickplayManifestDto? = null,
+) {
+    fun unwrap(): TrickplayManifestDto = data ?: this
+}
+
 @JsonClass(generateAdapter = true)
 data class ChapterDto(
     @Json(name = "start_ticks") val startTicks: Long = 0L,

@@ -68,6 +68,32 @@ class PlayerViewModel(
      */
     private val liveChromeJobs = mutableListOf<Job>()
 
+    /** Carga del manifiesto de miniaturas del item en curso (se cancela al cambiar de item). */
+    private var trickplayJob: Job? = null
+
+    /**
+     * Miniaturas de la barra. La primera vez el servidor las genera con
+     * ffmpeg (30–90 s) y responde 503 mientras tanto: se reintenta cada
+     * [TRICKPLAY_RETRY_MS] unas cuantas veces. 404 / 503 por desactivado /
+     * cualquier otro fallo → sin miniaturas, el reproductor sigue igual.
+     */
+    private fun loadTrickplay(targetItemId: String) {
+        trickplayJob?.cancel()
+        _ui.update { it.copy(trickplay = null) }
+        trickplayJob = viewModelScope.launch {
+            repeat(TRICKPLAY_ATTEMPTS) {
+                val result = runCatching { api.getTrickplay(targetItemId) }
+                result.getOrNull()?.let { dto ->
+                    _ui.update { it.copy(trickplay = TrickplayInfo.from(targetItemId, dto)) }
+                    return@launch
+                }
+                val pending = (result.exceptionOrNull() as? HttpException)?.code() == HTTP_UNAVAILABLE
+                if (!pending) return@launch
+                kotlinx.coroutines.delay(TRICKPLAY_RETRY_MS)
+            }
+        }
+    }
+
     init {
         viewModelScope.launch { resolve(itemId, resumePosSec) }
     }
@@ -123,6 +149,7 @@ class PlayerViewModel(
                 )
             }
             if (item != null && item.type == "episode") maybeResolveNextEpisode(item)
+            loadTrickplay(targetItemId)
             return
         }
 
@@ -496,6 +523,9 @@ class PlayerViewModel(
 
     companion object {
         private const val TAG = "PlayerViewModel"
+        private const val TRICKPLAY_ATTEMPTS = 10
+        private const val TRICKPLAY_RETRY_MS = 10_000L
+        private const val HTTP_UNAVAILABLE = 503
 
         fun factory(
             api:          HubplayApi,
@@ -544,6 +574,8 @@ data class PlayerUiState(
     val skipSegments:    List<SkipSegment> = emptyList(),
     /** direct_play | direct_stream | transcode (Información de reproducción). */
     val streamMethod:    String? = null,
+    /** Miniaturas para la barra al avanzar/retroceder; null = sin ellas. */
+    val trickplay:       TrickplayInfo? = null,
     // ── Live-mode extras ─────────────────────────────────────────────────
     val liveChannel:     LiveChannel? = null,
     /** Every channel in the library the current live channel belongs to. */
