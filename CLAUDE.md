@@ -55,6 +55,7 @@ app/src/main/kotlin/com/alex/hubplay/
   ui/HubplayApp.kt           # raíz: TrailerHostOverlay (capa 0) + NavHost + screensaver + BrandIntro
   ui/components/             # TvShell + NavSidebar (menú lateral común), BrandIntro, TrailerHostOverlay
   ui/home/                   # HomeScreen (hero + rails) y components/ (MediaCard, HomeRail, HomeBackdrop…)
+  ui/shared/                 # "Compartido contigo" (federación): sección y ficha
   ui/                        # resto por feature: login, livetv, catalog, detail, player, …
 app/src/main/res/
   values/strings.xml         # es-ES (default locale)
@@ -124,9 +125,11 @@ candente para la siguiente sesión:
 1. ~~**Pantalla de reorder canales + hide canales**~~ — HECHO.
 2. ~~**"Recientemente visto"** filtro auto en sidebar Live TV~~ — HECHO
    (2026-06-10, server-backed vía `/me/channels/continue-watching`).
-3. **Vista EPG grid completa** como pantalla alternativa (NO tocar
+3. ~~**"Compartido contigo"** (federación `/me/peers/*`)~~ — HECHO
+   2026-11-26 (pestaña, ficha, reproducción, rails, búsqueda).
+4. **Vista EPG grid completa** como pantalla alternativa (NO tocar
    el inicio actual de Live TV).
-4. **Tests de Compose UI** + emulator en CI.
-5. **Baseline Profile** (necesita device real).
+5. **Tests de Compose UI** + emulator en CI.
+6. **Baseline Profile** (necesita device real).
 
 Descartados explícitamente: MediaSession (Android Auto), Cast.

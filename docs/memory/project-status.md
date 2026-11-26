@@ -2,18 +2,24 @@
 
 > Entrypoint de cada sesión. Corto a propósito. El detalle de cada
 > sesión (medidas, por qué de cada decisión) está en `archive/`; el último
-> volcado largo es `archive/project-status-detalle-2026-09-12-a-16.md`.
-> Última actualización: **2026-11-26**.
+> volcado largo es `archive/project-status-detalle-2026-11-26.md`.
+> Última actualización: **2026-11-26** (tarde).
 
 ## 1. Dónde estamos
 
-- `main` == `origin/main`, CI verde (detekt estricto + unitarios + APK).
-  Backend hermano: `Alexzafra13/HubPlay_demo` (dev local en
-  `http://192.168.1.100:8097`).
-- Funciona en la Mi TV real: login/emparejado, Inicio, catálogo, ficha
-  (película y serie), reproductor VOD con chrome propio (audio y
-  subtítulos del servidor), TV en directo,
+- Rama de trabajo `claude/stoic-feynman-pyojkw` (sin mergear a `main`):
+  federación, sesiones del servidor, quitar de Continuar viendo y el crash
+  de rails. CI local verde (detekt + 136 unitarios + APK + 14 capturas).
+  Backend hermano: `Alexzafra13/HubPlay_demo`, misma rama (federación con
+  DirectPlay y pósters en miniatura). **Ninguno de los dos está en la TV.**
+- Funciona en la Mi TV real (lo de antes de hoy): login/emparejado, Inicio,
+  catálogo, ficha (película y serie), reproductor VOD con chrome propio
+  (audio, subtítulos, saltar intro, opciones, miniaturas), TV en directo,
   buscar, colecciones, salvapantallas, intro, Ajustes → Inicio.
+- **Hecho hoy y sin probar en la TV**: "Compartido contigo" (pestaña,
+  ficha, reproducción, rails en Inicio, búsqueda), liberar sesiones al
+  salir/zapear, quitar de Continuar viendo (mantener OK), logout en el
+  servidor. Detalle en el archivo del 2026-11-26.
 - Sin probar: móvil/tablet, release firmada real, tests de Compose UI.
 
 ## 2. Cómo se prueba
@@ -42,10 +48,18 @@
   `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*screenshots*'`
   (sin `-Pscreenshots` no corren: CI igual de rápido). Código en
   `src/test/.../screenshots/` (`ScreenshotTest`, `SampleCatalog`,
-  `FakeArtwork`). Limitaciones: el foco INICIAL de cada pantalla no es
-  fiable (lo fija la primera pulsación), ni vídeo, ni tráiler, ni
-  rendimiento. Si Maven Central da 429: espejo de Google en un init
-  script de Gradle y `ROBOLECTRIC_REPO_URL` (ver archivo de la sesión).
+  `FakeArtwork`; `press`, `longPress`, `focusText`). Limitaciones: el foco
+  INICIAL de cada pantalla no es fiable (lo fija la primera pulsación), ni
+  vídeo, ni tráiler, ni rendimiento, y las ventanas `Dialog` quedan en modo
+  táctil (otra razón para usar overlays). Detecta crashes de composición
+  al desmontar (así salió el de `focusRestorer`).
+- **Sesión en la nube (sin Android Studio)**: SDK con
+  `commandlinetools-linux-*` → `sdkmanager "platforms;android-35"
+  "build-tools;35.0.0"` y `local.properties` con `sdk.dir`; Gradle 8.14
+  sirve. Maven Central da 429: init script en `~/.gradle/init.d/` que
+  cambia `repo.maven.apache.org` por
+  `https://maven-central.storage-download.googleapis.com/maven2/`, y
+  `ROBOLECTRIC_REPO_URL` con esa misma URL para las capturas.
 
 ## 3. Arquitectura viva (lo que no se deduce del código en 1 min)
 
@@ -100,6 +114,31 @@
   toda lista con `key = { it.id }` deduplica o Compose aborta el proceso.
   `AppContainer`: OkHttp/Retrofit perezosos con `prewarm()` en un hilo
   (el TrustManager propio obliga a leer todas las CA).
+- **Federación** (`data/PeersRepository`, `ui/shared/`): todo por
+  `/me/peers/…` de NUESTRO servidor (la app nunca ve la URL del amigo).
+  `Content.Shared` (kind `MediaKind.Shared`, `peerId`, `remoteKind`) pasa
+  por rails, tarjetas (píldora "● Pedro", `LocalSharedBadge`) y
+  `HomeActions.play/open`, que deciden canal / amigo / catálogo propio en
+  un solo sitio. `PeersRepository.cached()` (LRU) da título y póster a la
+  ficha y al reproductor. Las series de amigos no se reproducen (sin
+  episodios). La pestaña sale con `SharedAvailability.hasPeers`.
+- **Reproductor y servidor** (`data/StreamSessions`, `PlayerRequest`,
+  `PlayerDeps`): al salir/pasar de episodio `DELETE /stream/{id}/session`;
+  en directo `?v=<viewer>` y baja al zapear (y a los 4 s al salir, para
+  que la vista previa herede la sesión). La ruta del reproductor lleva
+  `live=true` (sin `/items` + `/info`) o `peer=`. El progreso se escribe
+  en el scope de la app (`ProgressReporter` + `ProgressSink`: local o de
+  amigo); en `viewModelScope` el último guardado se perdía al salir.
+- **Rails sin `focusRestorer`** (`BaseRail` en `HomeRail.kt`): un
+  `FocusRequester` por tarjeta y `focusProperties.enter` a la última
+  enfocada. `focusRestorer` (Compose 1.7) fija la tarjeta al salir el foco
+  y, si desaparece de los datos, la app se cerraba al salir de Inicio. No
+  volver a usarlo en listas cuyos items pueden desaparecer.
+- **Overlays, no `Dialog`**: Identificar y "¿Quitar de Continuar viendo?"
+  (`RemoveFromContinueOverlay`) son overlays con `exit = Cancel`, foco
+  inicial en la acción segura, Atrás cierra y el foco vuelve al rail. Una
+  ventana nueva costaba 0,5-0,9 s en el TV box. Pulsación larga de OK:
+  `Modifier.onLongSelect` en el rail (fase preview, se traga el KeyUp).
 - **API < 33**: `URLEncoder.encode(x, "UTF-8")` (la sobrecarga con
   `Charset` no existe en la Mi TV). minSdk 26.
 - **Detekt estricto**: `LongMethod` ≤ 80, `LongParameterList` ≤ 7,
@@ -114,92 +153,41 @@
   Inicio: ~300 ms de UI en caliente, el doble en frío (clases + JIT; solo
   lo arregla un Baseline Profile en release).
 
-## 5. Sesión 2026-11-26 (visual, con el banco de capturas)
+## 5. Última sesión (2026-11-26, dos tandas)
 
-Arreglado tras verlo en capturas:
-- **"A continuación" vacío**: `/me/next-up` no mandaba imágenes → tarjetas
-  con una "C" y hero en negro. Backend (rama `claude/stoic-curie-9je0wx`
-  de HubPlay_demo) manda fotograma + póster/fondo/logo de serie; la app
-  los mapea (`NextUpItemDto.toEpisode`). **Hay que desplegar el backend.**
-- Episodios en Inicio: el hero y la tarjeta solo decían la serie; ahora
-  "T3 · E1 · Fuego cruzado" en el hero y "T3 · E1" en el pie de tarjeta
-  (`EpisodeLabel.kt`, `R.string.episode_code`). Continuar viendo usa el
-  logo de la serie en el hero.
-- Inicio: el título del rail siguiente asomaba cortado a media letra en
-  el borde inferior → fundido de 28 dp.
-- Catálogo/Buscar: la primera carátula salía 10 dp más estrecha
-  (`propagateMinConstraints` en la Box del foco inicial).
-- Ficha de serie: "Seguir S2·…" cortado → botones de ancho intrínseco
-  ("Seguir T2·E4" entero, "T" de temporada).
-
-Segunda tanda (pedido del usuario):
-- **Inicio estilo Netflix/Prime**: con el foco en los rails, bajo el rail
-  activo se lee entero el encabezado del siguiente y el borde de sus
-  tarjetas se funde (`NEXT_RAIL_PEEK` 74 dp; el hero reducido es
-  alto − rail − asomo ≈ 195 dp, antes 46 % fijo). Último rail: nada debajo.
-- **Menú lateral en todas las pantallas** tras el login (ficha, serie,
-  colección, persona, estudio, Ajustes, orden de canales): `shell(...)`
-  en `HubplayNavGraph`. La ficha/serie ya no tienen cabecera propia
-  (volver + marca): volver = tecla Atrás. Rails de la ficha alineados con
-  el póster. Persona/estudio/colección/Ajustes conservan su botón volver.
-- **Tráiler Inicio → ficha sin cortes**: si la ficha tardaba > 500 ms en
-  cargar, el host ocultaba el tráiler y lo recargaba al llegar el item
-  (salto). `HoldTrailerWhileLoading` reclama lo que suena mientras carga.
-  Sin probar en la TV (el WebView no se simula).
-- Vista previa de la ficha (tráiler, 5 s sin tocar): también se oculta el
-  menú lateral (`LocalShellChrome.hideSidebar`, fundido de 600 ms); la
-  primera tecla lo devuelve. Nunca se oculta con el menú desplegado.
-
-Reproductor VOD (pedido: "como Jellyfin"):
-- **Saltar intro / resumen / créditos** con los `segments` que ya da
-  `/items/{id}` (mismo filtro que la web: confianza ≥ 0,7, se va 0,5 s
-  antes del final; créditos solo si hay siguiente episodio → salta a él).
-  Chrome oculto: píldora abajo a la derecha y OK salta. Chrome visible:
-  botón al final de la fila. Lógica en `PlayerExtras` (testeada).
-- **Menú Opciones** (engranaje): velocidad 0,5–2×, imagen (ajustar /
-  ampliar / estirar → `resizeMode` del PlayerView), capítulos del fichero
-  (salta; marca el actual) e información (directo/remux/transcode, códec,
-  resolución, fps, canales). `PlayerOptionsSheet.kt`.
-- Sin probar en la TV. Si el servidor no ha detectado segmentos o el
-  fichero no trae capítulos, esas partes simplemente no salen.
-- **Miniaturas al avanzar** (trickplay): `/items/{id}/trickplay.json`
-  (sin sobre `data`; 503 mientras ffmpeg genera → reintento cada 10 s,
-  10 veces) + `trickplay.png`. La hoja (hasta ~4800×2700) se descarga a
-  `cacheDir/trickplay/` y `BitmapRegionDecoder` recorta solo la miniatura
-  (RGB_565, LRU de 12): nunca se decodifica entera. Se ve 1,5 s tras cada
-  salto, sobre la barra en su posición, con la hora. `TrickplayPreview.kt`.
-  Robolectric no implementa BitmapRegionDecoder (sale negro): las capturas
-  inyectan un recorte en memoria.
-- Pendiente del reproductor: calidad/bitrate y tamaño/estilo/retardo de
-  subtítulos.
-
-Revisado y bien: ficha de película, rails de carátulas, En directo, menú
-lateral, catálogo, buscar. **Sin revisar aún**: reproductor (chrome VOD y
-directo), TV en directo, login/emparejado, Ajustes, colecciones, personas.
+Mañana: revisión visual con el banco de capturas (A continuación con
+artwork, Inicio estilo Netflix, menú en todas las pantallas, saltar
+intro, opciones y miniaturas en el reproductor). Tarde: todo lo que el
+backend daba y la app no usaba (federación, sesiones, quitar de
+Continuar viendo, logout real), arranques más rápidos y un crash latente
+de rails. Detalle y porqués: `archive/project-status-detalle-2026-11-26.md`.
 
 ## 6. Pendiente (orden sugerido)
 
-0. Desplegar el backend con `/me/next-up` + artwork y mirar Inicio en la
-   Mi TV. Seguir la revisión visual con capturas de las pantallas sin
-   revisar (arriba).
-
+0. **Mergear las dos ramas** `claude/stoic-feynman-pyojkw` (app y
+   backend) con el CI terminado en verde, **desplegar el backend** en el
+   servidor de la TV e instalar la app. Probar en la Mi TV, por este orden:
+   - Inicio: "A continuación" con imágenes; mantener OK en Continuar
+     viendo → Quitar; salir de Inicio tras quitar (el crash arreglado).
+   - Reproductor: pasar de episodio con un fichero que transcodifique (ya
+     no debe dar 503); salir y volver a entrar.
+   - TV en directo: zapear rápido por varios canales y comprobar en el
+     panel del servidor que las sesiones de transmux bajan al momento;
+     abrir un canal desde la vista previa (debe salir al instante).
+   - Federación (con un segundo servidor emparejado): pestaña Compartido,
+     ficha, reproducir un MP4 y un MKV, subtítulos, reanudar, Inicio y
+     Buscar. Cerrar sesión y ver que desaparece de "Tus dispositivos".
 1. Rails nuevos para Ajustes → Inicio (backend + app): canales favoritos,
-   colecciones, recomendado, estrenos, por género, "para terminar hoy".
-   Ideas propuestas al usuario el 2026-09-16, sin decidir.
-2. Reproductor: velocidad/calidad si se quiere; TV en directo sin tocar.
-   Subtítulos HECHO (2026-09-16); el servidor de la TV (`192.168.1.100`)
-   aún corre un backend sin la caché de VTT: desplegar.
-3. ~~Hero con canal en directo enfocado queda vacío hasta la preview~~ —
-   HECHO 2026-09-16: `LiveChannelHeroFallback` (tinte con `logoBg` + logo o
-   iniciales arriba a la derecha) como `fallback` del `ChannelPreviewPlayer`
-   de Inicio, y `HeroInfo`/`LiveChannelCard` caen a título/iniciales si el
-   logo no carga (muchos `/channels/{id}/logo` dan 404 en el servidor).
-4. ~~Un host con dos IPs sale dos veces en "Servidores en tu red"~~ — HECHO
-   2026-09-16 en app + backend: el servidor anuncia un id estable
-   (`server.instance_id`) por mDNS (TXT `id`), UDP (`id`) y `/health`
-   (`server_id`); `LanServer.serverId` + `sameServerAs` deduplican en
-   `LoginViewModel`. Con backends antiguos (sin id) se sigue comparando
-   por URL. Sin probar en real hasta desplegar el backend.
-5. Estudio Lucasfilm devuelve 0 títulos (backend). Detalle sin artwork,
+   colecciones, recomendado, estrenos, por género, "porque viste X"
+   (`/me/home/because-you-watched` ya existe en el backend y la app no lo
+   usa). Ideas propuestas el 2026-09-16, sin decidir. Los rails de amigos
+   tampoco son configurables todavía.
+2. Reproductor: calidad/bitrate; tamaño/estilo/retardo de subtítulos;
+   `POST /channels/{id}/playback-failure` cuando un canal no arranca (el
+   backend lo usa para la salud de canales y la app no lo manda).
+3. Federación: series de amigos (el backend solo comparte items de primer
+   nivel) y quitar de "Seguir viendo de tus amigos" (no hay endpoint).
+4. Estudio Lucasfilm devuelve 0 títulos (backend). Detalle sin artwork,
    `CollectionDetailScreen`, probar en móvil.
-6. Largo plazo: Baseline Profile, EPG grid, tests de Compose UI en CI.
+5. Largo plazo: Baseline Profile (necesita el aparato), EPG grid, tests de
+   Compose UI en CI, gestión de dispositivos (`/me/sessions`) en Ajustes.
