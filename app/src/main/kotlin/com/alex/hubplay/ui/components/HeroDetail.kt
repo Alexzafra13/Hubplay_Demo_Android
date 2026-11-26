@@ -240,11 +240,7 @@ fun HeroDetailScaffold(
     )
     // En vista previa también se va el menú lateral de TvShell: el tráiler
     // queda limpio, solo con la carátula. Vuelve con la primera tecla.
-    val chrome = LocalShellChrome.current
-    DisposableEffect(chrome, preview.active) {
-        chrome?.hideSidebar = preview.active
-        onDispose { chrome?.hideSidebar = false }
-    }
+    HideShellSidebar(hidden = preview.active)
     val previewProgress by animateFloatAsState(
         targetValue   = if (preview.active) 1f else 0f,
         animationSpec = tween(durationMillis = PREVIEW_ANIM_MS),

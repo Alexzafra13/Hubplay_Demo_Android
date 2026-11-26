@@ -9,12 +9,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -23,19 +21,6 @@ import androidx.compose.ui.zIndex
 import com.alex.hubplay.ui.home.components.LocalVisibleTabs
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.theme.BgBase
-
-/**
- * Lo que una pantalla dentro de [TvShell] puede pedirle al armazón. Hoy:
- * ocultar el menú lateral mientras la ficha está en vista previa del
- * tráiler (5 s sin tocar el mando), para que el vídeo quede limpio.
- */
-@Stable
-class ShellChrome {
-    var hideSidebar by mutableStateOf(false)
-}
-
-/** null fuera de [TvShell] (tests, pantallas sin armazón). */
-val LocalShellChrome = staticCompositionLocalOf<ShellChrome?> { null }
 
 /** Mismo ritmo que el fundido de la vista previa de la ficha. */
 private const val SIDEBAR_HIDE_MS = 600
