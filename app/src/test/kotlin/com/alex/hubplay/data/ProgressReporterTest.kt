@@ -262,6 +262,8 @@ class ProgressReporterTest {
         override suspend fun getStreamInfo(itemId: String, capabilities: String, audio: Int?): StreamInfoResponse = TODO()
         override suspend fun stopStreamSession(itemId: String) = TODO()
         override suspend fun removeFromContinueWatching(itemId: String) = TODO()
+        override suspend fun listMySessions(refreshToken: String?): com.alex.hubplay.data.api.dto.MySessionsResponse = TODO()
+        override suspend fun revokeMySession(sessionId: String) = TODO()
         override suspend fun reportChannelFailure(channelId: String, body: com.alex.hubplay.data.api.dto.PlaybackFailureRequest) = TODO()
         override suspend fun leaveChannelViewer(channelId: String, viewerId: String) = TODO()
         override suspend fun listChannels(libraryId: String, active: Boolean, includeHidden: Boolean): ChannelsResponse = TODO()

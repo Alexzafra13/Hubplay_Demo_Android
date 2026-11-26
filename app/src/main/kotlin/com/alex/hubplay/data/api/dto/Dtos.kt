@@ -772,3 +772,20 @@ data class PlaybackFailureRequest(
     val kind:    String,
     val details: String? = null,
 )
+
+/** Una sesión (refresh token vivo) del usuario: `GET /me/sessions`. */
+@JsonClass(generateAdapter = true)
+data class MySessionDto(
+    val id: String,
+    @Json(name = "device_name")    val deviceName:   String? = null,
+    @Json(name = "ip_address")     val ipAddress:    String? = null,
+    @Json(name = "created_at")     val createdAt:    String? = null,
+    @Json(name = "last_active_at") val lastActiveAt: String? = null,
+    /** La del que pregunta (el servidor la reconoce por el refresh token). */
+    val current: Boolean = false,
+    /** device_link (emparejado con código/QR) | password. */
+    @Json(name = "auth_method")    val authMethod:   String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class MySessionsResponse(val data: List<MySessionDto>? = null)

@@ -358,6 +358,22 @@ interface HubplayApi {
     @POST("me/progress/{itemId}/favorite")
     suspend fun toggleItemFavorite(@Path("itemId") itemId: String): ItemFavoriteToggleResponse
 
+    // ─── Dispositivos (sesiones del usuario) ────────────────────────────────
+
+    /**
+     * GET /api/v1/me/sessions — sesiones vivas del usuario. Sin cookies, el
+     * servidor reconoce la nuestra (`current`) por el refresh token en
+     * `X-Hubplay-Refresh-Token` (solo identifica; autentica el Bearer).
+     */
+    @GET("me/sessions")
+    suspend fun listMySessions(
+        @Header("X-Hubplay-Refresh-Token") refreshToken: String?,
+    ): com.alex.hubplay.data.api.dto.MySessionsResponse
+
+    /** DELETE /api/v1/me/sessions/{id} — cierra esa sesión (204). */
+    @DELETE("me/sessions/{id}")
+    suspend fun revokeMySession(@Path("id") sessionId: String)
+
     // ─── Search ─────────────────────────────────────────────────────────────
 
     /**

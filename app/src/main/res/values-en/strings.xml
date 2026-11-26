@@ -323,4 +323,14 @@
     <string name="player_sub_look_outline">Outline</string>
     <string name="player_sub_look_shadow">Shadow</string>
     <string name="player_sub_look_box">Black box</string>
+    <string name="devices_screen_title">Connected devices</string>
+    <string name="devices_help">Devices signed in to your account. Sign out the ones you don\'t recognise or no longer use; to leave this TV use "Sign out".</string>
+    <string name="devices_error">Could not load the device list</string>
+    <string name="devices_unnamed">Unnamed device</string>
+    <string name="devices_current">This TV</string>
+    <string name="devices_method_linked">Linked with a code</string>
+    <string name="devices_method_password">Username and password</string>
+    <string name="devices_last_active">Active: %1$s</string>
+    <string name="devices_action_revoke">Sign out</string>
+    <string name="settings_action_devices">Connected devices</string>
 </resources>

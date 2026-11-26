@@ -44,10 +44,13 @@ import com.alex.hubplay.ui.search.SearchScreen
 import com.alex.hubplay.ui.search.SearchViewModel
 import com.alex.hubplay.ui.series.SeriesScreen
 import com.alex.hubplay.ui.series.SeriesViewModel
+import com.alex.hubplay.ui.settings.DevicesScreen
+import com.alex.hubplay.ui.settings.DevicesViewModel
 import com.alex.hubplay.ui.settings.HomeLayoutScreen
 import com.alex.hubplay.ui.settings.HomeLayoutViewModel
 import com.alex.hubplay.ui.settings.SettingsActions
 import com.alex.hubplay.ui.settings.SettingsScreen
+import com.alex.hubplay.ui.settings.SettingsTarget
 import com.alex.hubplay.ui.settings.SettingsViewModel
 import com.alex.hubplay.ui.settings.TrustedServersScreen
 import com.alex.hubplay.ui.settings.TrustedServersViewModel
@@ -383,8 +386,7 @@ fun HubplayNavGraph(
                         onForgetServer        = forgetServer,
                         onChangeProfile       = changeProfile,
                         onReorderChannels     = openChannelOrder,
-                        onOpenHomeLayout      = { navController.navigate(Route.HomeLayout.path) },
-                        onOpenTrustedServers  = { navController.navigate(Route.TrustedServers.path) },
+                        onOpen                = { target -> navController.navigate(target.route.path) },
                     ),
                 )
             }
@@ -400,6 +402,16 @@ fun HubplayNavGraph(
                     viewModel = vm,
                     onBack    = { navController.popBackStack() },
                 )
+            }
+        }
+
+        // ── Dispositivos conectados (/me/sessions) ───────────────────
+        composable(Route.Devices.path) {
+            val vm = viewModel<DevicesViewModel>(
+                factory = DevicesViewModel.factory(container.hubplayApi, container.tokenStore),
+            )
+            shell(null, true, true) {
+                DevicesScreen(viewModel = vm, onBack = { navController.popBackStack() })
             }
         }
 
@@ -640,3 +652,11 @@ private fun playerRequestOf(args: android.os.Bundle?): PlayerRequest? {
         peerId       = decodeArg(args.getString(Route.Player.ARG_PEER_ID)),
     )
 }
+
+/** Ruta de cada subpantalla de Ajustes. */
+private val SettingsTarget.route: Route
+    get() = when (this) {
+        SettingsTarget.HomeLayout     -> Route.HomeLayout
+        SettingsTarget.TrustedServers -> Route.TrustedServers
+        SettingsTarget.Devices        -> Route.Devices
+    }

@@ -323,4 +323,14 @@
     <string name="player_sub_look_outline">Contorno</string>
     <string name="player_sub_look_shadow">Sombra</string>
     <string name="player_sub_look_box">Fondo negro</string>
+    <string name="devices_screen_title">Dispositivos conectados</string>
+    <string name="devices_help">Aparatos con tu cuenta abierta. Cierra la sesión de los que no reconozcas o ya no uses; para salir de esta tele usa "Cerrar sesión".</string>
+    <string name="devices_error">No se pudo cargar la lista de dispositivos</string>
+    <string name="devices_unnamed">Dispositivo sin nombre</string>
+    <string name="devices_current">Esta tele</string>
+    <string name="devices_method_linked">Vinculado con código</string>
+    <string name="devices_method_password">Usuario y contraseña</string>
+    <string name="devices_last_active">Activo: %1$s</string>
+    <string name="devices_action_revoke">Cerrar sesión</string>
+    <string name="settings_action_devices">Dispositivos conectados</string>
 </resources>
