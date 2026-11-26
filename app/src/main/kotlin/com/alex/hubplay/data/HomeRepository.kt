@@ -185,7 +185,8 @@ class HomeRepositoryImpl(
 
     /** /me/next-up — queued episodes across every series. */
     override suspend fun fetchNextUp(): List<Content.Episode> {
-        return api.getNextUp().data.orEmpty().map { it.toEpisode() }
+        val server = serverUrl()
+        return api.getNextUp().data.orEmpty().map { it.toEpisode(server) }
     }
 
     /**
@@ -505,7 +506,7 @@ class HomeRepositoryImpl(
                     subtitle      = episodeSubtitle,
                     posterUrl     = absolutize(posterUrl, server),
                     backdropUrl   = absolutize(thumbUrl ?: backdropUrl ?: posterUrl, server, IMG_W_BACKDROP),
-                    logoUrl       = absolutize(logoUrl, server),
+                    logoUrl       = absolutize(episodeLogoPath(), server),
                     year          = seriesYear,
                     progressPct   = progress,
                     resumePosSec  = resumeSec,
@@ -520,13 +521,16 @@ class HomeRepositoryImpl(
         }
     }
 
+    /** Logo del episodio o, lo normal, el de su serie (hero de Inicio). */
+    private fun ContinueWatchingEntryDto.episodeLogoPath(): String? = logoUrl ?: seriesLogoUrl
+
     /**
      * /me/next-up entries are sparse — no overview, no images — but they
      * carry the episode id + series_id we need to play and to match in
      * the resume resolver. SeriesScreen tops up the missing fields via
      * children when it needs to render rich episode cards.
      */
-    private fun NextUpItemDto.toEpisode(): Content.Episode {
+    private fun NextUpItemDto.toEpisode(server: String): Content.Episode {
         val totalSec = durationTicks?.let { ticksToSeconds(it) } ?: 0L
         val episodeLabel = buildString {
             val s = seasonNumber; val e = episodeNumber
@@ -537,10 +541,16 @@ class HomeRepositoryImpl(
             }
         }.ifBlank { null }
 
+        // Card 16:9 y fondo del hero: fotograma del episodio; si no hay,
+        // el fondo de la serie (mismo criterio que Continuar viendo).
+        val still = backdropUrl ?: posterUrl
         return Content.Episode(
             id            = id,
             title         = seriesTitle.orEmpty(),
             subtitle      = episodeLabel,
+            posterUrl     = absolutize(posterUrl ?: seriesPosterUrl, server),
+            backdropUrl   = absolutize(still ?: seriesBackdropUrl, server, IMG_W_BACKDROP),
+            logoUrl       = absolutize(seriesLogoUrl, server),
             seriesId      = seriesId,
             seasonNumber  = seasonNumber,
             episodeNumber = episodeNumber,

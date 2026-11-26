@@ -94,6 +94,8 @@ data class ContinueWatchingEntryDto(
     @Json(name = "series_id")        val seriesId:      String? = null,
     @Json(name = "series_title")     val seriesTitle:   String? = null,
     @Json(name = "series_year")      val seriesYear:    Int?    = null,
+    /** Logo de la serie: el hero de un episodio lo pinta en vez del título en texto. */
+    @Json(name = "series_logo_url")  val seriesLogoUrl: String? = null,
     @Json(name = "season_index")     val seasonIndex:   Int?    = null,
     @Json(name = "episode_index")    val episodeIndex:  Int?    = null,
     @Json(name = "user_data")        val userData:      UserDataDto? = null,
@@ -398,6 +400,13 @@ data class NextUpItemDto(
     @Json(name = "duration_ticks") val durationTicks: Long? = null,
     @Json(name = "series_title")   val seriesTitle:   String? = null,
     @Json(name = "series_id")      val seriesId:      String? = null,
+    // Artwork (backend ≥ 2026-11-26; antes llegaba sin imágenes y el rail
+    // salía con tarjetas vacías). poster/backdrop = fotograma del episodio.
+    @Json(name = "poster_url")          val posterUrl:         String? = null,
+    @Json(name = "backdrop_url")        val backdropUrl:       String? = null,
+    @Json(name = "series_poster_url")   val seriesPosterUrl:   String? = null,
+    @Json(name = "series_backdrop_url") val seriesBackdropUrl: String? = null,
+    @Json(name = "series_logo_url")     val seriesLogoUrl:     String? = null,
 )
 
 @JsonClass(generateAdapter = true)

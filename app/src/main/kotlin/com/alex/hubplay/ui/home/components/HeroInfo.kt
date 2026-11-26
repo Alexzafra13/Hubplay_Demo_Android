@@ -61,6 +61,7 @@ import com.alex.hubplay.R
 import com.alex.hubplay.data.Content
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.OnAccent
+import com.alex.hubplay.ui.theme.TextPrimary
 import com.alex.hubplay.ui.theme.TextSecondary
 
 /** Fundido de entrada del título/meta del hero al cambiar de item. */
@@ -288,6 +289,21 @@ private fun HeroMetaRow(item: Content) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         val parts = mutableListOf<@Composable () -> Unit>()
+
+        // Episodio: el título del hero es la serie; sin esta línea no se
+        // sabía qué capítulo iba a reproducir "Reproducir".
+        (item as? Content.Episode)?.let { episodeLine(it) }?.let { line ->
+            parts.add {
+                Text(
+                    text = line,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
 
         item.genres.firstOrNull()?.let { genre ->
             parts.add {

@@ -120,6 +120,9 @@ private val RailHeight: Dp = 46.dp + RAIL_CARD_HEIGHT + CARD_CAPTION_HEIGHT + 7.
  *  entero (285) sin que asome el anterior. */
 private const val HERO_REDUCED_FRACTION = 0.46f
 
+/** Fundido sobre el borde inferior de los rails (tapa el rail que asoma). */
+private val RAILS_BOTTOM_FADE = 28.dp
+
 @OptIn(ExperimentalFoundationApi::class)
 private val SuppressVerticalBringIntoView = object : BringIntoViewSpec {
     override fun calculateScrollDistance(
@@ -530,6 +533,11 @@ fun HomeScreen(
                             // padre porque durante la animación del hero
                             // los items se redimensionaban y se veían
                             // aplastados / con cards cortadas.
+                            // Con el hero reducido asoman ~18 dp del rail
+                            // siguiente: solo la parte de arriba de su título,
+                            // cortada a media letra. Un fundido al fondo deja la
+                            // pista de "hay más" sin el texto partido.
+                            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                             @OptIn(ExperimentalFoundationApi::class)
                             CompositionLocalProvider(
                                 LocalBringIntoViewSpec provides SuppressVerticalBringIntoView,
@@ -537,9 +545,7 @@ fun HomeScreen(
                                 LazyColumn(
                                     state = listState,
                                     contentPadding = PaddingValues(bottom = railsBottomPad),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f),
+                                    modifier = Modifier.fillMaxSize(),
                                 ) {
                                     itemsIndexed(
                                         items = rails,
@@ -599,6 +605,16 @@ fun HomeScreen(
                                         }
                                     }
                                 }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .height(RAILS_BOTTOM_FADE)
+                                    .background(
+                                        Brush.verticalGradient(0f to Color.Transparent, 1f to BgBase),
+                                    ),
+                            )
                             }
                         }
                     }

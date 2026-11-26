@@ -3,7 +3,7 @@
 > Entrypoint de cada sesión. Corto a propósito. El detalle de cada
 > sesión (medidas, por qué de cada decisión) está en `archive/`; el último
 > volcado largo es `archive/project-status-detalle-2026-09-12-a-16.md`.
-> Última actualización: **2026-09-16**.
+> Última actualización: **2026-11-26**.
 
 ## 1. Dónde estamos
 
@@ -35,6 +35,17 @@
   mide 3-4 s de más.
 - Emparejar, servidores, descubrimiento LAN, trampas del box: ver el
   archivo del 2026-09-11.
+- **Capturas sin TV ni emulador** (2026-11-26): Robolectric pinta las
+  pantallas reales a 960×540 dp (xhdpi) con datos inventados y carátulas
+  generadas, y simula el mando (`press(KEYCODE_DPAD_…)`). PNG en
+  `app/build/screenshots/`:
+  `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*screenshots*'`
+  (sin `-Pscreenshots` no corren: CI igual de rápido). Código en
+  `src/test/.../screenshots/` (`ScreenshotTest`, `SampleCatalog`,
+  `FakeArtwork`). Limitaciones: el foco INICIAL de cada pantalla no es
+  fiable (lo fija la primera pulsación), ni vídeo, ni tráiler, ni
+  rendimiento. Si Maven Central da 429: espejo de Google en un init
+  script de Gradle y `ROBOLECTRIC_REPO_URL` (ver archivo de la sesión).
 
 ## 3. Arquitectura viva (lo que no se deduce del código en 1 min)
 
@@ -103,7 +114,33 @@
   Inicio: ~300 ms de UI en caliente, el doble en frío (clases + JIT; solo
   lo arregla un Baseline Profile en release).
 
-## 5. Pendiente (orden sugerido)
+## 5. Sesión 2026-11-26 (visual, con el banco de capturas)
+
+Arreglado tras verlo en capturas:
+- **"A continuación" vacío**: `/me/next-up` no mandaba imágenes → tarjetas
+  con una "C" y hero en negro. Backend (rama `claude/stoic-curie-9je0wx`
+  de HubPlay_demo) manda fotograma + póster/fondo/logo de serie; la app
+  los mapea (`NextUpItemDto.toEpisode`). **Hay que desplegar el backend.**
+- Episodios en Inicio: el hero y la tarjeta solo decían la serie; ahora
+  "T3 · E1 · Fuego cruzado" en el hero y "T3 · E1" en el pie de tarjeta
+  (`EpisodeLabel.kt`, `R.string.episode_code`). Continuar viendo usa el
+  logo de la serie en el hero.
+- Inicio: el título del rail siguiente asomaba cortado a media letra en
+  el borde inferior → fundido de 28 dp.
+- Catálogo/Buscar: la primera carátula salía 10 dp más estrecha
+  (`propagateMinConstraints` en la Box del foco inicial).
+- Ficha de serie: "Seguir S2·…" cortado → botones de ancho intrínseco
+  ("Seguir T2·E4" entero, "T" de temporada).
+
+Revisado y bien: ficha de película, rails de carátulas, En directo, menú
+lateral, catálogo, buscar. **Sin revisar aún**: reproductor (chrome VOD y
+directo), TV en directo, login/emparejado, Ajustes, colecciones, personas.
+
+## 6. Pendiente (orden sugerido)
+
+0. Desplegar el backend con `/me/next-up` + artwork y mirar Inicio en la
+   Mi TV. Seguir la revisión visual con capturas de las pantallas sin
+   revisar (arriba).
 
 1. Rails nuevos para Ajustes → Inicio (backend + app): canales favoritos,
    colecciones, recomendado, estrenos, por género, "para terminar hoy".

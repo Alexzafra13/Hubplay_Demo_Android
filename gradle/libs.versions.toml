@@ -69,6 +69,10 @@ espresso           = "3.6.1"
 truth              = "1.4.4"
 turbine            = "1.2.0"
 mockwebserver      = "4.12.0"   # match okhttp version exactly
+# Capturas de pantalla en la JVM (tests de screenshot, ver
+# app/src/test/kotlin/com/alex/hubplay/screenshots/). 4.14.x es la primera
+# con SDK 35 y graphics nativos estables.
+robolectric        = "4.14.1"
 
 [libraries]
 # AndroidX core
@@ -133,6 +137,10 @@ truth                          = { group = "com.google.truth",         name = "t
 turbine                        = { group = "app.cash.turbine",         name = "turbine",              version.ref = "turbine" }
 kotlinx-coroutines-test        = { group = "org.jetbrains.kotlinx",    name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 mockwebserver                  = { group = "com.squareup.okhttp3",     name = "mockwebserver",        version.ref = "mockwebserver" }
+robolectric                    = { group = "org.robolectric",          name = "robolectric",          version.ref = "robolectric" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui",     name = "ui-test-junit4" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui",   name = "ui-test-manifest" }
+coil-test                      = { group = "io.coil-kt.coil3",         name = "coil-test",            version.ref = "coil" }
 
 # Static analysis — applied via the detekt plugin (see [plugins]) +
 # the formatting ruleset bundled here so a single :detekt invocation

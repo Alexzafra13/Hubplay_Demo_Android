@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -625,8 +626,13 @@ private fun PosterColumn(
         }
         // Reproducir (ancho del póster), la acción secundaria si la hay y
         // los iconos rápidos. Todo se desvanece en la vista previa.
+        // Ancho intrínseco: los botones miden como el póster salvo que la
+        // etiqueta no quepa ("Seguir T2·E10" se cortaba en "Seguir S2·…");
+        // entonces crecen los dos a la vez y siguen alineados.
         Column(
-            modifier            = Modifier.graphicsLayer { alpha = 1f - preview.progress() },
+            modifier            = Modifier
+                .width(IntrinsicSize.Max)
+                .graphicsLayer { alpha = 1f - preview.progress() },
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             val play = config.ctas.play
@@ -637,7 +643,7 @@ private fun PosterColumn(
                 enabled        = play.enabled,
                 focusRequester = focus.play,
                 onClick        = play.onClick,
-                modifier       = Modifier.width(posterWidth),
+                modifier       = Modifier.widthIn(min = posterWidth).fillMaxWidth(),
             )
             config.ctas.secondary?.let { cta ->
                 HeroCtaButton(
@@ -646,7 +652,7 @@ private fun PosterColumn(
                     primary  = false,
                     enabled  = cta.enabled,
                     onClick  = cta.onClick,
-                    modifier = Modifier.width(posterWidth),
+                    modifier = Modifier.widthIn(min = posterWidth).fillMaxWidth(),
                 )
             }
             QuickActions(config = config, width = posterWidth, identifyFocus = focus.identify)
