@@ -136,6 +136,8 @@ fun PlayerScreen(
 
     // Encuadre elegido en Opciones; se aplica al PlayerView en `update`.
     var fit by remember { mutableStateOf(VideoFit.Fit) }
+    // Tamaño y estilo de subtítulos: preferencia del aparato (Opciones).
+    var subtitleLook by remember { mutableStateOf(SubtitleAppearance.load(context)) }
 
     val isLive = ui.mode == PlayerMode.Live
     // Fallo del stream: el directo avisa al servidor (salud del canal) una
@@ -174,7 +176,10 @@ fun PlayerScreen(
                     keepScreenOn = true
                 }
             },
-            update   = { view -> view.resizeMode = fit.resizeMode },
+            update   = { view ->
+                view.resizeMode = fit.resizeMode
+                subtitleLook.applyTo(view.subtitleView)
+            },
         )
 
         if (isLive) {
@@ -213,8 +218,18 @@ fun PlayerScreen(
             VodOptions(
                 open      = optionsOpen,
                 player    = player.exoPlayer,
-                state     = PlayerOptionsState(fit, ui.chapters, ui.streamMethod),
+                state     = PlayerOptionsState(
+                    fit          = fit,
+                    chapters     = ui.chapters,
+                    method       = ui.streamMethod,
+                    subtitles    = subtitleLook,
+                    hasSubtitles = ui.subtitleTracks.isNotEmpty(),
+                ),
                 onFit     = { fit = it },
+                onSubtitles = { look ->
+                    subtitleLook = look
+                    look.save(context)
+                },
                 onDismiss = { optionsOpen = false },
             )
             trackSection?.let { section ->
@@ -452,13 +467,22 @@ private fun rememberVodChromeInfo(ui: PlayerUiState, server: String?): VodChrome
 /** Menú Opciones del VOD, solo mientras está abierto. */
 @Composable
 private fun VodOptions(
-    open:      Boolean,
-    player:    androidx.media3.exoplayer.ExoPlayer,
-    state:     PlayerOptionsState,
-    onFit:     (VideoFit) -> Unit,
-    onDismiss: () -> Unit,
+    open:        Boolean,
+    player:      androidx.media3.exoplayer.ExoPlayer,
+    state:       PlayerOptionsState,
+    onFit:       (VideoFit) -> Unit,
+    onSubtitles: (SubtitleAppearance) -> Unit,
+    onDismiss:   () -> Unit,
 ) {
-    if (open) PlayerOptionsSheet(player = player, state = state, onFit = onFit, onDismiss = onDismiss)
+    if (open) {
+        PlayerOptionsSheet(
+            player      = player,
+            state       = state,
+            onFit       = onFit,
+            onSubtitles = onSubtitles,
+            onDismiss   = onDismiss,
+        )
+    }
 }
 
 /**

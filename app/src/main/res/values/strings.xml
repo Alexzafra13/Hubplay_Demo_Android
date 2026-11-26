@@ -314,4 +314,13 @@
     <string name="player_live_retry_hint">OK para reintentar · ↑ ↓ para cambiar de canal</string>
     <string name="player_vod_failed">No se pudo reproducir</string>
     <string name="player_retry_hint">OK para reintentar · Atrás para salir</string>
+    <string name="player_section_quality">Calidad</string>
+    <string name="player_quality_auto">Automática</string>
+    <string name="player_sub_size_small">Pequeños</string>
+    <string name="player_sub_size_normal">Normales</string>
+    <string name="player_sub_size_large">Grandes</string>
+    <string name="player_sub_size_huge">Muy grandes</string>
+    <string name="player_sub_look_outline">Contorno</string>
+    <string name="player_sub_look_shadow">Sombra</string>
+    <string name="player_sub_look_box">Fondo negro</string>
 </resources>

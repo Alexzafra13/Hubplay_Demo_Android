@@ -86,6 +86,9 @@ data class PlayerOptionsState(
     val chapters: List<PlayerChapter>,
     /** direct_play | direct_stream | transcode */
     val method:   String?,
+    /** Aspecto de los subtítulos de texto (la sección sale si [hasSubtitles]). */
+    val subtitles:    SubtitleAppearance = SubtitleAppearance(),
+    val hasSubtitles: Boolean = false,
 )
 
 /** Rectángulo (px) de una miniatura dentro de la hoja. */
