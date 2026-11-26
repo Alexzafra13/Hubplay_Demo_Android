@@ -1,7 +1,10 @@
 package com.alex.hubplay.screenshots
 
+import android.view.KeyEvent.KEYCODE_DPAD_CENTER
 import android.view.KeyEvent.KEYCODE_DPAD_DOWN
 import android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+import androidx.activity.compose.setContent
+import com.alex.hubplay.ui.home.HomeActions
 import com.alex.hubplay.ui.home.HomeScreen
 import com.alex.hubplay.ui.home.HomeViewModel
 import kotlinx.coroutines.flow.emptyFlow
@@ -14,14 +17,65 @@ class HomeScreenshots : ScreenshotTest() {
         setTvContent {
             HomeScreen(
                 viewModel = vm,
-                onOpenItem = { _, _ -> },
-                onPlayItem = { _, _ -> },
-                onNavigateToTab = {},
-                onLogOut = {},
+                actions = HomeActions(
+                    onOpenItem = { _, _ -> },
+                    onPlayItem = { _, _ -> },
+                    onPlayChannel = {},
+                    onOpenShared = {},
+                    onPlayShared = { _, _ -> },
+                    onNavigateToTab = {},
+                ),
                 profileName = "Alex",
             )
         }
         settle(2500)
+    }
+
+    /**
+     * Regresión: un item de Continuar viendo que desaparece (SSE desde otro
+     * dispositivo, o "Quitar") mientras el foco está en OTRO rail. El
+     * focusRestorer del rail lo tenía fijado y al desmontar Inicio Compose
+     * abortaba con "Release should only be called once".
+     */
+    @Test
+    fun railItemRemovedWhileFocusElsewhere() {
+        val vm = HomeViewModel(SampleHomeRepository(), emptyFlow())
+        setTvContent {
+            HomeScreen(
+                viewModel = vm,
+                actions = HomeActions(
+                    onOpenItem = { _, _ -> }, onPlayItem = { _, _ -> }, onPlayChannel = {},
+                    onOpenShared = {}, onPlayShared = { _, _ -> }, onNavigateToTab = {},
+                ),
+                profileName = "Alex",
+            )
+        }
+        settle(2500)
+        press(KEYCODE_DPAD_DOWN) // menú lateral
+        press(KEYCODE_DPAD_RIGHT) // hero
+        press(KEYCODE_DPAD_DOWN, settleMs = 1200) // Continuar viendo (foco en la 1.ª)
+        press(KEYCODE_DPAD_DOWN, settleMs = 1200) // A continuación
+        compose.runOnUiThread { vm.removeFromContinueWatching(vm.ui.value.data.continueWatching.first()) }
+        settle(1500)
+        snap("home_14_removed_elsewhere")
+        // Desmontar Inicio (como al navegar a otra pantalla).
+        compose.runOnUiThread { compose.activity.setContent { } }
+        settle(500)
+    }
+
+    /** Mantener OK en Continuar viendo → "¿Quitar de Continuar viendo?" con el foco en Cancelar. */
+    @Test
+    fun removeFromContinue() {
+        showHome()
+        press(KEYCODE_DPAD_DOWN) // menú lateral
+        press(KEYCODE_DPAD_RIGHT) // hero
+        press(KEYCODE_DPAD_DOWN, settleMs = 1200) // Continuar viendo
+        longPress(KEYCODE_DPAD_CENTER)
+        snap("home_11_remove_continue")
+        press(KEYCODE_DPAD_RIGHT) // a "Quitar"
+        snap("home_12_remove_confirm_focus")
+        press(KEYCODE_DPAD_CENTER, settleMs = 1500)
+        snap("home_13_removed")
     }
 
     @Test

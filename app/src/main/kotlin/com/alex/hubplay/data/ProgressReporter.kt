@@ -32,11 +32,22 @@ import kotlinx.coroutines.sync.withLock
  * markPlayed-sent flag) MUST reset.
  */
 class ProgressReporter(
-    private val api:        HubplayApi,
+    private val sink:       ProgressSink,
     private val scope:      CoroutineScope,
-    private val itemId:     String,
     private val timeSource: TimeSource = TimeSource.SYSTEM,
 ) {
+    /** Item de nuestro catálogo: `/me/progress/{itemId}`. */
+    constructor(
+        api:        HubplayApi,
+        scope:      CoroutineScope,
+        itemId:     String,
+        timeSource: TimeSource = TimeSource.SYSTEM,
+    ) : this(LocalProgressSink(api, itemId), scope, timeSource)
+
+    private val itemId: String get() = sink.label
+
+    /** Última duración conocida (la necesita el progreso de items de amigos). */
+    @Volatile private var lastDurationSec: Long = 0L
 
     private val mutex = Mutex()
 
@@ -59,13 +70,14 @@ class ProgressReporter(
      */
     fun reportPosition(positionSec: Long, durationSec: Long, isPlaying: Boolean) {
         if (positionSec < 0) return
+        if (durationSec > 0) lastDurationSec = durationSec
 
         if (durationSec > 0 && !markedPlayed) {
             val ratio = positionSec.toDouble() / durationSec.toDouble()
             if (ratio >= COMPLETION_THRESHOLD) {
                 markedPlayed = true
                 launchUnique {
-                    runCatching { api.markPlayed(itemId) }
+                    runCatching { sink.markPlayed(durationSec) }
                         .onFailure { Log.w(TAG, "markPlayed($itemId) failed", it) }
                 }
                 return
@@ -100,13 +112,8 @@ class ProgressReporter(
     }
 
     private suspend fun writePosition(positionSec: Long, completed: Boolean) {
-        val ticks = positionSec * TICKS_PER_SECOND
-        runCatching {
-            api.updateProgress(
-                itemId = itemId,
-                body   = UpdateProgressRequest(positionTicks = ticks, completed = completed),
-            )
-        }.onFailure { Log.w(TAG, "updateProgress($itemId, ${positionSec}s) failed", it) }
+        runCatching { sink.write(positionSec, lastDurationSec, completed) }
+            .onFailure { Log.w(TAG, "updateProgress($itemId, ${positionSec}s) failed", it) }
     }
 
     /** Serialise outgoing HTTP so we never have two writes racing for the same itemId. */
@@ -124,6 +131,37 @@ class ProgressReporter(
         private const val TAG               = "ProgressReporter"
         private const val WRITE_INTERVAL_MS = 10_000L
         private const val COMPLETION_THRESHOLD = 0.95
-        private const val TICKS_PER_SECOND  = 10_000_000L  // .NET ticks unit the backend uses
     }
+}
+
+/** .NET ticks (100 ns) por segundo: la unidad de posición del backend. */
+const val TICKS_PER_SECOND = 10_000_000L
+
+/**
+ * Dónde se guarda el progreso. Lo implementan el catálogo propio
+ * ([LocalProgressSink]) y los items de un servidor amigo (`PeerProgressSink`).
+ */
+interface ProgressSink {
+    /** Para los logs. */
+    val label: String
+
+    /** Guarda la posición; [durationSec] 0 = aún desconocida. */
+    suspend fun write(positionSec: Long, durationSec: Long, completed: Boolean)
+
+    /** Marca como visto al pasar el 95 %. */
+    suspend fun markPlayed(durationSec: Long)
+}
+
+/** `/me/progress/{itemId}` de nuestro servidor. */
+class LocalProgressSink(private val api: HubplayApi, private val itemId: String) : ProgressSink {
+    override val label: String get() = itemId
+
+    override suspend fun write(positionSec: Long, durationSec: Long, completed: Boolean) {
+        api.updateProgress(
+            itemId = itemId,
+            body   = UpdateProgressRequest(positionTicks = positionSec * TICKS_PER_SECOND, completed = completed),
+        )
+    }
+
+    override suspend fun markPlayed(durationSec: Long) = api.markPlayed(itemId)
 }

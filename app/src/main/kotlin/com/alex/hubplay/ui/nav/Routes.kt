@@ -21,6 +21,16 @@ sealed class Route(val path: String) {
     data object HomeLayout : Route("home-layout")
     data object TrustedServers: Route("trusted-servers")
     data object Collections : Route("collections")
+    data object Shared : Route("shared")
+
+    /** Ficha de un item que comparte un servidor amigo (federación). */
+    data object SharedDetail : Route("shared/{peerId}/{itemId}?library={libraryId}") {
+        const val ARG_PEER_ID = "peerId"
+        const val ARG_ITEM_ID = "itemId"
+        const val ARG_LIBRARY_ID = "libraryId"
+        fun route(peerId: String, itemId: String, libraryId: String?): String =
+            "shared/${enc(peerId)}/${enc(itemId)}?library=${enc(libraryId.orEmpty())}"
+    }
 
     /** Collection detail — saga hero + member movies in release order. */
     data object CollectionDetail : Route("collections/{collectionId}") {
@@ -57,11 +67,19 @@ sealed class Route(val path: String) {
             "studio/${java.net.URLEncoder.encode(slug, "UTF-8")}"
     }
 
-    data object Player : Route("player/{itemId}?resume={resumePosSec}") {
+    data object Player : Route("player/{itemId}?resume={resumePosSec}&live={live}&peer={peerId}") {
         const val ARG_ITEM_ID = "itemId"
         const val ARG_RESUME  = "resumePosSec"
+        const val ARG_LIVE    = "live"
+        const val ARG_PEER_ID = "peerId"
 
-        fun route(itemId: String, resumePosSec: Long = 0L): String =
-            "player/$itemId?resume=$resumePosSec"
+        /**
+         * [live] = la navegación sabe que es un canal (se ahorra dos
+         * peticiones al arrancar); [peerId] = item de un servidor amigo.
+         */
+        fun route(itemId: String, resumePosSec: Long = 0L, live: Boolean = false, peerId: String? = null): String =
+            "player/$itemId?resume=$resumePosSec&live=$live" + (peerId?.let { "&peer=${enc(it)}" } ?: "")
     }
 }
+
+private fun enc(value: String): String = java.net.URLEncoder.encode(value, "UTF-8")

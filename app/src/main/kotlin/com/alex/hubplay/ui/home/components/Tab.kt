@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.CollectionsBookmark
@@ -26,6 +27,9 @@ enum class Tab(@StringRes val labelRes: Int, val icon: ImageVector) {
     Movies(R.string.nav_tab_movies, Icons.Default.Movie),
     Series(R.string.nav_tab_series, Icons.Default.VideoLibrary),
     Collections(R.string.nav_tab_collections, Icons.Outlined.CollectionsBookmark),
+
+    /** Federación: solo se ve con algún servidor amigo emparejado. */
+    Shared(R.string.nav_tab_shared, Icons.Default.People),
     LiveTv(R.string.nav_tab_livetv, Icons.Default.LiveTv),
 }
 

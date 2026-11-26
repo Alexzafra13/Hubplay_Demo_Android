@@ -5,6 +5,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -12,6 +13,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.alex.hubplay.data.AppContainer
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.catalog.CatalogScreen
 import com.alex.hubplay.ui.catalog.CatalogViewModel
@@ -23,6 +25,7 @@ import com.alex.hubplay.ui.collections.CollectionsViewModel
 import com.alex.hubplay.ui.components.TvShell
 import com.alex.hubplay.ui.detail.DetailScreen
 import com.alex.hubplay.ui.detail.DetailViewModel
+import com.alex.hubplay.ui.home.HomeActions
 import com.alex.hubplay.ui.home.HomeScreen
 import com.alex.hubplay.ui.home.HomeViewModel
 import com.alex.hubplay.ui.home.components.Tab
@@ -34,6 +37,7 @@ import com.alex.hubplay.ui.login.LoginScreen
 import com.alex.hubplay.ui.login.LoginViewModel
 import com.alex.hubplay.ui.person.PersonDetailScreen
 import com.alex.hubplay.ui.person.PersonDetailViewModel
+import com.alex.hubplay.ui.player.PlayerRequest
 import com.alex.hubplay.ui.player.PlayerScreen
 import com.alex.hubplay.ui.player.PlayerViewModel
 import com.alex.hubplay.ui.search.SearchScreen
@@ -47,6 +51,11 @@ import com.alex.hubplay.ui.settings.SettingsScreen
 import com.alex.hubplay.ui.settings.SettingsViewModel
 import com.alex.hubplay.ui.settings.TrustedServersScreen
 import com.alex.hubplay.ui.settings.TrustedServersViewModel
+import com.alex.hubplay.ui.shared.SharedDetailScreen
+import com.alex.hubplay.ui.shared.SharedDetailViewModel
+import com.alex.hubplay.ui.shared.SharedScreen
+import com.alex.hubplay.ui.shared.SharedTarget
+import com.alex.hubplay.ui.shared.SharedViewModel
 import com.alex.hubplay.ui.studio.StudioDetailScreen
 import com.alex.hubplay.ui.studio.StudioDetailViewModel
 import com.alex.hubplay.ui.whoiswatching.WhoIsWatchingScreen
@@ -116,6 +125,7 @@ fun HubplayNavGraph(
                     // closure defined further down for the Home-side
                     // screens, but pops the picker off the back stack
                     // so back-press doesn't bounce them right back in.
+                    container.revokeServerSession()
                     container.tokenStore.clearBlocking()
                     navController.navigate(Route.Login.path) {
                         popUpTo(Route.WhoIsWatching.path) { inclusive = true }
@@ -136,7 +146,23 @@ fun HubplayNavGraph(
         val playItem: (String, Long) -> Unit = { itemId, resumePosSec ->
             navController.navigate(Route.Player.route(itemId, resumePosSec))
         }
+        // Canal de TV: el reproductor se salta `/items` + `/info` (404).
+        val playChannel: (String) -> Unit = { channelId ->
+            navController.navigate(Route.Player.route(channelId, live = true))
+        }
+        // Federación: ficha y reproducción de un título de un amigo.
+        val openShared: (Content.Shared) -> Unit = { item ->
+            navController.navigate(Route.SharedDetail.route(item.peerId, item.id, item.libraryId))
+        }
+        val playShared: (Content.Shared, Long) -> Unit = { item, resumeSec ->
+            if (item.isPlayable) {
+                navController.navigate(Route.Player.route(item.id, resumeSec, peerId = item.peerId))
+            } else {
+                openShared(item)
+            }
+        }
         val logOut: () -> Unit = {
+            container.revokeServerSession()
             container.tokenStore.clearBlocking()
             navController.navigate(Route.Login.path) {
                 popUpTo(Route.Home.path) { inclusive = true }
@@ -150,6 +176,7 @@ fun HubplayNavGraph(
                 Tab.Home        -> Route.Home.path
                 Tab.Movies      -> Route.Movies.path
                 Tab.Collections -> Route.Collections.path
+                Tab.Shared      -> Route.Shared.path
                 Tab.Series      -> Route.SeriesList.path
                 Tab.LiveTv      -> Route.LiveTv.path
                 Tab.Search      -> Route.Search.path
@@ -195,22 +222,33 @@ fun HubplayNavGraph(
         // ── Home ─────────────────────────────────────────────────────
         composable(Route.Home.path) {
             val viewModel = viewModel<HomeViewModel>(
-                factory = HomeViewModel.factory(container.homeRepository, container.meEventsStream),
+                factory = HomeViewModel.factory(
+                    container.homeRepository,
+                    container.meEventsStream,
+                    container.peersRepository,
+                ),
             )
+            val actions = remember(viewModel) {
+                HomeActions(
+                    onOpenItem      = { itemId, kind ->
+                        if (kind == MediaKind.Series) {
+                            navController.navigate(Route.Series.route(itemId))
+                        } else {
+                            val resume = viewModel.trailerCurrentTimeSec.value
+                            navController.navigate(Route.Detail.route(itemId, resume))
+                        }
+                    },
+                    onPlayItem      = playItem,
+                    onPlayChannel   = playChannel,
+                    onOpenShared    = openShared,
+                    onPlayShared    = playShared,
+                    onNavigateToTab = navigateToTab,
+                    onOpenSettings  = openSettings,
+                )
+            }
             HomeScreen(
                 viewModel       = viewModel,
-                onOpenItem      = { itemId, kind ->
-                    if (kind == MediaKind.Series) {
-                        navController.navigate(Route.Series.route(itemId))
-                    } else {
-                        val resume = viewModel.trailerCurrentTimeSec.value
-                        navController.navigate(Route.Detail.route(itemId, resume))
-                    }
-                },
-                onPlayItem      = playItem,
-                onNavigateToTab = navigateToTab,
-                onLogOut        = logOut,
-                onOpenSettings  = openSettings,
+                actions         = actions,
                 profileName     = authState.activeProfileName,
                 authState       = authState,
                 okHttpClient    = container.mainOkHttp,
@@ -275,7 +313,7 @@ fun HubplayNavGraph(
                 viewModel       = vm,
                 authState       = authState,
                 okHttpClient    = container.mainOkHttp,
-                onPlayChannel   = { channelId -> playItem(channelId, 0L) },
+                onPlayChannel   = playChannel,
                 onTabSelected   = navigateToTab,
                 onSettings      = openSettings,
                 onReorderChannels = openChannelOrder,
@@ -302,13 +340,14 @@ fun HubplayNavGraph(
         // ── Search ───────────────────────────────────────────────────
         composable(Route.Search.path) {
             val vm = viewModel<SearchViewModel>(
-                factory = SearchViewModel.factory(container.homeRepository),
+                factory = SearchViewModel.factory(container.homeRepository, container.peersRepository),
             )
             SearchScreen(
                 viewModel     = vm,
                 onTabSelected = navigateToTab,
                 onOpenItem    = openItem,
                 onSettings    = openSettings,
+                onOpenShared  = openShared,
             )
         }
 
@@ -319,6 +358,7 @@ fun HubplayNavGraph(
             )
             val forgetServer: () -> Unit = {
                 // Wipes BOTH tokens + server URL, then drops back to login.
+                container.revokeServerSession()
                 container.tokenStore.forgetServerBlocking()
                 navController.navigate(Route.Login.path) {
                     popUpTo(Route.Home.path) { inclusive = true }
@@ -449,6 +489,43 @@ fun HubplayNavGraph(
             }
         }
 
+        // ── Compartido contigo (federación) ──────────────────────────
+        composable(Route.Shared.path) {
+            val vm = viewModel<SharedViewModel>(
+                factory = SharedViewModel.factory(container.peersRepository),
+            )
+            SharedScreen(
+                viewModel     = vm,
+                onOpenItem    = openShared,
+                onResume      = { item -> playShared(item, item.resumePosSec) },
+                onTabSelected = navigateToTab,
+                onSettings    = openSettings,
+            )
+        }
+
+        composable(
+            route     = Route.SharedDetail.path,
+            arguments = listOf(
+                navArgument(Route.SharedDetail.ARG_PEER_ID) { type = NavType.StringType },
+                navArgument(Route.SharedDetail.ARG_ITEM_ID) { type = NavType.StringType },
+                navArgument(Route.SharedDetail.ARG_LIBRARY_ID) {
+                    type = NavType.StringType; defaultValue = ""
+                },
+            ),
+        ) { entry ->
+            val target = sharedTargetOf(entry.arguments) ?: return@composable
+            val vm = viewModel<SharedDetailViewModel>(
+                factory = SharedDetailViewModel.factory(container.peersRepository, target),
+            )
+            shell(Tab.Shared, false, false) {
+                SharedDetailScreen(
+                    viewModel = vm,
+                    onPlay    = playShared,
+                    onBack    = { navController.popBackStack() },
+                )
+            }
+        }
+
         // ── Collections grid ─────────────────────────────────────────
         composable(Route.Collections.path) {
             val vm = viewModel<CollectionsViewModel>(
@@ -518,17 +595,20 @@ fun HubplayNavGraph(
                     type = NavType.LongType
                     defaultValue = 0L
                 },
+                navArgument(Route.Player.ARG_LIVE) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+                navArgument(Route.Player.ARG_PEER_ID) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
         ) { entry ->
-            val itemId       = entry.arguments?.getString(Route.Player.ARG_ITEM_ID) ?: return@composable
-            val resumePosSec = entry.arguments?.getLong(Route.Player.ARG_RESUME) ?: 0L
-            val viewModel    = viewModel<PlayerViewModel>(
-                factory = PlayerViewModel.factory(
-                    api          = container.hubplayApi,
-                    liveTvRepo   = container.liveTvRepository,
-                    itemId       = itemId,
-                    resumePosSec = resumePosSec,
-                ),
+            val request = playerRequestOf(entry.arguments) ?: return@composable
+            val viewModel = viewModel<PlayerViewModel>(
+                factory = PlayerViewModel.factory(container.playerDeps, request),
             )
             PlayerScreen(
                 viewModel      = viewModel,
@@ -539,4 +619,24 @@ fun HubplayNavGraph(
             )
         }
     }
+}
+
+/** Los ids de amigo viajan URL-encoded en la ruta (pueden traer `:` o `/`). */
+private fun decodeArg(raw: String?): String? = raw?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+
+private fun sharedTargetOf(args: android.os.Bundle?): SharedTarget? {
+    val peerId = decodeArg(args?.getString(Route.SharedDetail.ARG_PEER_ID)) ?: return null
+    val itemId = decodeArg(args?.getString(Route.SharedDetail.ARG_ITEM_ID)) ?: return null
+    val library = decodeArg(args?.getString(Route.SharedDetail.ARG_LIBRARY_ID))?.takeIf { it.isNotBlank() }
+    return SharedTarget(peerId = peerId, itemId = itemId, libraryId = library)
+}
+
+private fun playerRequestOf(args: android.os.Bundle?): PlayerRequest? {
+    val itemId = args?.getString(Route.Player.ARG_ITEM_ID) ?: return null
+    return PlayerRequest(
+        itemId       = itemId,
+        resumePosSec = args.getLong(Route.Player.ARG_RESUME),
+        live         = args.getBoolean(Route.Player.ARG_LIVE),
+        peerId       = decodeArg(args.getString(Route.Player.ARG_PEER_ID)),
+    )
 }

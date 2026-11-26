@@ -121,6 +121,23 @@ abstract class ScreenshotTest {
         }
     }
 
+    /**
+     * Mantener pulsada una tecla: el KeyDown inicial, el repetido con
+     * FLAG_LONG_PRESS (lo que manda Android al ~0,5 s) y el KeyUp.
+     */
+    protected fun longPress(keyCode: Int, settleMs: Long = 800) {
+        compose.runOnUiThread {
+            val root = compose.activity.window.decorView
+            val now = android.os.SystemClock.uptimeMillis()
+            root.dispatchKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0))
+            root.dispatchKeyEvent(
+                KeyEvent(now, now + LONG_PRESS_MS, KeyEvent.ACTION_DOWN, keyCode, 1, 0, 0, 0, KeyEvent.FLAG_LONG_PRESS),
+            )
+            root.dispatchKeyEvent(KeyEvent(now, now + LONG_PRESS_MS + 50, KeyEvent.ACTION_UP, keyCode, 0))
+        }
+        settle(settleMs)
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun rootViews(): List<View> = runCatching {
         val wmg = Class.forName("android.view.WindowManagerGlobal")
@@ -168,3 +185,5 @@ abstract class ScreenshotTest {
         File(dir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 }
+
+private const val LONG_PRESS_MS = 500L

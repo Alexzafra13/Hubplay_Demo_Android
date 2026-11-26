@@ -14,13 +14,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.data.Content
@@ -110,7 +111,6 @@ private fun <T : Content> BaseRail(
     val items = remember(items) { items.distinctBy { it.id } }
     if (items.isEmpty()) return
 
-    val restoreRequester = remember { FocusRequester() }
     val restoreIndex = remember(initialFocusedItemId, items) {
         if (initialFocusedItemId != null) items.indexOfFirst { it.id == initialFocusedItemId } else -1
     }
@@ -118,6 +118,21 @@ private fun <T : Content> BaseRail(
         initialFirstVisibleItemIndex = restoreIndex.coerceAtLeast(0),
     )
     var focusedIndex by remember { mutableIntStateOf(-1) }
+
+    // Volver al rail = volver a su última tarjeta. Antes con `focusRestorer`,
+    // que "fija" (pin) esa tarjeta en la LazyRow al salir el foco; si luego
+    // desaparecía de los datos (SSE de otro dispositivo, "Quitar de
+    // Continuar viendo") Compose 1.7 la liberaba dos veces y la app se
+    // cerraba al salir de Inicio ("Release should only be called once").
+    // Sin pin: un FocusRequester por tarjeta y `enter` apunta a la última
+    // enfocada si sigue en el rail y está compuesta (el rail la desplaza al
+    // principio al enfocarla, así que lo está); si no, la primera visible.
+    var lastFocusedId by remember { mutableStateOf(initialFocusedItemId) }
+    val cardRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    LaunchedEffect(items) {
+        val ids = items.mapTo(HashSet()) { it.id }
+        cardRequesters.keys.retainAll(ids)
+    }
 
     LaunchedEffect(focusedIndex) {
         if (focusedIndex >= 0) {
@@ -145,22 +160,30 @@ private fun <T : Content> BaseRail(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier              = Modifier.fillMaxWidth()
                 .let { m -> if (railFocusRequester != null) m.focusRequester(railFocusRequester) else m }
-                .focusGroup()
-                .focusRestorer { if (restoreIndex >= 0) restoreRequester else FocusRequester.Default },
+                .focusProperties {
+                    enter = {
+                        val id = lastFocusedId
+                        val composed = id != null &&
+                            listState.layoutInfo.visibleItemsInfo.any { info -> info.key == id }
+                        (if (composed) id?.let { cardRequesters[it] } else null) ?: FocusRequester.Default
+                    }
+                }
+                .focusGroup(),
         ) {
             items(
                 count = items.size,
                 key   = { index -> items[index].id },
             ) { index ->
                 val item = items[index]
-                val attachRequester = index == restoreIndex
+                val requester = cardRequesters.getOrPut(item.id) { FocusRequester() }
                 card(
                     item,
                     { focusedItem ->
                         focusedIndex = index
+                        lastFocusedId = focusedItem.id
                         onFocused(focusedItem)
                     },
-                    if (attachRequester) Modifier.focusRequester(restoreRequester) else Modifier,
+                    Modifier.focusRequester(requester),
                 )
             }
         }

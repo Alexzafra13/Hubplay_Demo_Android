@@ -1,9 +1,9 @@
 package com.alex.hubplay.ui.livetv
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -28,6 +28,8 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.alex.hubplay.data.AuthState
 import com.alex.hubplay.data.LiveChannel
+import com.alex.hubplay.data.LocalStreamSessions
+import com.alex.hubplay.data.StreamSessions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -73,9 +75,10 @@ fun ChannelPreviewPlayer(
     fallback:     @Composable () -> Unit,
 ) {
     val context = LocalContext.current
+    val sessions = LocalStreamSessions.current
 
     val controller = remember(authState.serverUrl, okHttpClient) {
-        PreviewController(context, authState, okHttpClient)
+        PreviewController(context, authState, okHttpClient, sessions)
     }
     DisposableEffect(controller) {
         onDispose { controller.release() }
@@ -140,7 +143,16 @@ private class PreviewController(
     context:   android.content.Context,
     private val authState: AuthState,
     okHttpClient: OkHttpClient,
+    private val sessions: StreamSessions?,
 ) {
+    /**
+     * Viewer de esta vista previa en el transmux del canal. Al cambiar de
+     * canal se da de baja del anterior al momento; al desmontar (abrir el
+     * reproductor a pantalla completa) con margen, para que el reproductor
+     * se una antes y herede la sesión ya caliente.
+     */
+    private val viewerId = StreamSessions.newViewerId()
+
     // Same auto-refreshing OkHttp the rest of the app uses — so a
     // token expiry mid-preview doesn't silently freeze the thumbnail.
     private val httpFactory = OkHttpDataSource.Factory(okHttpClient)
@@ -181,9 +193,10 @@ private class PreviewController(
 
     fun play(channel: LiveChannel) {
         if (currentChannelId == channel.id && _state.value is PreviewState.Playing) return
+        currentChannelId?.takeIf { it != channel.id }?.let { sessions?.leaveChannel(it, viewerId) }
         currentChannelId = channel.id
         _state.value = PreviewState.Loading
-        val absoluteUrl = absolutize("/api/v1/channels/${channel.id}/stream")
+        val absoluteUrl = absolutize(StreamSessions.channelStreamPath(channel.id, viewerId))
         val mediaItem = MediaItem.fromUri(absoluteUrl)
         val source = HlsMediaSource.Factory(httpFactory).createMediaSource(mediaItem)
         exoPlayer.setMediaSource(source)
@@ -191,6 +204,7 @@ private class PreviewController(
     }
 
     fun stop() {
+        currentChannelId?.let { sessions?.leaveChannel(it, viewerId) }
         currentChannelId = null
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
@@ -198,6 +212,8 @@ private class PreviewController(
     }
 
     fun release() {
+        currentChannelId?.let { sessions?.leaveChannel(it, viewerId, StreamSessions.LEAVE_GRACE_MS) }
+        currentChannelId = null
         exoPlayer.release()
     }
 

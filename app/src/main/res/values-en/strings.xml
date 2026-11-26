@@ -289,4 +289,25 @@
     <string name="identify_empty">No results</string>
     <string name="identify_applying">Applying…</string>
     <string name="identify_close">Close</string>
+    <!-- Shared with you (federation) -->
+    <string name="nav_tab_shared">Shared</string>
+    <string name="shared_title">Shared with you</string>
+    <string name="shared_subtitle">What your friends\' HubPlay servers share</string>
+    <string name="shared_empty">No friend server is sharing anything yet.</string>
+    <string name="shared_continue">Keep watching from friends</string>
+    <string name="shared_recent">New from your friends</string>
+    <string name="shared_library_title">%1$s · %2$s</string>
+    <string name="shared_by">Shared by %1$s</string>
+    <string name="shared_offline">%1$s is not responding: showing the last saved list</string>
+    <string name="shared_library_error">Could not load this library</string>
+    <string name="shared_play_from_start">From the beginning</string>
+    <string name="shared_series_unavailable">Shared series can\'t be played yet</string>
+    <string name="shared_not_found">This title is no longer available</string>
+    <string name="shared_movie">Movie</string>
+    <string name="shared_series">Series</string>
+    <string name="search_shared_section">From your friends</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="continue_remove_title">Remove from Continue watching?</string>
+    <string name="continue_remove_body">“%1$s” will no longer show up in Continue watching. It is not marked as watched.</string>
+    <string name="continue_remove_confirm">Remove</string>
 </resources>

@@ -53,6 +53,9 @@ interface HomeRepository {
     suspend fun toggleItemFavorite(itemId: String): Boolean
     suspend fun setItemWatched(itemId: String, watched: Boolean)
 
+    /** Quita un item de Continuar viendo sin marcarlo como visto. */
+    suspend fun removeFromContinueWatching(itemId: String) = Unit
+
     /** `true` si el usuario del token puede editar metadatos (admin o permiso explícito). */
     suspend fun fetchCanEditMetadata(): Boolean
     suspend fun refreshItemMetadata(itemId: String)
@@ -349,6 +352,7 @@ class HomeRepositoryImpl(
                 year        = data.year,
             )
             MediaKind.LiveChannel,
+            MediaKind.Shared,
             MediaKind.Unknown -> Content.Unknown(
                 id          = data.id,
                 title       = data.title.orEmpty(),
@@ -391,6 +395,8 @@ class HomeRepositoryImpl(
     // clase: son otro dominio y HomeRepositoryImpl ya roza el límite de
     // tamaño de detekt.
     private val metadataTools = MetadataTools(api, tokenStore)
+
+    override suspend fun removeFromContinueWatching(itemId: String) = api.removeFromContinueWatching(itemId)
 
     override suspend fun fetchCanEditMetadata(): Boolean = metadataTools.fetchCanEditMetadata()
     override suspend fun refreshItemMetadata(itemId: String) = metadataTools.refreshItemMetadata(itemId)
@@ -645,6 +651,7 @@ class HomeRepositoryImpl(
                 isFavorite    = favorite,
             )
             MediaKind.LiveChannel,
+            MediaKind.Shared,
             MediaKind.Unknown -> Content.Unknown(
                 id          = id,
                 title       = title.orEmpty(),
@@ -895,6 +902,8 @@ fun homeRailTitle(type: HomeRailType, libraryName: String?): String = when (type
     HomeRailType.Trending           -> "Tendencias"
     HomeRailType.LiveNow            -> "En directo ahora"
     HomeRailType.LatestInLibrary    -> libraryName?.let { "Lo último en $it" } ?: "Lo último"
+    HomeRailType.SharedContinue     -> "Seguir viendo de tus amigos"
+    HomeRailType.SharedRecent       -> "Novedades de tus amigos"
 }
 
 /** Un resultado de TMDb al re-identificar un item (Detalle → Identificar). */
@@ -958,6 +967,9 @@ data class HomeData(
      * card shape matches what the user expects (no episode pollution).
      */
     val latestByRailId:   Map<String, List<Content>> = emptyMap(),
+    /** Federación: items de amigos a medio ver y lo último que han añadido. */
+    val sharedContinue:   List<Content.Shared>      = emptyList(),
+    val sharedRecent:     List<Content.Shared>      = emptyList(),
 )
 
 /** A single rail's place in the home layout. */
@@ -976,7 +988,14 @@ data class HomeRailConfig(
  * and the repo skips it — frontend-tolerant by design).
  */
 enum class HomeRailType {
-    ContinueWatching, NextUp, Trending, LiveNow, LatestInLibrary;
+    ContinueWatching, NextUp, Trending, LiveNow, LatestInLibrary,
+
+    /**
+     * Rails de servidores amigos. No vienen del layout del servidor (no
+     * son configurables todavía): la app los añade al final cuando hay
+     * algo que enseñar, como la web.
+     */
+    SharedContinue, SharedRecent;
 
     companion object {
         fun from(s: String): HomeRailType? = when (s) {

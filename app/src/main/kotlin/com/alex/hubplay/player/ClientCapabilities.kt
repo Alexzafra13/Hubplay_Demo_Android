@@ -20,7 +20,18 @@ import android.media.MediaCodecList.REGULAR_CODECS
  */
 object ClientCapabilities {
 
-    fun probe(): String {
+    /**
+     * Los decodificadores del aparato no cambian en caliente: se calcula una
+     * vez. Recorrer `MediaCodecList` cuesta decenas de ms en un TV box (y se
+     * hacía en el hilo principal en cada reproducción y cada cambio de
+     * audio); [com.alex.hubplay.data.AppContainer.prewarm] lo deja listo al
+     * arrancar la app.
+     */
+    private val cached: String by lazy { compute() }
+
+    fun probe(): String = cached
+
+    private fun compute(): String {
         val codecs = mutableSetOf<String>()
         val list = MediaCodecList(REGULAR_CODECS)
         for (info in list.codecInfos) {

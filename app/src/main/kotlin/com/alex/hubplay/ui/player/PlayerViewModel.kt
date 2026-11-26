@@ -7,19 +7,27 @@ import androidx.lifecycle.viewModelScope
 import com.alex.hubplay.data.EpgProgram
 import com.alex.hubplay.data.LiveChannel
 import com.alex.hubplay.data.LiveTvRepository
+import com.alex.hubplay.data.PeersRepository
 import com.alex.hubplay.data.ProgressReporter
+import com.alex.hubplay.data.StreamSessions
 import com.alex.hubplay.data.api.HubplayApi
 import com.alex.hubplay.data.api.dto.ItemDetailDto
 import com.alex.hubplay.data.api.dto.ItemSummaryDto
+import com.alex.hubplay.data.api.dto.StreamInfoDto
 import com.alex.hubplay.player.ClientCapabilities
 import com.alex.hubplay.player.SideloadedSubtitle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.time.Instant
 
@@ -42,22 +50,32 @@ import java.time.Instant
  * ticker work. The cost is paid only by live items.
  */
 class PlayerViewModel(
-    private val api:          HubplayApi,
-    private val liveTvRepo:   LiveTvRepository,
-    private val itemId:       String,
-    private val resumePosSec: Long,
+    private val deps:    PlayerDeps,
+    private val request: PlayerRequest,
 ) : ViewModel() {
 
-    private val _ui = MutableStateFlow(PlayerUiState(itemId = itemId))
+    private val api:        HubplayApi       get() = deps.api
+    private val liveTvRepo: LiveTvRepository get() = deps.liveTvRepo
+
+    private val _ui = MutableStateFlow(PlayerUiState(itemId = request.itemId))
     val ui: StateFlow<PlayerUiState> = _ui.asStateFlow()
 
     /**
      * Reports playback position back to the server every ~10s, on pause,
      * and on dispose. Constructed lazily after [resolve] decides whether
      * the id is a VOD item (reporter enabled) or a live channel (left
-     * null — live streams have no concept of progress).
+     * null — live streams have no concept of progress). Escribe en el
+     * scope de la app: el guardado final al salir del reproductor se
+     * lanza justo cuando este ViewModel se destruye y en `viewModelScope`
+     * se cancelaba antes de llegar al servidor.
      */
     private var progressReporter: ProgressReporter? = null
+
+    /** Id de viewer de este reproductor en el transmux de los canales. */
+    private val viewerId = StreamSessions.newViewerId()
+
+    /** Canal que suena ahora (para darse de baja al zapear o salir). */
+    private var currentLiveChannelId: String? = null
 
     /**
      * The long-lived live-chrome coroutines (metadata fetch + 15s now-ticker
@@ -95,91 +113,164 @@ class PlayerViewModel(
     }
 
     init {
-        viewModelScope.launch { resolve(itemId, resumePosSec) }
+        viewModelScope.launch {
+            val peerId = request.peerId
+            when {
+                peerId != null -> resolvePeer(peerId, request.itemId, request.resumePosSec)
+                // La navegación ya sabe que es un canal: directo al stream,
+                // sin las dos peticiones (`/items` + `/info`) que daban 404.
+                request.live   -> startLive(request.itemId, title = null)
+                else           -> resolve(request.itemId, request.resumePosSec)
+            }
+        }
+    }
+
+    override fun onCleared() {
+        // Margen al salir: si la vista previa de TV en directo vuelve a pedir
+        // el mismo canal se une antes y el servidor no corta la sesión.
+        currentLiveChannelId?.let { deps.sessions.leaveChannel(it, viewerId, StreamSessions.LEAVE_GRACE_MS) }
+        val state = _ui.value
+        if (state.mode == PlayerMode.Vod && request.peerId == null) deps.sessions.stopVod(state.itemId)
     }
 
     private suspend fun resolve(targetItemId: String, resumeSec: Long) {
-        val capabilities = ClientCapabilities.probe()
-        Log.d(TAG, "resolve itemId=$targetItemId resume=$resumeSec caps=$capabilities")
+        val capabilities = withContext(Dispatchers.Default) { ClientCapabilities.probe() }
+        Log.d(TAG, "resolve itemId=$targetItemId resume=$resumeSec")
 
-        val itemResult = runCatching { api.getItem(targetItemId).data }
-        val item = itemResult.getOrNull()
+        // En paralelo: `/info` puede esperar hasta 3 s al índice de keyframes
+        // y la ficha no depende de él. Antes iban una detrás de otra.
+        val (itemResult, infoResult) = coroutineScope {
+            val itemDef = async { runCatching { api.getItem(targetItemId).data } }
+            val infoDef = async { runCatching { api.getStreamInfo(targetItemId, capabilities).data } }
+            itemDef.await() to infoDef.await()
+        }
+        val item     = itemResult.getOrNull()
+        val info     = infoResult.getOrNull()
+        val infoErr  = infoResult.exceptionOrNull()
+        val infoCode = (infoErr as? HttpException)?.code()
 
-        val infoResult = runCatching { api.getStreamInfo(targetItemId, capabilities).data }
-        val info       = infoResult.getOrNull()
-        val infoErr    = infoResult.exceptionOrNull()
-        val infoCode   = (infoErr as? HttpException)?.code()
-
-        if (info != null) {
-            // ── Item path (movies / episodes) ─────────────────────────────
-            val isDirectPlay   = info.method == "direct_play"
-            val streamUrl      = if (isDirectPlay) {
-                "/api/v1/stream/$targetItemId/direct"
-            } else {
-                TrackOptions.masterUrl(targetItemId, audio = -1, burnSub = -1)
+        when {
+            info != null    -> startVod(targetItemId, item, info, resumeSec)
+            // Un canal no tiene `/info`: 404 → directo.
+            infoCode == 404 -> startLive(targetItemId, item?.title)
+            else            -> {
+                val detail = infoErr?.let { "Error pidiendo /stream/$targetItemId/info: ${describe(it)}" }
+                    ?: "El server devolvió /stream/$targetItemId/info sin envelope `data`."
+                Log.e(TAG, "resolve failed: $detail", infoErr)
+                // User-facing copy stays clean — the diagnostic detail (endpoint
+                // path, HTTP status) goes to logcat only, never to the TV screen.
+                _ui.update { it.copy(title = item?.title, error = "No se pudo iniciar la reproducción. Inténtalo de nuevo.") }
             }
-            val subtitleTracks = item?.let { TrackOptions.subtitles(it.mediaStreams) }.orEmpty()
-            // VOD items report progress. Live channels are constructed
-            // farther down with reporter = null because /me/progress
-            // makes no sense for an endless live stream.
-            progressReporter = ProgressReporter(api, viewModelScope, targetItemId)
+        }
+    }
+
+    /** Item de nuestro catálogo (película / episodio) con la decisión de `/info`. */
+    private fun startVod(targetItemId: String, item: ItemDetailDto?, info: StreamInfoDto, resumeSec: Long) {
+        val isDirectPlay   = info.method == "direct_play"
+        val streamUrl      = if (isDirectPlay) {
+            "/api/v1/stream/$targetItemId/direct"
+        } else {
+            TrackOptions.masterUrl(targetItemId, audio = -1, burnSub = -1)
+        }
+        val subtitleTracks = item?.let { TrackOptions.subtitles(it.mediaStreams) }.orEmpty()
+        progressReporter = ProgressReporter(api, deps.backgroundScope, targetItemId)
+        _ui.update {
+            it.copy(
+                mode               = PlayerMode.Vod,
+                title              = item?.title ?: "Reproduciendo…",
+                subtitle           = item?.let(::subtitleFor),
+                backdropUrl        = item?.backdropUrl ?: item?.posterUrl,
+                logoUrl            = item?.logoUrl,
+                audioTracks        = item?.let { d -> TrackOptions.audio(d.mediaStreams) }.orEmpty(),
+                subtitleTracks     = subtitleTracks,
+                // Otro fichero, otras pistas: las elecciones no se arrastran.
+                selectedAudio      = -1,
+                directAudioOrdinal = null,
+                selectedSubtitle   = -1,
+                chapters           = item?.let { d -> PlayerExtras.chapters(d.chapters) }.orEmpty(),
+                skipSegments       = item?.let { d -> PlayerExtras.segments(d.segments) }.orEmpty(),
+                streamMethod       = info.method,
+                startParams        = PlayerStartParams(
+                    streamUrl    = streamUrl,
+                    resumePosSec = resumeSec,
+                    isHls        = !isDirectPlay,
+                    subtitles    = TrackOptions.sideloaded(targetItemId, subtitleTracks),
+                ),
+                error              = null,
+            )
+        }
+        if (item != null && item.type == "episode") maybeResolveNextEpisode(item)
+        loadTrickplay(targetItemId)
+    }
+
+    /** Canal de TV: stream con nuestro viewer y el chrome de directo. */
+    private fun startLive(channelId: String, title: String?) {
+        Log.d(TAG, "live channel $channelId")
+        currentLiveChannelId = channelId
+        _ui.update {
+            it.copy(
+                mode        = PlayerMode.Live,
+                title       = title ?: it.title ?: "Canal en vivo",
+                startParams = liveParams(channelId),
+                error       = null,
+            )
+        }
+        loadLiveChrome(channelId)
+    }
+
+    private fun liveParams(channelId: String) = PlayerStartParams(
+        streamUrl    = StreamSessions.channelStreamPath(channelId, viewerId),
+        resumePosSec = 0L,
+        isHls        = true,
+    )
+
+    /**
+     * Película de un servidor amigo: el amigo abre la sesión con nuestras
+     * capacidades y nuestro servidor proxya el HLS. Subtítulos de texto sí
+     * (WebVTT por la sesión); audio alternativo y capítulos no viajan. El
+     * progreso va a `/me/peers/…`.
+     */
+    private suspend fun resolvePeer(peerId: String, itemId: String, resumeSec: Long) {
+        val shared = deps.peers.cached(peerId, itemId)
+        _ui.update {
+            it.copy(
+                title       = shared?.title ?: it.title,
+                subtitle    = shared?.peerName?.takeIf { n -> n.isNotBlank() },
+                backdropUrl = shared?.backdropUrl,
+            )
+        }
+        val capabilities = withContext(Dispatchers.Default) { ClientCapabilities.probe() }
+        val result = runCatching { deps.peers.startStream(peerId, itemId, capabilities) }
+        val stream = result.getOrNull()
+        if (stream == null) {
+            Log.e(TAG, "peer stream $peerId/$itemId failed", result.exceptionOrNull())
             _ui.update {
-                it.copy(
-                    mode               = PlayerMode.Vod,
-                    title              = item?.title ?: "Reproduciendo…",
-                    subtitle           = item?.let(::subtitleFor),
-                    backdropUrl        = item?.backdropUrl ?: item?.posterUrl,
-                    logoUrl            = item?.logoUrl,
-                    audioTracks        = item?.let { d -> TrackOptions.audio(d.mediaStreams) }.orEmpty(),
-                    subtitleTracks     = subtitleTracks,
-                    // Otro fichero, otras pistas: las elecciones no se arrastran.
-                    selectedAudio      = -1,
-                    directAudioOrdinal = null,
-                    selectedSubtitle   = -1,
-                    chapters           = item?.let { d -> PlayerExtras.chapters(d.chapters) }.orEmpty(),
-                    skipSegments       = item?.let { d -> PlayerExtras.segments(d.segments) }.orEmpty(),
-                    streamMethod       = info.method,
-                    startParams        = PlayerStartParams(
-                        streamUrl    = streamUrl,
-                        resumePosSec = resumeSec,
-                        isHls        = !isDirectPlay,
-                        subtitles    = TrackOptions.sideloaded(targetItemId, subtitleTracks),
-                    ),
-                    error              = null,
-                )
+                it.copy(error = "No se pudo reproducir desde el servidor de tu amigo. Puede que esté apagado.")
             }
-            if (item != null && item.type == "episode") maybeResolveNextEpisode(item)
-            loadTrickplay(targetItemId)
             return
         }
-
-        if (infoCode == 404) {
-            // ── Channel path ──────────────────────────────────────────────
-            Log.d(TAG, "channel fallback for $targetItemId")
-            _ui.update {
-                it.copy(
-                    mode        = PlayerMode.Live,
-                    title       = item?.title ?: "Canal en vivo",
-                    startParams = PlayerStartParams(
-                        streamUrl    = "/api/v1/channels/$targetItemId/stream",
-                        resumePosSec = 0L,
-                        isHls        = true,
-                    ),
-                    error       = null,
-                )
-            }
-            loadLiveChrome(targetItemId)
-            return
+        progressReporter = ProgressReporter(deps.peers.progressSink(peerId, itemId), deps.backgroundScope)
+        // Solo los de texto: la federación no quema subtítulos de imagen.
+        val subtitleTracks = runCatching { deps.peers.subtitles(peerId, stream) }
+            .getOrDefault(emptyList())
+            .let(TrackOptions::subtitles)
+            .filter { !it.burnIn }
+        _ui.update {
+            it.copy(
+                mode             = PlayerMode.Vod,
+                title            = it.title ?: "Reproduciendo…",
+                streamMethod     = stream.method,
+                subtitleTracks   = subtitleTracks,
+                selectedSubtitle = -1,
+                startParams      = PlayerStartParams(
+                    streamUrl    = stream.masterPath,
+                    resumePosSec = resumeSec,
+                    isHls        = true,
+                    subtitles    = TrackOptions.sideloadedFrom(stream.subtitlesPath, subtitleTracks),
+                ),
+                error            = null,
+            )
         }
-
-        val detail = when {
-            infoErr != null -> "Error pidiendo /stream/$targetItemId/info: ${describe(infoErr)}"
-            else            -> "El server devolvió /stream/$targetItemId/info sin envelope `data`."
-        }
-        Log.e(TAG, "resolve failed: $detail", infoErr)
-        // User-facing copy stays clean — the diagnostic detail (endpoint path,
-        // HTTP status) goes to logcat only, never to the TV screen.
-        _ui.update { it.copy(title = item?.title, error = "No se pudo iniciar la reproducción. Inténtalo de nuevo.") }
     }
 
     /**
@@ -228,6 +319,9 @@ class PlayerViewModel(
         val next = _ui.value.nextEpisode ?: return
         Log.d(TAG, "playNextEpisode -> ${next.id} (${next.label})")
         progressReporter?.flush(positionSec = finalPositionSec, completed = true)
+        // El ffmpeg del episodio terminado ocupa el cupo de transcode del
+        // usuario: sin soltarlo, el siguiente podía dar 503 durante 90 s.
+        deps.sessions.stopVod(_ui.value.itemId)
         _ui.update {
             it.copy(
                 itemId      = next.id,
@@ -343,15 +437,15 @@ class PlayerViewModel(
 
     private fun switchToChannel(channel: LiveChannel) {
         Log.d(TAG, "switchToChannel ${channel.id} (${channel.name})")
+        // Baja inmediata del canal anterior: libera su ffmpeg y la conexión
+        // al proveedor IPTV (muchos solo permiten una por cuenta).
+        currentLiveChannelId?.takeIf { it != channel.id }?.let { deps.sessions.leaveChannel(it, viewerId) }
+        currentLiveChannelId = channel.id
         _ui.update {
             it.copy(
                 title       = channel.name,
                 liveChannel = channel,
-                startParams = PlayerStartParams(
-                    streamUrl    = "/api/v1/channels/${channel.id}/stream",
-                    resumePosSec = 0L,
-                    isHls        = true,
-                ),
+                startParams = liveParams(channel.id),
             )
         }
         // Beacon the new channel so continue-watching reflects reality.
@@ -527,20 +621,35 @@ class PlayerViewModel(
         private const val TRICKPLAY_RETRY_MS = 10_000L
         private const val HTTP_UNAVAILABLE = 503
 
-        fun factory(
-            api:          HubplayApi,
-            liveTvRepo:   LiveTvRepository,
-            itemId:       String,
-            resumePosSec: Long,
-        ) =
+        fun factory(deps: PlayerDeps, request: PlayerRequest) =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return PlayerViewModel(api, liveTvRepo, itemId, resumePosSec) as T
+                    return PlayerViewModel(deps, request) as T
                 }
             }
     }
 }
+
+/** Qué reproducir (argumentos de la ruta del reproductor). */
+data class PlayerRequest(
+    val itemId:       String,
+    val resumePosSec: Long = 0L,
+    /** La navegación sabe que es un canal: se salta `/items` + `/info`. */
+    val live:         Boolean = false,
+    /** Item de un servidor amigo (federación); null = nuestro catálogo. */
+    val peerId:       String? = null,
+)
+
+/** Dependencias del reproductor (DI manual desde [com.alex.hubplay.data.AppContainer]). */
+class PlayerDeps(
+    val api:             HubplayApi,
+    val liveTvRepo:      LiveTvRepository,
+    val sessions:        StreamSessions,
+    val peers:           PeersRepository,
+    /** Scope de la app: el guardado final de progreso sobrevive al ViewModel. */
+    val backgroundScope: CoroutineScope,
+)
 
 enum class PlayerMode { Unknown, Vod, Live }
 

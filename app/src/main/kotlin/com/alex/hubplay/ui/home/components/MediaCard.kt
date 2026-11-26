@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -175,6 +178,9 @@ fun MediaCard(
                 )
             }
             if (progressPct > 0f) ProgressStripe(progressPct = progressPct)
+            if (LocalSharedBadge.current) {
+                (item as? Content.Shared)?.peerName?.takeIf { it.isNotBlank() }?.let { SharedBadge(peerName = it) }
+            }
         }
 
         if (showCaption) {
@@ -264,3 +270,50 @@ private fun BoxScope.ProgressStripe(progressPct: Float) {
         )
     }
 }
+
+/**
+ * Píldora "● Pedro" arriba a la izquierda en los items que comparte un
+ * servidor amigo: de un vistazo se sabe de quién es (igual que la web).
+ */
+@Composable
+private fun BoxScope.SharedBadge(peerName: String) {
+    androidx.compose.foundation.layout.Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .padding(6.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = SHARED_BADGE_ALPHA))
+            .padding(horizontal = 7.dp, vertical = 2.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(SharedOnline),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text     = peerName,
+            color    = Color.White,
+            style    = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = SharedBadgeMaxWidth),
+        )
+    }
+}
+
+/**
+ * Si las tarjetas de items de amigos llevan la píldora con su nombre. Sí en
+ * rails que mezclan amigos (Inicio, "Seguir viendo"); no en el rail de UNA
+ * biblioteca, cuyo título ya dice de quién es.
+ */
+val LocalSharedBadge: androidx.compose.runtime.ProvidableCompositionLocal<Boolean> =
+    androidx.compose.runtime.staticCompositionLocalOf { true }
+
+private const val SHARED_BADGE_ALPHA = 0.65f
+private val SharedBadgeMaxWidth = 90.dp
+
+/** Verde "en línea" de la web (emerald-400). */
+private val SharedOnline = Color(0xFF34D399)

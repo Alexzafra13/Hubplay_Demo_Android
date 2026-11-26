@@ -38,14 +38,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.R
+import com.alex.hubplay.data.Content
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.catalog.PortraitCatalogCard
 import com.alex.hubplay.ui.components.TvShell
+import com.alex.hubplay.ui.home.components.CardStyle
+import com.alex.hubplay.ui.home.components.MediaCard
 import com.alex.hubplay.ui.home.components.Tab
 
 /**
@@ -66,6 +70,7 @@ fun SearchScreen(
     onTabSelected: (Tab) -> Unit,
     onOpenItem:    (itemId: String, kind: MediaKind) -> Unit,
     onSettings:    () -> Unit = {},
+    onOpenShared:  (Content.Shared) -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsState()
 
@@ -86,13 +91,15 @@ fun SearchScreen(
                 when {
                     ui.error != null && ui.results.isEmpty() -> ErrorMessage(ui.error!!)
                     ui.query.trim().length < 2               -> EmptyHint()
-                    !ui.isSearching && ui.results.isEmpty()  -> NoMatches(ui.query)
+                    !ui.isSearching && ui.results.isEmpty() && ui.sharedResults.isEmpty() -> NoMatches(ui.query)
                     else                                     -> ResultsGrid(
                         items         = ui.results,
+                        shared        = ui.sharedResults,
                         isLoadingMore = ui.isLoadingMore,
                         canLoadMore   = ui.canLoadMore,
                         onLoadMore    = viewModel::loadMore,
                         onOpenItem    = onOpenItem,
+                        onOpenShared  = onOpenShared,
                     )
                 }
             }
@@ -153,11 +160,13 @@ private fun SearchInputBar(
 
 @Composable
 private fun ResultsGrid(
-    items:         List<com.alex.hubplay.data.Content>,
+    items:         List<Content>,
+    shared:        List<Content.Shared>,
     isLoadingMore: Boolean,
     canLoadMore:   Boolean,
     onLoadMore:    () -> Unit,
     onOpenItem:    (String, MediaKind) -> Unit,
+    onOpenShared:  (Content.Shared) -> Unit,
 ) {
     val gridState = rememberLazyGridState()
 
@@ -182,6 +191,20 @@ private fun ResultsGrid(
     ) {
         items(items, key = { it.id }) { item ->
             PortraitCatalogCard(item, onOpenItem)
+        }
+        if (shared.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "shared-header") {
+                Text(
+                    text       = stringResource(R.string.search_shared_section),
+                    style      = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color      = MaterialTheme.colorScheme.onBackground,
+                    modifier   = Modifier.padding(top = 12.dp),
+                )
+            }
+            items(shared, key = { "shared:${it.key}" }) { item ->
+                MediaCard(item = item, style = CardStyle.Portrait, onFocused = {}, onClick = { onOpenShared(item) })
+            }
         }
         if (isLoadingMore) {
             item(span = { GridItemSpan(maxLineSpan) }) {
