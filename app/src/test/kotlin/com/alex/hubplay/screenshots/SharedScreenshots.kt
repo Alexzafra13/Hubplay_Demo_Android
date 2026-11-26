@@ -44,11 +44,6 @@ class SharedScreenshots : ScreenshotTest() {
     )
 
     private val api = FakePeersApi(
-        libraries = listOf(
-            PeerLibraryDto("p1", "Pedro", "lib-p1", "Películas", "movies", canPlay = true),
-            PeerLibraryDto("p2", "Lucía", "lib-p2", "Series", "shows", canPlay = true),
-        ),
-        pages = mapOf("lib-p1" to pedroMovies, "lib-p2" to luciaShows),
         continueWatching = listOf(
             PeerContinueDto(
                 id = "pm2", peerId = "p1", peerName = "Pedro", libraryId = "lib-p1", type = "movie",
@@ -57,7 +52,13 @@ class SharedScreenshots : ScreenshotTest() {
             ),
         ),
         recent = pedroMovies.take(5).map { it.copy(peerId = "p1", peerName = "Pedro", libraryId = "lib-p1") },
-    )
+    ).apply {
+        libraries = listOf(
+            PeerLibraryDto("p1", "Pedro", "lib-p1", "Películas", "movies", canPlay = true),
+            PeerLibraryDto("p2", "Lucía", "lib-p2", "Series", "shows", canPlay = true),
+        )
+        pages = mapOf("lib-p1" to pedroMovies, "lib-p2" to luciaShows)
+    }
 
     private val repo = PeersRepository(api) { "https://hub.example" }
 

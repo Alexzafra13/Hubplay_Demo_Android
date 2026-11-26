@@ -7,6 +7,7 @@ import com.alex.hubplay.data.api.dto.PeerLibrariesResponse
 import com.alex.hubplay.data.api.dto.PeerProgressRequest
 import com.alex.hubplay.data.api.dto.PeerProgressResponse
 import com.alex.hubplay.data.api.dto.PeerStreamSessionResponse
+import com.alex.hubplay.data.api.dto.PeerSubtitlesResponse
 import com.alex.hubplay.data.api.dto.PeersResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -67,6 +68,13 @@ interface PeersApi {
         @Path("itemId") itemId: String,
         @Header("X-Hubplay-Client-Capabilities") capabilities: String,
     ): PeerStreamSessionResponse
+
+    /** Subtítulos del fichero de la sesión abierta (los de texto se piden como WebVTT). */
+    @GET("me/peers/{peerId}/stream/session/{sessionId}/subtitles")
+    suspend fun subtitles(
+        @Path("peerId")    peerId:    String,
+        @Path("sessionId") sessionId: String,
+    ): PeerSubtitlesResponse
 
     @GET("me/peers/{peerId}/items/{itemId}/progress")
     suspend fun getProgress(

@@ -104,12 +104,19 @@ object TrackOptions {
      * burn-in no van: los pinta el servidor dentro de los frames.
      */
     fun sideloaded(itemId: String, tracks: List<SubtitleTrackOption>): List<SideloadedSubtitle> =
+        sideloadedFrom("/api/v1/stream/$itemId/subtitles", tracks)
+
+    /**
+     * Igual que [sideloaded] con otra base de WebVTT (`{base}/{streamIndex}`):
+     * la de una sesión de un servidor amigo.
+     */
+    fun sideloadedFrom(basePath: String, tracks: List<SubtitleTrackOption>): List<SideloadedSubtitle> =
         tracks
             .filter { !it.burnIn }
             .map {
                 SideloadedSubtitle(
                     id       = sideloadId(it.streamIndex),
-                    url      = "/api/v1/stream/$itemId/subtitles/${it.streamIndex}",
+                    url      = "$basePath/${it.streamIndex}",
                     language = it.language,
                     label    = it.label,
                 )

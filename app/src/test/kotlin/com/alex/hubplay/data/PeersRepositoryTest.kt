@@ -5,6 +5,8 @@ import com.alex.hubplay.data.api.dto.PeerDto
 import com.alex.hubplay.data.api.dto.PeerItemDto
 import com.alex.hubplay.data.api.dto.PeerProgressRequest
 import com.alex.hubplay.data.api.dto.PeerStreamSessionDto
+import com.alex.hubplay.data.api.dto.PeerSubtitleDto
+import com.alex.hubplay.ui.player.TrackOptions
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -122,6 +124,29 @@ class PeersRepositoryTest {
 
         val empty = PeersRepository(FakePeersApi(stream = PeerStreamSessionDto("transcode", null, null))) { server }
         assertThat(empty.startStream("p1", "m1", "")).isNull()
+    }
+
+    @Test
+    fun `session subtitles map to media streams and sideload from the session path`() = runTest {
+        val api = FakePeersApi().apply {
+            subtitles = listOf(
+                PeerSubtitleDto(index = 3, codec = "subrip", language = "spa", default = true),
+                PeerSubtitleDto(index = 4, codec = "hdmv_pgs_subtitle", language = "eng"),
+            )
+        }
+        val repo = PeersRepository(api) { server }
+        val stream = SharedStream("/api/v1/me/peers/p1/stream/session/s1/master.m3u8", "direct_stream", "s1")
+
+        val tracks = TrackOptions.subtitles(repo.subtitles("p1", stream))
+        val sideloaded = TrackOptions.sideloadedFrom(stream.subtitlesPath, tracks)
+
+        assertThat(tracks.map { it.streamIndex }).containsExactly(3, 4).inOrder()
+        assertThat(tracks[1].burnIn).isTrue()
+        // Los de imagen no se cargan aparte: la federación no los quema.
+        assertThat(sideloaded.map { it.url })
+            .containsExactly("/api/v1/me/peers/p1/stream/session/s1/subtitles/3")
+        // Sin id de sesión no hay ruta de subtítulos.
+        assertThat(repo.subtitles("p1", stream.copy(sessionId = null))).isEmpty()
     }
 
     @Test

@@ -16,6 +16,8 @@ import com.alex.hubplay.data.api.dto.PeerProgressRequest
 import com.alex.hubplay.data.api.dto.PeerProgressResponse
 import com.alex.hubplay.data.api.dto.PeerStreamSessionDto
 import com.alex.hubplay.data.api.dto.PeerStreamSessionResponse
+import com.alex.hubplay.data.api.dto.PeerSubtitleDto
+import com.alex.hubplay.data.api.dto.PeerSubtitlesResponse
 import com.alex.hubplay.data.api.dto.PeersResponse
 
 /** `PeersApi` en memoria para los tests de federación. */
@@ -25,11 +27,13 @@ internal class FakePeersApi(
     private val continueWatching: List<PeerContinueDto> = emptyList(),
     private val page:             List<PeerItemDto> = emptyList(),
     private val stream:           PeerStreamSessionDto? = null,
-    private val libraries:        List<PeerLibraryDto> = emptyList(),
-    /** Items por biblioteca (`libraryId` → items); si falta se usa [page]. */
-    private val pages:            Map<String, List<PeerItemDto>> = emptyMap(),
 ) : PeersApi {
     val saved = mutableListOf<PeerProgressRequest>()
+    var libraries: List<PeerLibraryDto> = emptyList()
+
+    /** Items por biblioteca (`libraryId` → items); si falta se usa `page`. */
+    var pages: Map<String, List<PeerItemDto>> = emptyMap()
+    var subtitles: List<PeerSubtitleDto> = emptyList()
 
     override suspend fun listPeers() = PeersResponse(peers)
     override suspend fun listLibraries() = PeerLibrariesResponse(libraries)
@@ -42,6 +46,7 @@ internal class FakePeersApi(
     override suspend fun continueWatching(limit: Int) = PeerContinueResponse(continueWatching)
     override suspend fun startStream(peerId: String, itemId: String, capabilities: String) =
         PeerStreamSessionResponse(stream)
+    override suspend fun subtitles(peerId: String, sessionId: String) = PeerSubtitlesResponse(subtitles)
     override suspend fun getProgress(peerId: String, itemId: String) = PeerProgressResponse(PeerProgressDto())
     override suspend fun saveProgress(peerId: String, itemId: String, body: PeerProgressRequest) {
         saved += body

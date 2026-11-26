@@ -226,8 +226,9 @@ class PlayerViewModel(
 
     /**
      * Película de un servidor amigo: el amigo abre la sesión con nuestras
-     * capacidades y nuestro servidor proxya el HLS. Sin pistas ni capítulos
-     * (la federación no los comparte); el progreso va a `/me/peers/…`.
+     * capacidades y nuestro servidor proxya el HLS. Subtítulos de texto sí
+     * (WebVTT por la sesión); audio alternativo y capítulos no viajan. El
+     * progreso va a `/me/peers/…`.
      */
     private suspend fun resolvePeer(peerId: String, itemId: String, resumeSec: Long) {
         val shared = deps.peers.cached(peerId, itemId)
@@ -249,17 +250,25 @@ class PlayerViewModel(
             return
         }
         progressReporter = ProgressReporter(deps.peers.progressSink(peerId, itemId), deps.backgroundScope)
+        // Solo los de texto: la federación no quema subtítulos de imagen.
+        val subtitleTracks = runCatching { deps.peers.subtitles(peerId, stream) }
+            .getOrDefault(emptyList())
+            .let(TrackOptions::subtitles)
+            .filter { !it.burnIn }
         _ui.update {
             it.copy(
-                mode         = PlayerMode.Vod,
-                title        = it.title ?: "Reproduciendo…",
-                streamMethod = stream.method,
-                startParams  = PlayerStartParams(
+                mode             = PlayerMode.Vod,
+                title            = it.title ?: "Reproduciendo…",
+                streamMethod     = stream.method,
+                subtitleTracks   = subtitleTracks,
+                selectedSubtitle = -1,
+                startParams      = PlayerStartParams(
                     streamUrl    = stream.masterPath,
                     resumePosSec = resumeSec,
                     isHls        = true,
+                    subtitles    = TrackOptions.sideloadedFrom(stream.subtitlesPath, subtitleTracks),
                 ),
-                error        = null,
+                error            = null,
             )
         }
     }

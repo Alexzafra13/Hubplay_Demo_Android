@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 
@@ -330,6 +331,23 @@ class HomeViewModel(
             val cw     = async { safeFetch("sharedContinue") { repo.continueWatching() } }
             val recent = async { safeFetch("sharedRecent") { repo.recent() } }
             cw.await() to recent.await()
+        }
+    }
+
+    /**
+     * Quita [item] de Continuar viendo: optimista (desaparece ya) y, si el
+     * servidor falla, vuelve a su sitio. El SSE de vuelta solo confirma.
+     */
+    fun removeFromContinueWatching(item: Content) {
+        val before = _ui.value.data.continueWatching
+        if (before.none { it.id == item.id }) return
+        _ui.update { it.copy(data = it.data.copy(continueWatching = before.filterNot { c -> c.id == item.id })) }
+        viewModelScope.launch {
+            runCatching { repository.removeFromContinueWatching(item.id) }
+                .onFailure { err ->
+                    Log.w("HomeViewModel", "remove from continue watching ${item.id}: ${err.message}")
+                    _ui.update { it.copy(data = it.data.copy(continueWatching = before)) }
+                }
         }
     }
 

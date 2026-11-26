@@ -244,6 +244,27 @@ class HomeViewModelTest {
         ).inOrder()
     }
 
+    @Test
+    fun `removing from continue watching is optimistic and reverts when the server fails`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val repo = FakeHomeRepository(
+            trending = listOf(movie("t1")),
+            continueWatching = listOf(movie("cw1"), movie("cw2")),
+        )
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.removeFromContinueWatching(movie("cw1"))
+        advanceUntilIdle()
+        assertThat(vm.ui.value.data.continueWatching.map { it.id }).containsExactly("cw2")
+        assertThat(repo.removed).containsExactly("cw1")
+
+        repo.failRemove = true
+        vm.removeFromContinueWatching(movie("cw2"))
+        advanceUntilIdle()
+        assertThat(vm.ui.value.data.continueWatching.map { it.id }).containsExactly("cw2")
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────
 
     private fun viewModel(repo: HomeRepository) =
@@ -302,6 +323,14 @@ class HomeViewModelTest {
 
         /** Ids pedidos a `/items/{id}` (lo usa la búsqueda de tráiler). */
         val detailRequests = mutableListOf<String>()
+
+        val removed = mutableListOf<String>()
+        var failRemove = false
+
+        override suspend fun removeFromContinueWatching(itemId: String) {
+            if (failRemove) throw RuntimeException("network")
+            removed += itemId
+        }
 
         override suspend fun fetchItemDetail(itemId: String): Content {
             detailRequests += itemId

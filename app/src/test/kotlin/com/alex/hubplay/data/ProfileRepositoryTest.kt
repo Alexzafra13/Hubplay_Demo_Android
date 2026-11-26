@@ -264,6 +264,7 @@ class ProfileRepositoryTest {
         override suspend fun getNextUp(): NextUpResponse                      = TODO()
         override suspend fun getStreamInfo(itemId: String, capabilities: String, audio: Int?): StreamInfoResponse = TODO()
         override suspend fun stopStreamSession(itemId: String) = TODO()
+        override suspend fun removeFromContinueWatching(itemId: String) = TODO()
         override suspend fun leaveChannelViewer(channelId: String, viewerId: String) = TODO()
         override suspend fun listChannels(libraryId: String, active: Boolean, includeHidden: Boolean): ChannelsResponse = TODO()
         override suspend fun listChannelGroups(libraryId: String): GroupsResponse = TODO()

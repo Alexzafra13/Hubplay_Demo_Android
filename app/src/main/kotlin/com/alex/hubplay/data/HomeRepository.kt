@@ -53,6 +53,9 @@ interface HomeRepository {
     suspend fun toggleItemFavorite(itemId: String): Boolean
     suspend fun setItemWatched(itemId: String, watched: Boolean)
 
+    /** Quita un item de Continuar viendo sin marcarlo como visto. */
+    suspend fun removeFromContinueWatching(itemId: String) = Unit
+
     /** `true` si el usuario del token puede editar metadatos (admin o permiso explícito). */
     suspend fun fetchCanEditMetadata(): Boolean
     suspend fun refreshItemMetadata(itemId: String)
@@ -392,6 +395,8 @@ class HomeRepositoryImpl(
     // clase: son otro dominio y HomeRepositoryImpl ya roza el límite de
     // tamaño de detekt.
     private val metadataTools = MetadataTools(api, tokenStore)
+
+    override suspend fun removeFromContinueWatching(itemId: String) = api.removeFromContinueWatching(itemId)
 
     override suspend fun fetchCanEditMetadata(): Boolean = metadataTools.fetchCanEditMetadata()
     override suspend fun refreshItemMetadata(itemId: String) = metadataTools.refreshItemMetadata(itemId)

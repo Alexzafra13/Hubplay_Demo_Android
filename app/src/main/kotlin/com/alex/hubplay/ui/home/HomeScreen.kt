@@ -81,7 +81,9 @@ import com.alex.hubplay.ui.home.components.HomeRail
 import com.alex.hubplay.ui.home.components.LiveChannelHeroFallback
 import com.alex.hubplay.ui.home.components.LiveNowRail
 import com.alex.hubplay.ui.home.components.RAIL_CARD_HEIGHT
+import com.alex.hubplay.ui.home.components.RemoveFromContinueOverlay
 import com.alex.hubplay.ui.home.components.Tab
+import com.alex.hubplay.ui.home.components.onLongSelect
 import com.alex.hubplay.ui.livetv.ChannelPreviewPlayer
 import com.alex.hubplay.ui.theme.BgBase
 import kotlinx.coroutines.flow.first
@@ -262,6 +264,11 @@ fun HomeScreen(
         onDispose { if (trailerRevealed) idleController?.setSuspended(false) }
     }
 
+    // Mantener OK en Continuar viendo → "¿Quitar de Continuar viendo?".
+    // (rail, item) pendiente; al cerrar, el foco vuelve a ese rail.
+    var pendingRemoval by remember { mutableStateOf<Pair<String, Content>?>(null) }
+    var refocusRail by remember { mutableStateOf<String?>(null) }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         // Transparente para que se vea el TrailerHostOverlay del root cuando
@@ -301,6 +308,12 @@ fun HomeScreen(
                 // foco en los rails (no en el sidebar) y deja que el chain
                 // de `focusRestorer`s elija el item correcto dentro.
                 val railFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
+                LaunchedEffect(refocusRail) {
+                    val railId = refocusRail ?: return@LaunchedEffect
+                    withFrameNanos { }
+                    runCatching { railFocusRequesters[railId]?.requestFocus() }
+                    refocusRail = null
+                }
                 val railHeightPx = with(LocalDensity.current) { RailHeight.toPx() }
 
                 DisposableEffect(Unit) {
@@ -602,6 +615,7 @@ fun HomeScreen(
                                                     perRailFocused[config.id] = item.id
                                                 },
                                                 actions = actions,
+                                                onLongSelect = { item -> pendingRemoval = config.id to item },
                                             )
                                         }
                                     }
@@ -622,6 +636,21 @@ fun HomeScreen(
                 }
             }
         }
+        // Encima de todo (zIndex): "¿Quitar de Continuar viendo?".
+        pendingRemoval?.let { (railId, item) ->
+            RemoveFromContinueOverlay(
+                title     = item.title,
+                onConfirm = {
+                    viewModel.removeFromContinueWatching(item)
+                    pendingRemoval = null
+                    refocusRail = railId
+                },
+                onDismiss = {
+                    pendingRemoval = null
+                    refocusRail = railId
+                },
+            )
+        }
     }
 }
 
@@ -633,7 +662,14 @@ private fun RenderRail(
     actions:              HomeActions,
     initialFocusedItemId: String? = null,
     railFocusRequester:   FocusRequester? = null,
+    onLongSelect:         (Content) -> Unit = {},
 ) {
+    // Tarjeta con foco de este rail: la pulsación larga actúa sobre ella.
+    var focused by remember { mutableStateOf<Content?>(null) }
+    val onFocused: (Content) -> Unit = { item ->
+        focused = item
+        onCardFocused(item)
+    }
     // Todo rail que no es "En directo" se pinta igual: solo cambian los
     // items, la forma de la tarjeta y qué hace OK.
     val (items, style, onClick) = when (config.type) {
@@ -657,12 +693,15 @@ private fun RenderRail(
             return
         }
     }
+    // Solo Continuar viendo se puede "quitar" (es nuestro progreso).
+    val removable = config.type == HomeRailType.ContinueWatching
     HomeRail(
         title = config.title,
         items = items,
         style = style,
-        onFocused = onCardFocused,
+        onFocused = onFocused,
         onClick = onClick,
+        modifier = if (removable) Modifier.onLongSelect { focused?.let(onLongSelect) } else Modifier,
         initialFocusedItemId = initialFocusedItemId,
         railFocusRequester = railFocusRequester,
     )

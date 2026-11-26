@@ -306,4 +306,8 @@
     <string name="shared_movie">Movie</string>
     <string name="shared_series">Series</string>
     <string name="search_shared_section">From your friends</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="continue_remove_title">Remove from Continue watching?</string>
+    <string name="continue_remove_body">“%1$s” will no longer show up in Continue watching. It is not marked as watched.</string>
+    <string name="continue_remove_confirm">Remove</string>
 </resources>

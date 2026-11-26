@@ -325,6 +325,14 @@ interface HubplayApi {
     @POST("me/progress/{itemId}/played")
     suspend fun markPlayed(@Path("itemId") itemId: String)
 
+    /**
+     * DELETE /api/v1/me/continue-watching/{itemId} — lo saca de Continuar
+     * viendo sin marcarlo como visto (pone la posición a 0). 204; el
+     * servidor avisa a los demás dispositivos por SSE (ProgressUpdated).
+     */
+    @DELETE("me/continue-watching/{itemId}")
+    suspend fun removeFromContinueWatching(@Path("itemId") itemId: String)
+
     /** POST /api/v1/me/progress/{itemId}/unplayed — undo for the Detail screen. */
     @POST("me/progress/{itemId}/unplayed")
     suspend fun markUnplayed(@Path("itemId") itemId: String)

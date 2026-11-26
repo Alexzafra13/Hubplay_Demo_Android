@@ -2,6 +2,7 @@ package com.alex.hubplay.data
 
 import androidx.compose.runtime.Immutable
 import com.alex.hubplay.data.api.PeersApi
+import com.alex.hubplay.data.api.dto.MediaStreamDto
 import com.alex.hubplay.data.api.dto.PeerContinueDto
 import com.alex.hubplay.data.api.dto.PeerItemDto
 import com.alex.hubplay.data.api.dto.PeerLibraryDto
@@ -109,7 +110,26 @@ class PeersRepository(
     suspend fun startStream(peerId: String, itemId: String, capabilities: String): SharedStream? {
         val data = api.startStream(peerId, itemId, capabilities).data ?: return null
         val master = data.masterPlaylistUrl?.takeIf { it.isNotBlank() } ?: return null
-        return SharedStream(masterPath = master, method = data.strategy)
+        return SharedStream(masterPath = master, method = data.strategy, sessionId = data.peerSessionId)
+    }
+
+    /**
+     * Subtítulos de la sesión con la forma de `media_streams` (la del
+     * selector de pistas). Vacío si la sesión no tiene id o el amigo falla.
+     */
+    suspend fun subtitles(peerId: String, stream: SharedStream): List<MediaStreamDto> {
+        val sid = stream.sessionId ?: return emptyList()
+        return api.subtitles(peerId, sid).data.orEmpty().map {
+            MediaStreamDto(
+                streamIndex = it.index,
+                streamType  = "subtitle",
+                codec       = it.codec,
+                isDefault   = it.default,
+                isForced    = it.forced,
+                language    = it.language,
+                title       = it.title,
+            )
+        }
     }
 
     /** Guardado de progreso para el [ProgressReporter] del reproductor. */
@@ -269,4 +289,10 @@ data class SharedStream(
     val masterPath: String,
     /** direct_play | direct_stream | transcode según decidió el amigo. */
     val method:     String?,
-)
+    /** Id de la sesión en el amigo (rutas de subtítulos). */
+    val sessionId:  String? = null,
+) {
+    /** Base de los WebVTT de esta sesión: `…/session/{sid}/subtitles`. */
+    val subtitlesPath: String
+        get() = masterPath.substringBeforeLast('/') + "/subtitles"
+}

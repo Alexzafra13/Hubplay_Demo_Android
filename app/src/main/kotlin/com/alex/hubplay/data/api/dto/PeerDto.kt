@@ -124,3 +124,21 @@ data class PeerProgressRequest(
     @Json(name = "duration_ticks") val durationTicks: Long,
     val completed:                                    Boolean? = null,
 )
+
+/**
+ * `GET /me/peers/{peer}/stream/session/{sid}/subtitles`: pistas de subtítulo
+ * del fichero del amigo. `index` es el índice absoluto del stream (el de
+ * `…/subtitles/{index}`, WebVTT), igual que en `/stream/{id}/subtitles`.
+ */
+@JsonClass(generateAdapter = true)
+data class PeerSubtitleDto(
+    val index:    Int,
+    val codec:    String? = null,
+    val language: String? = null,
+    val title:    String? = null,
+    val forced:   Boolean = false,
+    val default:  Boolean = false,
+)
+
+@JsonClass(generateAdapter = true)
+data class PeerSubtitlesResponse(val data: List<PeerSubtitleDto>? = null)
