@@ -115,13 +115,17 @@ private const val HERO_AUTOROTATE_MS = 8000L
  */
 private val RailHeight: Dp = 46.dp + RAIL_CARD_HEIGHT + CARD_CAPTION_HEIGHT + 7.dp
 
-/** Fracción del alto de pantalla que ocupa el hero cuando el foco está
- *  en los rails. 0.46 deja 292dp bajo el hero: cabe un rail de posters
- *  entero (285) sin que asome el anterior. */
-private const val HERO_REDUCED_FRACTION = 0.46f
+/**
+ * Lo que asoma del rail SIGUIENTE bajo el rail con foco (estilo Netflix /
+ * Prime): su encabezado entero (12 + 28 + 10 dp) y el borde de arriba de
+ * sus tarjetas, que se funde con el fondo. El hero reducido se queda con
+ * el resto: alto − rail − asomo (≈195 dp en la Mi TV). Antes era un 46 %
+ * fijo y del rail siguiente solo salía media línea de texto cortada.
+ */
+private val NEXT_RAIL_PEEK = 74.dp
 
-/** Fundido sobre el borde inferior de los rails (tapa el rail que asoma). */
-private val RAILS_BOTTOM_FADE = 28.dp
+/** Fundido sobre el borde inferior: tapa las tarjetas que asoman, no el encabezado. */
+private val RAILS_BOTTOM_FADE = 26.dp
 
 @OptIn(ExperimentalFoundationApi::class)
 private val SuppressVerticalBringIntoView = object : BringIntoViewSpec {
@@ -480,7 +484,7 @@ fun HomeScreen(
                         // cards aplastados durante la animación.
                         val available        = maxHeight
                         val heroFullHeight    = available - RailHeight
-                        val heroReducedHeight = available * HERO_REDUCED_FRACTION
+                        val heroReducedHeight = available - RailHeight - NEXT_RAIL_PEEK
                         // El último rail también debe poder subir hasta el
                         // borde del hero: sin este padding inferior el
                         // LazyColumn se queda sin recorrido y el rail
@@ -533,10 +537,10 @@ fun HomeScreen(
                             // padre porque durante la animación del hero
                             // los items se redimensionaban y se veían
                             // aplastados / con cards cortadas.
-                            // Con el hero reducido asoman ~18 dp del rail
-                            // siguiente: solo la parte de arriba de su título,
-                            // cortada a media letra. Un fundido al fondo deja la
-                            // pista de "hay más" sin el texto partido.
+                            // Bajo el rail con foco asoma el siguiente
+                            // (NEXT_RAIL_PEEK): encabezado legible y el borde
+                            // de sus tarjetas fundiéndose. En el último rail
+                            // no hay nada debajo y el fundido no pinta nada.
                             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                             @OptIn(ExperimentalFoundationApi::class)
                             CompositionLocalProvider(

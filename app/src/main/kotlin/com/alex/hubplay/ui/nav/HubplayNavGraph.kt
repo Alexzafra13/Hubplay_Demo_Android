@@ -20,6 +20,7 @@ import com.alex.hubplay.ui.collections.CollectionDetailScreen
 import com.alex.hubplay.ui.collections.CollectionDetailViewModel
 import com.alex.hubplay.ui.collections.CollectionsScreen
 import com.alex.hubplay.ui.collections.CollectionsViewModel
+import com.alex.hubplay.ui.components.TvShell
 import com.alex.hubplay.ui.detail.DetailScreen
 import com.alex.hubplay.ui.detail.DetailViewModel
 import com.alex.hubplay.ui.home.HomeScreen
@@ -177,6 +178,19 @@ fun HubplayNavGraph(
         val openChannelOrder: () -> Unit = {
             navController.navigate(Route.ChannelOrder.path)
         }
+        // Menú lateral en TODAS las pantallas tras el login (no solo en las
+        // de primer nivel): fichas, colecciones, personas, estudios y
+        // Ajustes. Volver sigue siendo la tecla Atrás.
+        val shell: @Composable (Tab?, Boolean, Boolean, @Composable () -> Unit) -> Unit =
+            { tab, padContent, settings, content ->
+                TvShell(
+                    selectedTab      = tab,
+                    onNavigateToTab  = navigateToTab,
+                    onOpenSettings   = openSettings,
+                    padContent       = padContent,
+                    settingsSelected = settings,
+                ) { content() }
+            }
 
         // ── Home ─────────────────────────────────────────────────────
         composable(Route.Home.path) {
@@ -277,10 +291,12 @@ fun HubplayNavGraph(
                     container.tokenStore,
                 ),
             )
-            ChannelOrderScreen(
-                viewModel = vm,
-                onBack    = { navController.popBackStack() },
-            )
+            shell(Tab.LiveTv, true, false) {
+                ChannelOrderScreen(
+                    viewModel = vm,
+                    onBack    = { navController.popBackStack() },
+                )
+            }
         }
 
         // ── Search ───────────────────────────────────────────────────
@@ -318,18 +334,20 @@ fun HubplayNavGraph(
                     popUpTo(Route.Home.path) { inclusive = true }
                 }
             }
-            SettingsScreen(
-                viewModel = vm,
-                actions   = SettingsActions(
-                    onBack                = { navController.popBackStack() },
-                    onLogOut              = logOut,
-                    onForgetServer        = forgetServer,
-                    onChangeProfile       = changeProfile,
-                    onReorderChannels     = openChannelOrder,
-                    onOpenHomeLayout      = { navController.navigate(Route.HomeLayout.path) },
-                    onOpenTrustedServers  = { navController.navigate(Route.TrustedServers.path) },
-                ),
-            )
+            shell(null, true, true) {
+                SettingsScreen(
+                    viewModel = vm,
+                    actions   = SettingsActions(
+                        onBack                = { navController.popBackStack() },
+                        onLogOut              = logOut,
+                        onForgetServer        = forgetServer,
+                        onChangeProfile       = changeProfile,
+                        onReorderChannels     = openChannelOrder,
+                        onOpenHomeLayout      = { navController.navigate(Route.HomeLayout.path) },
+                        onOpenTrustedServers  = { navController.navigate(Route.TrustedServers.path) },
+                    ),
+                )
+            }
         }
 
         // ── Ajustes → Inicio (rails: orden y visibilidad, por perfil) ─
@@ -337,10 +355,12 @@ fun HubplayNavGraph(
             val vm = viewModel<HomeLayoutViewModel>(
                 factory = HomeLayoutViewModel.factory(container.homeRepository),
             )
-            HomeLayoutScreen(
-                viewModel = vm,
-                onBack    = { navController.popBackStack() },
-            )
+            shell(null, true, true) {
+                HomeLayoutScreen(
+                    viewModel = vm,
+                    onBack    = { navController.popBackStack() },
+                )
+            }
         }
 
         // ── Trusted servers (TOFU pin list) ──────────────────────────
@@ -348,10 +368,12 @@ fun HubplayNavGraph(
             val vm = viewModel<TrustedServersViewModel>(
                 factory = TrustedServersViewModel.factory(container.certPinStore),
             )
-            TrustedServersScreen(
-                viewModel = vm,
-                onBack    = { navController.popBackStack() },
-            )
+            shell(null, true, true) {
+                TrustedServersScreen(
+                    viewModel = vm,
+                    onBack    = { navController.popBackStack() },
+                )
+            }
         }
 
         // ── Detail ───────────────────────────────────────────────────
@@ -369,18 +391,20 @@ fun HubplayNavGraph(
             val viewModel = viewModel<DetailViewModel>(
                 factory = DetailViewModel.factory(container.homeRepository, itemId),
             )
-            DetailScreen(
-                viewModel          = viewModel,
-                trailerResumeSec   = trailerResume,
-                onPlay             = { id, resume ->
-                    navController.navigate(Route.Player.route(id, resume))
-                },
-                onBack             = { navController.popBackStack() },
-                onOpenCollection   = openCollection,
-                onOpenPerson       = openPerson,
-                onOpenItem         = openItem,
-                onOpenStudio       = openStudio,
-            )
+            shell(Tab.Movies, false, false) {
+                DetailScreen(
+                    viewModel          = viewModel,
+                    trailerResumeSec   = trailerResume,
+                    onPlay             = { id, resume ->
+                        navController.navigate(Route.Player.route(id, resume))
+                    },
+                    onBack             = { navController.popBackStack() },
+                    onOpenCollection   = openCollection,
+                    onOpenPerson       = openPerson,
+                    onOpenItem         = openItem,
+                    onOpenStudio       = openStudio,
+                )
+            }
         }
 
         // ── Person detail (cast/crew tap-through) ────────────────────
@@ -395,11 +419,13 @@ fun HubplayNavGraph(
             val vm = viewModel<PersonDetailViewModel>(
                 factory = PersonDetailViewModel.factory(container.homeRepository, personId),
             )
-            PersonDetailScreen(
-                viewModel  = vm,
-                onOpenItem = openItem,
-                onBack     = { navController.popBackStack() },
-            )
+            shell(null, true, false) {
+                PersonDetailScreen(
+                    viewModel  = vm,
+                    onOpenItem = openItem,
+                    onBack     = { navController.popBackStack() },
+                )
+            }
         }
 
         // ── Studio detail (chip tap-through) ─────────────────────────
@@ -414,11 +440,13 @@ fun HubplayNavGraph(
             val vm = viewModel<StudioDetailViewModel>(
                 factory = StudioDetailViewModel.factory(container.homeRepository, slug),
             )
-            StudioDetailScreen(
-                viewModel  = vm,
-                onOpenItem = openItem,
-                onBack     = { navController.popBackStack() },
-            )
+            shell(null, true, false) {
+                StudioDetailScreen(
+                    viewModel  = vm,
+                    onOpenItem = openItem,
+                    onBack     = { navController.popBackStack() },
+                )
+            }
         }
 
         // ── Collections grid ─────────────────────────────────────────
@@ -446,11 +474,13 @@ fun HubplayNavGraph(
             val vm = viewModel<CollectionDetailViewModel>(
                 factory = CollectionDetailViewModel.factory(container.homeRepository, collectionId),
             )
-            CollectionDetailScreen(
-                viewModel  = vm,
-                onOpenItem = openItem,
-                onBack     = { navController.popBackStack() },
-            )
+            shell(Tab.Collections, true, false) {
+                CollectionDetailScreen(
+                    viewModel  = vm,
+                    onOpenItem = openItem,
+                    onBack     = { navController.popBackStack() },
+                )
+            }
         }
 
         // ── Series ───────────────────────────────────────────────────
@@ -464,17 +494,19 @@ fun HubplayNavGraph(
             val viewModel = viewModel<SeriesViewModel>(
                 factory = SeriesViewModel.factory(container.homeRepository, seriesId),
             )
-            SeriesScreen(
-                viewModel        = viewModel,
-                onPlayEpisode    = { id, resume ->
-                    navController.navigate(Route.Player.route(id, resume))
-                },
-                onBack           = { navController.popBackStack() },
-                onOpenPerson     = openPerson,
-                onOpenItem       = openItem,
-                onOpenStudio     = openStudio,
-                onOpenCollection = openCollection,
-            )
+            shell(Tab.Series, false, false) {
+                SeriesScreen(
+                    viewModel        = viewModel,
+                    onPlayEpisode    = { id, resume ->
+                        navController.navigate(Route.Player.route(id, resume))
+                    },
+                    onBack           = { navController.popBackStack() },
+                    onOpenPerson     = openPerson,
+                    onOpenItem       = openItem,
+                    onOpenStudio     = openStudio,
+                    onOpenCollection = openCollection,
+                )
+            }
         }
 
         // ── Player ───────────────────────────────────────────────────

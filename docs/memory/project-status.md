@@ -132,6 +132,23 @@ Arreglado tras verlo en capturas:
 - Ficha de serie: "Seguir S2·…" cortado → botones de ancho intrínseco
   ("Seguir T2·E4" entero, "T" de temporada).
 
+Segunda tanda (pedido del usuario):
+- **Inicio estilo Netflix/Prime**: con el foco en los rails, bajo el rail
+  activo se lee entero el encabezado del siguiente y el borde de sus
+  tarjetas se funde (`NEXT_RAIL_PEEK` 74 dp; el hero reducido es
+  alto − rail − asomo ≈ 195 dp, antes 46 % fijo). Último rail: nada debajo.
+- **Menú lateral en todas las pantallas** tras el login (ficha, serie,
+  colección, persona, estudio, Ajustes, orden de canales): `shell(...)`
+  en `HubplayNavGraph`. La ficha/serie ya no tienen cabecera propia
+  (volver + marca): volver = tecla Atrás. Rails de la ficha alineados con
+  el póster. Persona/estudio/colección/Ajustes conservan su botón volver.
+- **Tráiler Inicio → ficha sin cortes**: si la ficha tardaba > 500 ms en
+  cargar, el host ocultaba el tráiler y lo recargaba al llegar el item
+  (salto). `HoldTrailerWhileLoading` reclama lo que suena mientras carga.
+  Sin probar en la TV (el WebView no se simula).
+- Pendiente de decidir: en la vista previa de la ficha (tráiler a 5 s sin
+  tocar) el menú lateral colapsado sigue visible.
+
 Revisado y bien: ficha de película, rails de carátulas, En directo, menú
 lateral, catálogo, buscar. **Sin revisar aún**: reproductor (chrome VOD y
 directo), TV en directo, login/emparejado, Ajustes, colecciones, personas.

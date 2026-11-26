@@ -7,7 +7,6 @@ import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -99,7 +98,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -112,7 +110,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
@@ -293,7 +290,7 @@ fun HeroDetailScaffold(
             }
         }
         CompositionLocalProvider(LocalBringIntoViewSpec provides bringIntoViewSpec) {
-            Column(modifier = Modifier.verticalScroll(scrollState)) {
+            Column(modifier = Modifier.padding(start = SIDEBAR_WIDTH).verticalScroll(scrollState)) {
                 Box(
                     modifier = Modifier
                         .height(heroHeight)
@@ -544,40 +541,14 @@ private fun HeroPanel(
                 geometry.heroSize   = it.size
             },
     ) {
-        Row(
-            modifier          = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 24.dp, top = 20.dp)
-                .zIndex(HEADER_Z_INDEX)
-                .then(fadeOut),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BackPill(onBack = config.actions.onBack)
-            Spacer(Modifier.width(16.dp))
-            Image(
-                painter            = painterResource(R.drawable.brand_wordmark),
-                contentDescription = stringResource(R.string.brand_hubplay),
-                modifier           = Modifier.height(28.dp),
-            )
-            config.header.sectionLabel?.let { label ->
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text          = label,
-                    style         = MaterialTheme.typography.labelMedium,
-                    color         = MaterialTheme.colorScheme.onBackground.copy(alpha = SECTION_LABEL_ALPHA),
-                    fontWeight    = FontWeight.SemiBold,
-                    letterSpacing = 2.sp,
-                )
-            }
-        }
-
+        // Sin cabecera propia (volver + marca): la ficha vive dentro de
+        // TvShell como el resto de pantallas y el menú lateral ya da la
+        // marca y la navegación; volver es la tecla Atrás del mando.
         Row(
             modifier              = Modifier
                 .align(Alignment.CenterStart)
                 .fillMaxWidth(HERO_CONTENT_WIDTH_FRACTION)
-                // top: reserva la fila de volver + marca; con póster, Play e
-                // iconos la columna izquierda no cabe centrada sin pisarla.
-                .padding(start = 48.dp, end = 24.dp, top = HERO_HEADER_HEIGHT),
+                .padding(start = HERO_CONTENT_START, end = 24.dp, top = HERO_TOP_INSET),
             verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(32.dp),
         ) {
@@ -1487,7 +1458,6 @@ private const val LEFT_FADE_MID_ALPHA = 0.40f
 private const val BOTTOM_FADE_ALPHA = 0.55f
 
 /** Fila de volver + marca por encima del contenido del hero. */
-private const val HEADER_Z_INDEX = 10f
 
 /** El bloque póster | info ocupa este ancho del hero. */
 private const val HERO_CONTENT_WIDTH_FRACTION = 0.8f
@@ -1496,7 +1466,6 @@ private const val HERO_CONTENT_WIDTH_FRACTION = 0.8f
 private const val POSTER_ASPECT_RATIO = 2f / 3f
 
 /** Etiqueta "SERIES" junto a la marca. */
-private const val SECTION_LABEL_ALPHA = 0.85f
 
 /** Fondo de la tarjeta "Ver colección" con y sin foco. */
 private const val OPEN_CARD_ALPHA_FOCUSED = 0.9f
@@ -1513,7 +1482,11 @@ private const val OVERVIEW_MAX_LINES = 4
 private const val OVERVIEW_MAX_LINES_EXPANDED = 12
 
 /** Alto reservado arriba del hero para la píldora de volver y la marca. */
-private val HERO_HEADER_HEIGHT = 72.dp
+/** Aire arriba del bloque póster | info (antes reservaba la cabecera de 72 dp). */
+private val HERO_TOP_INSET = 16.dp
+
+/** El contenido empieza tras el menú lateral colapsado más el margen de Inicio. */
+private val HERO_CONTENT_START = 24.dp
 
 /** Ancho de la tarjeta "Ver colección" (igual que un póster del catálogo). */
 private val OPEN_COLLECTION_CARD_WIDTH = 120.dp
@@ -1550,7 +1523,8 @@ private const val KEYBOARD_HIDE_RETRY_MS = 150L
 private const val RAIL_PIVOT_FRACTION = 0.3f
 
 /** Márgenes de los rails, dentro del LazyRow (ver PosterRail). */
-private val RAIL_START_PADDING = 48.dp
+// Igual que el bloque del hero (HERO_CONTENT_START): rails y póster alineados.
+private val RAIL_START_PADDING = HERO_CONTENT_START
 private val RAIL_END_PADDING = 24.dp
 
 /** Opacidad del velo de los rails sobre el tráiler / backdrop fijo. */

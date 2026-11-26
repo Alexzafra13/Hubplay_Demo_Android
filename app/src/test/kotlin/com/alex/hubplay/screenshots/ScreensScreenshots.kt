@@ -2,11 +2,13 @@ package com.alex.hubplay.screenshots
 
 import android.view.KeyEvent.KEYCODE_DPAD_DOWN
 import android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.alex.hubplay.ui.catalog.CatalogScreen
 import com.alex.hubplay.ui.catalog.CatalogViewModel
 import com.alex.hubplay.ui.catalog.PortraitCatalogCard
+import com.alex.hubplay.ui.components.TvShell
 import com.alex.hubplay.ui.detail.DetailScreen
 import com.alex.hubplay.ui.detail.DetailViewModel
 import com.alex.hubplay.ui.home.components.Tab
@@ -21,14 +23,21 @@ class ScreensScreenshots : ScreenshotTest() {
 
     private val repo = SampleHomeRepository()
 
+    /** Como en HubplayNavGraph: las fichas van dentro de TvShell sin padding. */
+    @Composable
+    private fun inShell(tab: Tab, content: @Composable () -> Unit) {
+        TvShell(selectedTab = tab, onNavigateToTab = {}, onOpenSettings = {}, padContent = false) { content() }
+    }
+
     @Test
     fun detail() {
         val vm = DetailViewModel(repo, "m2")
-        setTvContent { DetailScreen(viewModel = vm, onPlay = { _, _ -> }, onBack = {}) }
+        setTvContent { inShell(Tab.Movies) { DetailScreen(viewModel = vm, onPlay = { _, _ -> }, onBack = {}) } }
         settle(2500)
         snap("detail_01")
-        press(KEYCODE_DPAD_DOWN, settleMs = 1500)
-        snap("detail_02_down")
+        // En la TV el foco nace en Reproducir (el foco inicial no se simula).
+        focusText("Reproducir")
+        snap("detail_02_play")
         press(KEYCODE_DPAD_DOWN, settleMs = 1500)
         snap("detail_03_down2")
         press(KEYCODE_DPAD_DOWN, settleMs = 1500)
@@ -40,11 +49,11 @@ class ScreensScreenshots : ScreenshotTest() {
     @Test
     fun series() {
         val vm = SeriesViewModel(repo, "s1")
-        setTvContent { SeriesScreen(viewModel = vm, onPlayEpisode = { _, _ -> }, onBack = {}) }
+        setTvContent { inShell(Tab.Series) { SeriesScreen(viewModel = vm, onPlayEpisode = { _, _ -> }, onBack = {}) } }
         settle(2500)
         snap("series_01")
-        press(KEYCODE_DPAD_DOWN, settleMs = 1500)
-        snap("series_02_down")
+        focusText("Seguir T2·E4")
+        snap("series_02_play")
         press(KEYCODE_DPAD_DOWN, settleMs = 1500)
         snap("series_03_down2")
         press(KEYCODE_DPAD_DOWN, settleMs = 1500)

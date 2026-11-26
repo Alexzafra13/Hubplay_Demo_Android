@@ -166,3 +166,28 @@ class TrailerHost(private val scope: CoroutineScope) {
 val LocalTrailerHost = compositionLocalOf<TrailerHost> {
     error("TrailerHost not provided")
 }
+
+/**
+ * Mantiene vivo el tráiler que ya suena mientras una ficha carga.
+ *
+ * Inicio suelta su claim al navegar y el host oculta el tráiler a los
+ * [TrailerHost] 500 ms si nadie lo reclama; la ficha solo lo reclama
+ * cuando llega el item del servidor. Con una red lenta (> 500 ms) el
+ * tráiler se cortaba y volvía a arrancar al cargar: salto feo justo al
+ * entrar. Mientras [loading], esto reclama lo que esté sonando (misma
+ * key → el WebView ni se entera); al cargar se suelta y manda el claim
+ * real de la ficha (o, si el item no tiene tráiler, se oculta como antes).
+ */
+@androidx.compose.runtime.Composable
+fun HoldTrailerWhileLoading(loading: Boolean) {
+    val host = LocalTrailerHost.current
+    androidx.compose.runtime.DisposableEffect(loading) {
+        val playing = host.current.value
+        val token = if (loading && playing != null) {
+            host.activate(playing.itemId, playing.videoKey, playing.site)
+        } else {
+            null
+        }
+        onDispose { token?.let { host.deactivate(it) } }
+    }
+}

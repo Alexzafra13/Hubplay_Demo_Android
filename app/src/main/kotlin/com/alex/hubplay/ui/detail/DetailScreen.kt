@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.alex.hubplay.R
 import com.alex.hubplay.data.Content
+import com.alex.hubplay.data.HoldTrailerWhileLoading
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.components.HeroActions
 import com.alex.hubplay.ui.components.HeroCta
@@ -70,6 +71,8 @@ fun DetailScreen(
         Toast.makeText(context, notice, Toast.LENGTH_SHORT).show()
         viewModel.tools.clearNotice()
     }
+
+    HoldTrailerWhileLoading(loading = ui.item == null && ui.error == null)
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         val item = ui.item

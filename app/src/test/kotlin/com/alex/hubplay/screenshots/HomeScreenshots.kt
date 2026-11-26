@@ -46,5 +46,7 @@ class HomeScreenshots : ScreenshotTest() {
         snap("home_08_live")
         press(KEYCODE_DPAD_DOWN, settleMs = 1200)
         snap("home_09_latest")
+        press(KEYCODE_DPAD_DOWN, settleMs = 1200)
+        snap("home_10_last")
     }
 }

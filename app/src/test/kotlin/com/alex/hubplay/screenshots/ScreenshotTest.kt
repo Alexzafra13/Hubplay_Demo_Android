@@ -16,7 +16,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ApplicationProvider
 import coil3.SingletonImageLoader
 import com.alex.hubplay.data.LocalTrailerHost
@@ -125,6 +129,13 @@ abstract class ScreenshotTest {
         KeyEvent.KEYCODE_DPAD_LEFT -> View.FOCUS_LEFT
         KeyEvent.KEYCODE_DPAD_RIGHT -> View.FOCUS_RIGHT
         else -> View.FOCUS_DOWN
+    }
+
+    /** Pone el foco en el nodo con ese texto (sustituye al foco inicial de la TV). */
+    protected fun focusText(text: String) {
+        compose.onNode(hasText(text) and hasClickAction(), useUnmergedTree = false)
+            .performSemanticsAction(SemanticsActions.RequestFocus)
+        settle(1200)
     }
 
     protected fun snap(name: String) {
