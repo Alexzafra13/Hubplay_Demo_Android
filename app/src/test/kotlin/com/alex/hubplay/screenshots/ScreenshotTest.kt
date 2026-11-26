@@ -121,6 +121,13 @@ abstract class ScreenshotTest {
         }
     }
 
+    @Suppress("UNCHECKED_CAST")
+    private fun rootViews(): List<View> = runCatching {
+        val wmg = Class.forName("android.view.WindowManagerGlobal")
+        val instance = wmg.getMethod("getInstance").invoke(null)
+        (wmg.getDeclaredField("mViews").apply { isAccessible = true }.get(instance) as List<View>).toList()
+    }.getOrDefault(emptyList())
+
     private fun composeView(v: View): View? {
         if (v.javaClass.simpleName == "AndroidComposeView") return v
         if (v is ViewGroup) for (i in 0 until v.childCount) composeView(v.getChildAt(i))?.let { return it }
@@ -147,7 +154,17 @@ abstract class ScreenshotTest {
         // Robolectric no llega: se dibuja la vista raíz a mano.
         val root = compose.activity.window.decorView
         val bmp = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-        root.draw(Canvas(bmp))
+        val canvas = Canvas(bmp)
+        // Todas las ventanas (la de la Activity y las de diálogos / hojas
+        // inferiores, que Compose abre aparte), en orden, en su posición.
+        for (view in rootViews().ifEmpty { listOf(root) }) {
+            if (!view.isShown || view.width == 0) continue
+            val loc = IntArray(2).also { view.getLocationOnScreen(it) }
+            canvas.save()
+            canvas.translate(loc[0].toFloat(), loc[1].toFloat())
+            view.draw(canvas)
+            canvas.restore()
+        }
         File(dir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,15 +29,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay30
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.outlined.Audiotrack
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -73,6 +78,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
 import com.alex.hubplay.player.PlayerState
+import com.alex.hubplay.ui.components.HeroCtaButton
 import com.alex.hubplay.ui.components.HeroIconButton
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.TextPrimary
@@ -116,6 +122,8 @@ class VodChromeInfo(
     val backdropUrl: String?,
     val logoUrl:     String?,
     val hasNext:     Boolean,
+    /** Intro / resumen / créditos que se pueden saltar. */
+    val skipSegments: List<SkipSegment> = emptyList(),
 )
 
 /** Acciones del chrome hacia la pantalla. */
@@ -124,6 +132,8 @@ class VodChromeActions(
     val onOpenAudio:     () -> Unit,
     val onOpenSubtitles: () -> Unit,
     val onNextEpisode:   () -> Unit,
+    /** Menú Opciones (velocidad, imagen, capítulos, información). */
+    val onOpenOptions:   () -> Unit = {},
 )
 
 @Composable
@@ -167,12 +177,21 @@ fun VodPlayerLayer(
     }
     val togglePlay = { if (exo.isPlaying) exo.pause() else exo.play() }
 
+    val skipState = rememberActiveSkip(info, exo)
+    val skip = { segment: SkipSegment ->
+        if (segment.kind == SkipKind.Outro && info.hasNext) actions.onNextEpisode() else exo.seekTo(segment.endMs)
+        skipState.value = null
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .focusRequester(rootFocus)
             .focusable()
             .onPreviewKeyEvent { event ->
+                // Chrome oculto + "Saltar intro" en pantalla: OK salta (como
+                // Netflix/Jellyfin) en vez de enseñar los controles.
+                if (skipOnOk(event, skipState.value.takeIf { !visible }, skip)) return@onPreviewKeyEvent true
                 handleKey(
                     event      = event,
                     visible    = visible,
@@ -190,8 +209,14 @@ fun VodPlayerLayer(
             },
     ) {
         LoadingAndBuffering(info = info, showBackdrop = showBackdrop, buffering = playerState.isBuffering)
+        SkipPill(segment = skipState.value.takeIf { !visible && !showBackdrop })
         ChromeOverlay(
-            state       = ChromeVisibility(shown = visible && !showBackdrop, sheetOpen = sheetOpen),
+            state       = ChromeVisibility(
+                shown     = visible && !showBackdrop,
+                sheetOpen = sheetOpen,
+                skip      = skipState.value,
+                onSkip    = skip,
+            ),
             info        = info,
             exo         = exo,
             playerState = playerState,
@@ -212,8 +237,37 @@ fun VodPlayerLayer(
     }
 }
 
+/** Tramo saltable en curso (intro, resumen, créditos con siguiente), sondeado cada medio segundo. */
+@Composable
+private fun rememberActiveSkip(info: VodChromeInfo, exo: ExoPlayer): androidx.compose.runtime.MutableState<SkipSegment?> {
+    val state = remember { mutableStateOf<SkipSegment?>(null) }
+    LaunchedEffect(info.skipSegments, info.hasNext) {
+        state.value = null
+        if (info.skipSegments.isEmpty()) return@LaunchedEffect
+        while (true) {
+            state.value = PlayerExtras.activeSkip(info.skipSegments, exo.currentPosition, info.hasNext)
+            delay(SKIP_POLL_MS)
+        }
+    }
+    return state
+}
+
+/** OK con un tramo saltable pendiente: salta y consume la tecla. */
+private fun skipOnOk(event: KeyEvent, pending: SkipSegment?, skip: (SkipSegment) -> Unit): Boolean {
+    val ok = event.type == KeyEventType.KeyDown && (event.key == Key.DirectionCenter || event.key == Key.Enter)
+    if (!ok || pending == null) return false
+    skip(pending)
+    return true
+}
+
 /** Si el chrome se ve y si hay una hoja (audio/subtítulos) abierta encima. */
-private class ChromeVisibility(val shown: Boolean, val sheetOpen: Boolean)
+private class ChromeVisibility(
+    val shown:     Boolean,
+    val sheetOpen: Boolean,
+    /** Tramo saltable en curso: con el chrome visible es un botón más de la fila. */
+    val skip:      SkipSegment? = null,
+    val onSkip:    (SkipSegment) -> Unit = {},
+)
 
 /** Título arriba a la izquierda y controles abajo, con sus fundidos. */
 @Composable
@@ -264,7 +318,7 @@ private fun BoxScope.ChromeOverlay(
             playFocus   = playFocus,
             actions     = actions,
             callbacks   = callbacks,
-            sheetOpen   = state.sheetOpen,
+            state       = state,
         )
     }
 }
@@ -423,7 +477,7 @@ private fun ControlsBlock(
     playFocus:   FocusRequester,
     actions:     VodChromeActions,
     callbacks:   ControlsCallbacks,
-    sheetOpen:   Boolean,
+    state:       ChromeVisibility,
 ) {
     val onSeek   = callbacks.onSeek
     val playhead = remember { Playhead() }
@@ -459,7 +513,7 @@ private fun ControlsBlock(
         Spacer(Modifier.height(2.dp))
         TimeRow(playhead = playhead)
         Spacer(Modifier.height(8.dp))
-        ControlButtons(info, playerState, playFocus, actions, callbacks, sheetOpen)
+        ControlButtons(info, playerState, playFocus, actions, callbacks, state)
     }
 }
 
@@ -471,8 +525,9 @@ private fun ControlButtons(
     playFocus:   FocusRequester,
     actions:     VodChromeActions,
     callbacks:   ControlsCallbacks,
-    sheetOpen:   Boolean,
+    state:       ChromeVisibility,
 ) {
+    val sheetOpen    = state.sheetOpen
     val onSeek       = callbacks.onSeek
     val onTogglePlay = callbacks.onTogglePlay
     val onInteract   = callbacks.onInteract
@@ -480,11 +535,16 @@ private fun ControlButtons(
     // subtítulos), no a Play: así se abren las dos seguidas sin navegar.
     val audioFocus = remember { FocusRequester() }
     val subsFocus  = remember { FocusRequester() }
+    val optsFocus  = remember { FocusRequester() }
     var opener by remember { mutableStateOf<FocusRequester?>(null) }
     LaunchedEffect(sheetOpen) {
         if (!sheetOpen) opener?.let { runCatching { it.requestFocus() } }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+        modifier              = Modifier.fillMaxWidth(),
+    ) {
         val playing = playerState.isPlaying
         HeroIconButton(
             icon               = Icons.Filled.Replay30,
@@ -536,6 +596,79 @@ private fun ControlButtons(
             modifier           = Modifier.focusRequester(subsFocus).onFocusChanged { if (it.isFocused) onInteract() },
             size               = CONTROL_BUTTON,
         )
+        TrailingButtons(state, optsFocus, onInteract) {
+            opener = optsFocus
+            actions.onOpenOptions()
+        }
+    }
+}
+
+/** Opciones y, si hay un tramo saltable, "Saltar intro" pegado a la derecha. */
+@Composable
+private fun RowScope.TrailingButtons(
+    state:         ChromeVisibility,
+    optsFocus:     FocusRequester,
+    onInteract:    () -> Unit,
+    onOpenOptions: () -> Unit,
+) {
+    HeroIconButton(
+        icon               = Icons.Outlined.Settings,
+        contentDescription = stringResource(R.string.player_options),
+        onClick            = onOpenOptions,
+        modifier           = Modifier.focusRequester(optsFocus).onFocusChanged { if (it.isFocused) onInteract() },
+        size               = CONTROL_BUTTON,
+    )
+    state.skip?.let { segment ->
+        Spacer(Modifier.weight(1f))
+        HeroCtaButton(
+            label    = stringResource(segment.kind.labelRes),
+            icon     = Icons.Filled.FastForward,
+            primary  = true,
+            onClick  = { state.onSkip(segment) },
+            modifier = Modifier.onFocusChanged { if (it.isFocused) onInteract() },
+        )
+    }
+}
+
+/**
+ * "Saltar intro" flotando abajo a la derecha con el chrome oculto (OK lo
+ * pulsa: lo intercepta la capa). Con el chrome visible el botón va en la
+ * fila de controles y este se oculta.
+ */
+@Composable
+private fun BoxScope.SkipPill(segment: SkipSegment?) {
+    // Se recuerda el último para que el fundido de salida conserve el texto.
+    var last by remember { mutableStateOf(segment) }
+    if (segment != null) last = segment
+    AnimatedVisibility(
+        visible  = segment != null,
+        enter    = fadeIn(animationSpec = tween(FADE_IN_MS)),
+        exit     = fadeOut(animationSpec = tween(HIDE_MS)),
+        modifier = Modifier.align(Alignment.BottomEnd).padding(end = CHROME_PADDING, bottom = SKIP_PILL_BOTTOM),
+    ) {
+        last?.let { seg ->
+            Row(
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier              = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White)
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+            ) {
+                Icon(Icons.Filled.FastForward, contentDescription = null, tint = Color.Black)
+                Text(
+                    text       = stringResource(seg.kind.labelRes),
+                    color      = Color.Black,
+                    style      = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text  = "OK",
+                    color = Color.Black.copy(alpha = OK_HINT_ALPHA),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+        }
     }
 }
 
@@ -723,6 +856,9 @@ private val TIME_ROW_HEIGHT = 20.dp
 private val CHROME_BOTTOM = 32.dp
 private val CONTROLS_TOP_FADE = 72.dp
 private val CONTROL_BUTTON = 40.dp
+private val SKIP_PILL_BOTTOM = 40.dp
+private const val SKIP_POLL_MS = 500L
+private const val OK_HINT_ALPHA = 0.55f
 private val LOADING_BAR_WIDTH = 220.dp
 private val LOGO_HEIGHT = 56.dp
 private val LOGO_MAX_WIDTH = 320.dp

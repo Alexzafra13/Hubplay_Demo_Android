@@ -278,7 +278,7 @@ private fun languageDisplay(tag: String?): String? {
 }
 
 @Composable
-private fun SectionHeader(text: String) {
+internal fun SectionHeader(text: String) {
     Text(
         text       = text,
         style      = MaterialTheme.typography.titleSmall,
@@ -299,7 +299,7 @@ private fun EmptyRow(text: String) {
 }
 
 @Composable
-private fun TrackRow(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun TrackRow(label: String, selected: Boolean, onClick: () -> Unit) {
     ListItem(
         headlineContent = {
             Text(

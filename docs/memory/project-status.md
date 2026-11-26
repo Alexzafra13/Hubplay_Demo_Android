@@ -150,6 +150,21 @@ Segunda tanda (pedido del usuario):
   menú lateral (`LocalShellChrome.hideSidebar`, fundido de 600 ms); la
   primera tecla lo devuelve. Nunca se oculta con el menú desplegado.
 
+Reproductor VOD (pedido: "como Jellyfin"):
+- **Saltar intro / resumen / créditos** con los `segments` que ya da
+  `/items/{id}` (mismo filtro que la web: confianza ≥ 0,7, se va 0,5 s
+  antes del final; créditos solo si hay siguiente episodio → salta a él).
+  Chrome oculto: píldora abajo a la derecha y OK salta. Chrome visible:
+  botón al final de la fila. Lógica en `PlayerExtras` (testeada).
+- **Menú Opciones** (engranaje): velocidad 0,5–2×, imagen (ajustar /
+  ampliar / estirar → `resizeMode` del PlayerView), capítulos del fichero
+  (salta; marca el actual) e información (directo/remux/transcode, códec,
+  resolución, fps, canales). `PlayerOptionsSheet.kt`.
+- Sin probar en la TV. Si el servidor no ha detectado segmentos o el
+  fichero no trae capítulos, esas partes simplemente no salen.
+- Pendiente del reproductor: miniaturas al avanzar (trickplay, el servidor
+  ya las sirve), calidad/bitrate y tamaño/estilo de subtítulos.
+
 Revisado y bien: ficha de película, rails de carátulas, En directo, menú
 lateral, catálogo, buscar. **Sin revisar aún**: reproductor (chrome VOD y
 directo), TV en directo, login/emparejado, Ajustes, colecciones, personas.

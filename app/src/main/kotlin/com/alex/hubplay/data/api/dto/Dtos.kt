@@ -143,6 +143,25 @@ data class ItemDetailDto(
     @Json(name = "user_data")        val userData:        UserDataDto? = null,
     /** Pistas del fichero (vídeo/audio/subtítulos). El reproductor lista las de audio. */
     @Json(name = "media_streams")    val mediaStreams:    List<MediaStreamDto> = emptyList(),
+    /** Capítulos del fichero (items.go::chapterResponse). Ausente = sin capítulos. */
+    val chapters:                                          List<ChapterDto> = emptyList(),
+    /** Intro / resumen / créditos detectados (item_detail_handler.go::attachSegments). */
+    val segments:                                          List<SegmentDto> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class ChapterDto(
+    @Json(name = "start_ticks") val startTicks: Long = 0L,
+    val title:                                  String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class SegmentDto(
+    /** recap | intro | outro */
+    val kind:                                       String,
+    @Json(name = "start_seconds") val startSeconds: Double = 0.0,
+    @Json(name = "end_seconds")   val endSeconds:   Double = 0.0,
+    val confidence:                                 Double = 0.0,
 )
 
 /**

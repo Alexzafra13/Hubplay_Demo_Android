@@ -110,6 +110,9 @@ class PlayerViewModel(
                     selectedAudio      = -1,
                     directAudioOrdinal = null,
                     selectedSubtitle   = -1,
+                    chapters           = item?.let { d -> PlayerExtras.chapters(d.chapters) }.orEmpty(),
+                    skipSegments       = item?.let { d -> PlayerExtras.segments(d.segments) }.orEmpty(),
+                    streamMethod       = info.method,
                     startParams        = PlayerStartParams(
                         streamUrl    = streamUrl,
                         resumePosSec = resumeSec,
@@ -535,6 +538,12 @@ data class PlayerUiState(
     val selectedSubtitle: Int = -1,
     /** Episode to auto-play when this one ends. Null = end of series / not an episode. */
     val nextEpisode:     NextEpisodeInfo? = null,
+    /** Capítulos del fichero (menú Opciones). */
+    val chapters:        List<PlayerChapter> = emptyList(),
+    /** Intro / resumen / créditos con botón "Saltar". */
+    val skipSegments:    List<SkipSegment> = emptyList(),
+    /** direct_play | direct_stream | transcode (Información de reproducción). */
+    val streamMethod:    String? = null,
     // ── Live-mode extras ─────────────────────────────────────────────────
     val liveChannel:     LiveChannel? = null,
     /** Every channel in the library the current live channel belongs to. */

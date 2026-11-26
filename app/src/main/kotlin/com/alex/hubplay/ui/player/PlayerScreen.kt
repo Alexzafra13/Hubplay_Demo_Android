@@ -131,6 +131,8 @@ fun PlayerScreen(
     }
 
     val isLive = ui.mode == PlayerMode.Live
+    // Encuadre elegido en Opciones; se aplica al PlayerView en `update`.
+    var fit by remember { mutableStateOf(VideoFit.Fit) }
 
     Box(
         modifier         = Modifier.fillMaxSize().background(Color.Black),
@@ -161,6 +163,7 @@ fun PlayerScreen(
                     keepScreenOn = true
                 }
             },
+            update   = { view -> view.resizeMode = fit.resizeMode },
         )
 
         if (isLive) {
@@ -176,22 +179,15 @@ fun PlayerScreen(
             // Audio + subtitle picker — only relevant for VOD HLS (live
             // IPTV streams typically expose a single audio track).
             var trackSection by remember { mutableStateOf<TrackSection?>(null) }
+            var optionsOpen by remember { mutableStateOf(false) }
             val server = authState.serverUrl
-            val info = remember(ui.title, ui.subtitle, ui.backdropUrl, ui.logoUrl, ui.nextEpisode, server) {
-                VodChromeInfo(
-                    title       = ui.title,
-                    subtitle    = ui.subtitle,
-                    backdropUrl = absoluteImage(ui.backdropUrl, server, IMG_W_BACKDROP),
-                    logoUrl     = absoluteImage(ui.logoUrl, server, IMG_W_LOGO),
-                    hasNext     = ui.nextEpisode != null,
-                )
-            }
+            val info = rememberVodChromeInfo(ui, server)
             VodPlayerLayer(
                 info        = info,
                 exo         = player.exoPlayer,
                 playerState = playerState,
                 preparing   = ui.startParams == null,
-                sheetOpen   = trackSection != null,
+                sheetOpen   = trackSection != null || optionsOpen,
                 actions     = VodChromeActions(
                     onOpenAudio     = { trackSection = TrackSection.Audio },
                     onOpenSubtitles = { trackSection = TrackSection.Subtitles },
@@ -199,7 +195,15 @@ fun PlayerScreen(
                         val durMs = player.exoPlayer.duration
                         viewModel.playNextEpisode(if (durMs > 0) durMs / MS_PER_SECOND else 0L)
                     },
+                    onOpenOptions = { optionsOpen = true },
                 ),
+            )
+            VodOptions(
+                open      = optionsOpen,
+                player    = player.exoPlayer,
+                state     = PlayerOptionsState(fit, ui.chapters, ui.streamMethod),
+                onFit     = { fit = it },
+                onDismiss = { optionsOpen = false },
             )
             trackSection?.let { section ->
                 TrackSelectionSheet(
@@ -409,4 +413,30 @@ private fun LiveLayer(
             isFavorite        = ui.isCurrentChannelFavorite,
         )
     }
+}
+
+/** Lo que el chrome de VOD necesita del estado, con las imágenes ya absolutas. */
+@Composable
+private fun rememberVodChromeInfo(ui: PlayerUiState, server: String?): VodChromeInfo =
+    remember(ui.title, ui.subtitle, ui.backdropUrl, ui.logoUrl, ui.nextEpisode, ui.skipSegments, server) {
+        VodChromeInfo(
+            title        = ui.title,
+            subtitle     = ui.subtitle,
+            backdropUrl  = absoluteImage(ui.backdropUrl, server, IMG_W_BACKDROP),
+            logoUrl      = absoluteImage(ui.logoUrl, server, IMG_W_LOGO),
+            hasNext      = ui.nextEpisode != null,
+            skipSegments = ui.skipSegments,
+        )
+    }
+
+/** Menú Opciones del VOD, solo mientras está abierto. */
+@Composable
+private fun VodOptions(
+    open:      Boolean,
+    player:    androidx.media3.exoplayer.ExoPlayer,
+    state:     PlayerOptionsState,
+    onFit:     (VideoFit) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    if (open) PlayerOptionsSheet(player = player, state = state, onFit = onFit, onDismiss = onDismiss)
 }

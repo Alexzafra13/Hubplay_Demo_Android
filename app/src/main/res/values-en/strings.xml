@@ -184,6 +184,26 @@
     <string name="player_ends_at">Ends %1$s</string>
     <string name="player_loading">Loading…</string>
     <string name="player_audio_subtitles">Audio and subtitles</string>
+    <!-- Player: skip segments and options -->
+    <string name="player_skip_intro">Skip intro</string>
+    <string name="player_skip_recap">Skip recap</string>
+    <string name="player_skip_credits">Skip credits</string>
+    <string name="player_options">Options</string>
+    <string name="player_section_speed">Speed</string>
+    <string name="player_speed_normal">Normal</string>
+    <string name="player_section_fit">Picture</string>
+    <string name="player_fit_fit">Fit</string>
+    <string name="player_fit_zoom">Zoom (fill screen)</string>
+    <string name="player_fit_stretch">Stretch</string>
+    <string name="player_section_chapters">Chapters</string>
+    <string name="player_chapter_number">Chapter %1$d</string>
+    <string name="player_section_info">Playback info</string>
+    <string name="player_info_method">Mode</string>
+    <string name="player_info_video">Video</string>
+    <string name="player_info_audio">Audio</string>
+    <string name="player_method_direct_play">Direct play</string>
+    <string name="player_method_direct_stream">Remux (no re-encode)</string>
+    <string name="player_method_transcode">Transcoding on the server</string>
     <string name="player_section_audio">Audio</string>
     <string name="player_section_subtitles">Subtitles</string>
     <string name="player_subtitles_disabled">Off</string>
