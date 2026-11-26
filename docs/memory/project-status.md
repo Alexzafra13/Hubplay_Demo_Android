@@ -146,8 +146,9 @@ Segunda tanda (pedido del usuario):
   cargar, el host ocultaba el tráiler y lo recargaba al llegar el item
   (salto). `HoldTrailerWhileLoading` reclama lo que suena mientras carga.
   Sin probar en la TV (el WebView no se simula).
-- Pendiente de decidir: en la vista previa de la ficha (tráiler a 5 s sin
-  tocar) el menú lateral colapsado sigue visible.
+- Vista previa de la ficha (tráiler, 5 s sin tocar): también se oculta el
+  menú lateral (`LocalShellChrome.hideSidebar`, fundido de 600 ms); la
+  primera tecla lo devuelve. Nunca se oculta con el menú desplegado.
 
 Revisado y bien: ficha de película, rails de carátulas, En directo, menú
 lateral, catálogo, buscar. **Sin revisar aún**: reproductor (chrome VOD y

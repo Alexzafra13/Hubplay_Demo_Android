@@ -46,6 +46,23 @@ class ScreensScreenshots : ScreenshotTest() {
         snap("detail_05_down4")
     }
 
+    /** Vista previa: tráiler sonando y 5 s sin tocar → solo carátula, sin menú. */
+    @Test
+    fun detailPreview() {
+        val vm = DetailViewModel(repo, "m2")
+        setTvContent { inShell(Tab.Movies) { DetailScreen(viewModel = vm, onPlay = { _, _ -> }, onBack = {}) } }
+        settle(2000)
+        focusText("Reproducir")
+        compose.runOnUiThread {
+            trailerHost.activate(itemId = "m2", videoKey = "fake", site = "YouTube")
+            trailerHost.reportPlaying()
+        }
+        settle(6500)
+        snap("detail_06_preview")
+        press(KEYCODE_DPAD_DOWN, settleMs = 1200)
+        snap("detail_07_preview_woken")
+    }
+
     @Test
     fun series() {
         val vm = SeriesViewModel(repo, "s1")

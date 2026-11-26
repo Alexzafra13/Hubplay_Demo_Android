@@ -57,12 +57,15 @@ abstract class ScreenshotTest {
         SingletonImageLoader.setUnsafe(FakeArtwork.imageLoader(ctx))
     }
 
+    /** Host de tráileres de la raíz (sin WebView: se simula con reportPlaying). */
+    protected lateinit var trailerHost: TrailerHost
+
     /** Monta [content] con el tema y los CompositionLocals de la raíz de la app. */
     protected fun setTvContent(content: @Composable () -> Unit) {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             val scope = rememberCoroutineScope()
-            val host = remember { TrailerHost(scope) }
+            val host = remember { TrailerHost(scope).also { trailerHost = it } }
             HubPlayTheme {
                 CompositionLocalProvider(LocalTrailerHost provides host) {
                     Box(Modifier.fillMaxSize().background(BgBase)) { content() }
