@@ -61,6 +61,7 @@ import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.alex.hubplay.R
 import com.alex.hubplay.data.Content
+import com.alex.hubplay.data.HoldTrailerWhileLoading
 import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.ui.components.BackPill
 import com.alex.hubplay.ui.components.HeroActions
@@ -114,6 +115,8 @@ fun SeriesScreen(
         Toast.makeText(context, notice, Toast.LENGTH_SHORT).show()
         viewModel.tools.clearNotice()
     }
+
+    HoldTrailerWhileLoading(loading = ui.data?.series == null && ui.error == null)
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         val data = ui.data

@@ -102,7 +102,13 @@ fun CatalogScreen(
                             // sistema lo deja en el menú lateral y la rejilla
                             // parece muerta hasta que el usuario pulsa →.
                             if (index == 0) {
-                                Box(modifier = Modifier.focusRequester(firstCardRequester)) {
+                                // propagateMinConstraints: sin él la Box soltaba
+                                // el ancho de la celda y esta primera carátula
+                                // salía 10 dp más estrecha que las demás.
+                                Box(
+                                    modifier = Modifier.focusRequester(firstCardRequester),
+                                    propagateMinConstraints = true,
+                                ) {
                                     cardContent(item)
                                 }
                             } else {

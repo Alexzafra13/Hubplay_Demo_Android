@@ -34,6 +34,7 @@ import com.alex.hubplay.data.api.dto.StudioDetailResponse
 import com.alex.hubplay.data.api.dto.SwitchProfileRequest
 import com.alex.hubplay.data.api.dto.SwitchProfileResponse
 import com.alex.hubplay.data.api.dto.TrendingResponse
+import com.alex.hubplay.data.api.dto.TrickplayManifestDto
 import com.alex.hubplay.data.api.dto.UpdateProgressRequest
 import com.alex.hubplay.data.api.dto.WatchBeaconResponse
 import retrofit2.http.Body
@@ -127,6 +128,13 @@ interface HubplayApi {
     /** GET /api/v1/items/{id} */
     @GET("items/{id}")
     suspend fun getItem(@Path("id") itemId: String): ItemDetailResponse
+
+    /**
+     * GET /api/v1/items/{id}/trickplay.json — miniaturas para la barra.
+     * 503 mientras ffmpeg las genera (reintentar), 404 si no se pudo.
+     */
+    @GET("items/{id}/trickplay.json")
+    suspend fun getTrickplay(@Path("id") itemId: String): TrickplayManifestDto
 
     /**
      * GET /api/v1/items/{id}/children

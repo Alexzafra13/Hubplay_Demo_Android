@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -20,6 +21,9 @@ import androidx.compose.ui.zIndex
 import com.alex.hubplay.ui.home.components.LocalVisibleTabs
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.theme.BgBase
+
+/** Mismo ritmo que el fundido de la vista previa de la ficha. */
+private const val SIDEBAR_HIDE_MS = 600
 
 /** Capa del sidebar: por encima de cualquier contenido de la pantalla. */
 const val SIDEBAR_Z_INDEX = 5f
@@ -55,6 +59,13 @@ fun TvShell(
 ) {
     val visibleTabs = LocalVisibleTabs.current
     var expanded by remember { mutableStateOf(false) }
+    val chrome = remember { ShellChrome() }
+    // Con el menú desplegado (el foco está en él) nunca se oculta.
+    val sidebarAlpha by animateFloatAsState(
+        targetValue   = if (chrome.hideSidebar && !expanded) 0f else 1f,
+        animationSpec = tween(SIDEBAR_HIDE_MS),
+        label         = "sidebar-hide",
+    )
     val scrimAlpha by animateFloatAsState(
         targetValue   = if (expanded) 1f else 0f,
         animationSpec = tween(if (expanded) SCRIM_IN_MS else SCRIM_OUT_MS),
@@ -82,7 +93,7 @@ fun TvShell(
                 .fillMaxSize()
                 .then(if (padContent) Modifier.padding(start = SIDEBAR_WIDTH) else Modifier),
         ) {
-            content()
+            CompositionLocalProvider(LocalShellChrome provides chrome) { content() }
         }
 
         if (scrimAlpha > 0f) {
@@ -104,7 +115,8 @@ fun TvShell(
             onExpandedChange = { expanded = it },
             modifier         = Modifier
                 .align(Alignment.CenterStart)
-                .zIndex(SIDEBAR_Z_INDEX),
+                .zIndex(SIDEBAR_Z_INDEX)
+                .graphicsLayer { alpha = sidebarAlpha },
         )
     }
 }

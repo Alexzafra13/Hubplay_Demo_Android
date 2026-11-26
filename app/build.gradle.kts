@@ -161,6 +161,26 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Robolectric necesita los recursos (strings, fuentes, drawables)
+        // para pintar las pantallas en los tests de capturas.
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all { test ->
+            // Las capturas (paquete `screenshots`) tardan ~1 min y generan
+            // PNG: solo corren con `-Pscreenshots`. El resto de unitarios
+            // (y CI) siguen igual de rápidos.
+            if (!project.hasProperty("screenshots")) {
+                test.exclude("**/screenshots/**")
+            } else {
+                test.systemProperty("hubplay.screenshotDir", layout.buildDirectory.dir("screenshots").get().asFile.absolutePath)
+                test.maxHeapSize = "3g"
+                test.outputs.upToDateWhen { false }
+            }
+            // Robolectric baja android-all de Maven Central; permite
+            // apuntarlo a un espejo cuando Central limita (429).
+            System.getenv("ROBOLECTRIC_REPO_URL")?.let {
+                test.systemProperty("robolectric.dependency.repo.url", it)
+            }
+        }
     }
 }
 
@@ -289,6 +309,11 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockwebserver)
+    testImplementation(libs.robolectric)
+    testImplementation(composeBom)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.coil.test)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)
 

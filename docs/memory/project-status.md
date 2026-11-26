@@ -3,7 +3,7 @@
 > Entrypoint de cada sesión. Corto a propósito. El detalle de cada
 > sesión (medidas, por qué de cada decisión) está en `archive/`; el último
 > volcado largo es `archive/project-status-detalle-2026-09-12-a-16.md`.
-> Última actualización: **2026-09-16**.
+> Última actualización: **2026-11-26**.
 
 ## 1. Dónde estamos
 
@@ -35,6 +35,17 @@
   mide 3-4 s de más.
 - Emparejar, servidores, descubrimiento LAN, trampas del box: ver el
   archivo del 2026-09-11.
+- **Capturas sin TV ni emulador** (2026-11-26): Robolectric pinta las
+  pantallas reales a 960×540 dp (xhdpi) con datos inventados y carátulas
+  generadas, y simula el mando (`press(KEYCODE_DPAD_…)`). PNG en
+  `app/build/screenshots/`:
+  `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*screenshots*'`
+  (sin `-Pscreenshots` no corren: CI igual de rápido). Código en
+  `src/test/.../screenshots/` (`ScreenshotTest`, `SampleCatalog`,
+  `FakeArtwork`). Limitaciones: el foco INICIAL de cada pantalla no es
+  fiable (lo fija la primera pulsación), ni vídeo, ni tráiler, ni
+  rendimiento. Si Maven Central da 429: espejo de Google en un init
+  script de Gradle y `ROBOLECTRIC_REPO_URL` (ver archivo de la sesión).
 
 ## 3. Arquitectura viva (lo que no se deduce del código en 1 min)
 
@@ -103,7 +114,74 @@
   Inicio: ~300 ms de UI en caliente, el doble en frío (clases + JIT; solo
   lo arregla un Baseline Profile en release).
 
-## 5. Pendiente (orden sugerido)
+## 5. Sesión 2026-11-26 (visual, con el banco de capturas)
+
+Arreglado tras verlo en capturas:
+- **"A continuación" vacío**: `/me/next-up` no mandaba imágenes → tarjetas
+  con una "C" y hero en negro. Backend (rama `claude/stoic-curie-9je0wx`
+  de HubPlay_demo) manda fotograma + póster/fondo/logo de serie; la app
+  los mapea (`NextUpItemDto.toEpisode`). **Hay que desplegar el backend.**
+- Episodios en Inicio: el hero y la tarjeta solo decían la serie; ahora
+  "T3 · E1 · Fuego cruzado" en el hero y "T3 · E1" en el pie de tarjeta
+  (`EpisodeLabel.kt`, `R.string.episode_code`). Continuar viendo usa el
+  logo de la serie en el hero.
+- Inicio: el título del rail siguiente asomaba cortado a media letra en
+  el borde inferior → fundido de 28 dp.
+- Catálogo/Buscar: la primera carátula salía 10 dp más estrecha
+  (`propagateMinConstraints` en la Box del foco inicial).
+- Ficha de serie: "Seguir S2·…" cortado → botones de ancho intrínseco
+  ("Seguir T2·E4" entero, "T" de temporada).
+
+Segunda tanda (pedido del usuario):
+- **Inicio estilo Netflix/Prime**: con el foco en los rails, bajo el rail
+  activo se lee entero el encabezado del siguiente y el borde de sus
+  tarjetas se funde (`NEXT_RAIL_PEEK` 74 dp; el hero reducido es
+  alto − rail − asomo ≈ 195 dp, antes 46 % fijo). Último rail: nada debajo.
+- **Menú lateral en todas las pantallas** tras el login (ficha, serie,
+  colección, persona, estudio, Ajustes, orden de canales): `shell(...)`
+  en `HubplayNavGraph`. La ficha/serie ya no tienen cabecera propia
+  (volver + marca): volver = tecla Atrás. Rails de la ficha alineados con
+  el póster. Persona/estudio/colección/Ajustes conservan su botón volver.
+- **Tráiler Inicio → ficha sin cortes**: si la ficha tardaba > 500 ms en
+  cargar, el host ocultaba el tráiler y lo recargaba al llegar el item
+  (salto). `HoldTrailerWhileLoading` reclama lo que suena mientras carga.
+  Sin probar en la TV (el WebView no se simula).
+- Vista previa de la ficha (tráiler, 5 s sin tocar): también se oculta el
+  menú lateral (`LocalShellChrome.hideSidebar`, fundido de 600 ms); la
+  primera tecla lo devuelve. Nunca se oculta con el menú desplegado.
+
+Reproductor VOD (pedido: "como Jellyfin"):
+- **Saltar intro / resumen / créditos** con los `segments` que ya da
+  `/items/{id}` (mismo filtro que la web: confianza ≥ 0,7, se va 0,5 s
+  antes del final; créditos solo si hay siguiente episodio → salta a él).
+  Chrome oculto: píldora abajo a la derecha y OK salta. Chrome visible:
+  botón al final de la fila. Lógica en `PlayerExtras` (testeada).
+- **Menú Opciones** (engranaje): velocidad 0,5–2×, imagen (ajustar /
+  ampliar / estirar → `resizeMode` del PlayerView), capítulos del fichero
+  (salta; marca el actual) e información (directo/remux/transcode, códec,
+  resolución, fps, canales). `PlayerOptionsSheet.kt`.
+- Sin probar en la TV. Si el servidor no ha detectado segmentos o el
+  fichero no trae capítulos, esas partes simplemente no salen.
+- **Miniaturas al avanzar** (trickplay): `/items/{id}/trickplay.json`
+  (sin sobre `data`; 503 mientras ffmpeg genera → reintento cada 10 s,
+  10 veces) + `trickplay.png`. La hoja (hasta ~4800×2700) se descarga a
+  `cacheDir/trickplay/` y `BitmapRegionDecoder` recorta solo la miniatura
+  (RGB_565, LRU de 12): nunca se decodifica entera. Se ve 1,5 s tras cada
+  salto, sobre la barra en su posición, con la hora. `TrickplayPreview.kt`.
+  Robolectric no implementa BitmapRegionDecoder (sale negro): las capturas
+  inyectan un recorte en memoria.
+- Pendiente del reproductor: calidad/bitrate y tamaño/estilo/retardo de
+  subtítulos.
+
+Revisado y bien: ficha de película, rails de carátulas, En directo, menú
+lateral, catálogo, buscar. **Sin revisar aún**: reproductor (chrome VOD y
+directo), TV en directo, login/emparejado, Ajustes, colecciones, personas.
+
+## 6. Pendiente (orden sugerido)
+
+0. Desplegar el backend con `/me/next-up` + artwork y mirar Inicio en la
+   Mi TV. Seguir la revisión visual con capturas de las pantallas sin
+   revisar (arriba).
 
 1. Rails nuevos para Ajustes → Inicio (backend + app): canales favoritos,
    colecciones, recomendado, estrenos, por género, "para terminar hoy".

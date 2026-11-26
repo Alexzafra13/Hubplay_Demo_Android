@@ -92,7 +92,8 @@ object SeriesResumeResolver {
     private fun epLabel(item: Content.Episode): String {
         val s = item.seasonNumber; val e = item.episodeNumber
         return when {
-            s != null && e != null -> "S$s·E$e"
+            // "T" de temporada: las etiquetas de este resolver van en español.
+            s != null && e != null -> "T$s·E$e"
             e != null               -> "E$e"
             else                    -> ""
         }

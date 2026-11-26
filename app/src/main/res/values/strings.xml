@@ -128,6 +128,8 @@
 
     <!-- Series -->
     <string name="series_section_label">SERIES</string>
+    <!-- Código corto de episodio en hero y cards de Inicio. -->
+    <string name="episode_code">T%1$d · E%2$d</string>
     <string name="series_seasons_count">%1$d temporadas</string>
     <string name="series_episodes_count">%1$d episodios</string>
     <string name="series_play_empty">Sin episodios</string>
@@ -182,6 +184,26 @@
     <string name="player_ends_at">Termina %1$s</string>
     <string name="player_loading">Cargando…</string>
     <string name="player_audio_subtitles">Audio y subtítulos</string>
+    <!-- Reproductor: saltar tramos y opciones -->
+    <string name="player_skip_intro">Saltar intro</string>
+    <string name="player_skip_recap">Saltar resumen</string>
+    <string name="player_skip_credits">Saltar créditos</string>
+    <string name="player_options">Opciones</string>
+    <string name="player_section_speed">Velocidad</string>
+    <string name="player_speed_normal">Normal</string>
+    <string name="player_section_fit">Imagen</string>
+    <string name="player_fit_fit">Ajustar</string>
+    <string name="player_fit_zoom">Ampliar (llenar pantalla)</string>
+    <string name="player_fit_stretch">Estirar</string>
+    <string name="player_section_chapters">Capítulos</string>
+    <string name="player_chapter_number">Capítulo %1$d</string>
+    <string name="player_section_info">Información de reproducción</string>
+    <string name="player_info_method">Modo</string>
+    <string name="player_info_video">Vídeo</string>
+    <string name="player_info_audio">Audio</string>
+    <string name="player_method_direct_play">Reproducción directa</string>
+    <string name="player_method_direct_stream">Remux (sin recodificar)</string>
+    <string name="player_method_transcode">Transcodificando en el servidor</string>
     <string name="player_section_audio">Audio</string>
     <string name="player_section_subtitles">Subtítulos</string>
     <string name="player_subtitles_disabled">Desactivados</string>

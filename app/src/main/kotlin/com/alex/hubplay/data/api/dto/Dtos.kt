@@ -94,6 +94,8 @@ data class ContinueWatchingEntryDto(
     @Json(name = "series_id")        val seriesId:      String? = null,
     @Json(name = "series_title")     val seriesTitle:   String? = null,
     @Json(name = "series_year")      val seriesYear:    Int?    = null,
+    /** Logo de la serie: el hero de un episodio lo pinta en vez del título en texto. */
+    @Json(name = "series_logo_url")  val seriesLogoUrl: String? = null,
     @Json(name = "season_index")     val seasonIndex:   Int?    = null,
     @Json(name = "episode_index")    val episodeIndex:  Int?    = null,
     @Json(name = "user_data")        val userData:      UserDataDto? = null,
@@ -141,6 +143,43 @@ data class ItemDetailDto(
     @Json(name = "user_data")        val userData:        UserDataDto? = null,
     /** Pistas del fichero (vídeo/audio/subtítulos). El reproductor lista las de audio. */
     @Json(name = "media_streams")    val mediaStreams:    List<MediaStreamDto> = emptyList(),
+    /** Capítulos del fichero (items.go::chapterResponse). Ausente = sin capítulos. */
+    val chapters:                                          List<ChapterDto> = emptyList(),
+    /** Intro / resumen / créditos detectados (item_detail_handler.go::attachSegments). */
+    val segments:                                          List<SegmentDto> = emptyList(),
+)
+
+/**
+ * /items/{id}/trickplay.json (imaging.TrickplayManifest). El servidor lo
+ * sirve tal cual del disco, SIN el sobre `{data: …}`; se acepta también con
+ * sobre por si se unifica ([unwrap]).
+ */
+@JsonClass(generateAdapter = true)
+data class TrickplayManifestDto(
+    @Json(name = "interval_sec") val intervalSec: Int = 0,
+    @Json(name = "thumb_width")  val thumbWidth:  Int = 0,
+    @Json(name = "thumb_height") val thumbHeight: Int = 0,
+    val columns: Int = 0,
+    val rows:    Int = 0,
+    val total:   Int = 0,
+    val data:    TrickplayManifestDto? = null,
+) {
+    fun unwrap(): TrickplayManifestDto = data ?: this
+}
+
+@JsonClass(generateAdapter = true)
+data class ChapterDto(
+    @Json(name = "start_ticks") val startTicks: Long = 0L,
+    val title:                                  String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class SegmentDto(
+    /** recap | intro | outro */
+    val kind:                                       String,
+    @Json(name = "start_seconds") val startSeconds: Double = 0.0,
+    @Json(name = "end_seconds")   val endSeconds:   Double = 0.0,
+    val confidence:                                 Double = 0.0,
 )
 
 /**
@@ -398,6 +437,13 @@ data class NextUpItemDto(
     @Json(name = "duration_ticks") val durationTicks: Long? = null,
     @Json(name = "series_title")   val seriesTitle:   String? = null,
     @Json(name = "series_id")      val seriesId:      String? = null,
+    // Artwork (backend ≥ 2026-11-26; antes llegaba sin imágenes y el rail
+    // salía con tarjetas vacías). poster/backdrop = fotograma del episodio.
+    @Json(name = "poster_url")          val posterUrl:         String? = null,
+    @Json(name = "backdrop_url")        val backdropUrl:       String? = null,
+    @Json(name = "series_poster_url")   val seriesPosterUrl:   String? = null,
+    @Json(name = "series_backdrop_url") val seriesBackdropUrl: String? = null,
+    @Json(name = "series_logo_url")     val seriesLogoUrl:     String? = null,
 )
 
 @JsonClass(generateAdapter = true)

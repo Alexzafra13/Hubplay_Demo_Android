@@ -33,8 +33,12 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -173,20 +177,38 @@ fun MediaCard(
             if (progressPct > 0f) ProgressStripe(progressPct = progressPct)
         }
 
-        if (showCaption) CardCaption(title = item.title, focused = focused)
+        if (showCaption) {
+            CardCaption(
+                title = item.title,
+                code = (item as? Content.Episode)?.let { episodeCode(it) },
+                focused = focused,
+            )
+        }
     }
 }
 
-/** Título bajo el artwork: apagado en reposo, primario y SemiBold al enfocar. */
+/**
+ * Título bajo el artwork: apagado en reposo, primario y SemiBold al enfocar.
+ * En episodios añade el código ("T3 · E1") apagado: en Continuar viendo y
+ * A continuación el título es la serie y dos capítulos se confundían.
+ */
 @Composable
-private fun CardCaption(title: String, focused: Boolean) {
+private fun CardCaption(title: String, code: String?, focused: Boolean) {
     Spacer(Modifier.height(8.dp))
+    val text = if (code == null) {
+        AnnotatedString(title)
+    } else {
+        buildAnnotatedString {
+            append(title)
+            withStyle(SpanStyle(color = TextMuted, fontWeight = FontWeight.Medium)) { append("  $code") }
+        }
+    }
     Text(
-        text       = title,
+        text       = text,
         color      = if (focused) TextPrimary else TextSecondary,
         style      = MaterialTheme.typography.labelLarge,
         fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Medium,
-        maxLines   = 2,
+        maxLines   = if (code == null) 2 else 1,
         overflow   = TextOverflow.Ellipsis,
         modifier   = Modifier
             .fillMaxWidth()
