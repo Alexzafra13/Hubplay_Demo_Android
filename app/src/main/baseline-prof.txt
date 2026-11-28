@@ -1,0 +1,8 @@
+HSPLcom/alex/hubplay/**;->**(**)**
+Lcom/alex/hubplay/**;
+HSPLokhttp3/**;->**(**)**
+Lokhttp3/**;
+HSPLretrofit2/**;->**(**)**
+Lretrofit2/**;
+HSPLcom/squareup/moshi/**;->**(**)**
+Lcom/squareup/moshi/**;
