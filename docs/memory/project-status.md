@@ -4,15 +4,82 @@
 > sesión (medidas, por qué de cada decisión) está en `archive/`; los
 > últimos volcados son `archive/project-status-detalle-2026-11-26.md` y
 > `archive/project-status-detalle-2026-11-28.md`.
-> Última actualización: **2026-11-28**.
+> Última actualización: **2026-11-28** (todo mergeado a `main`).
+>
+> **¿Vienes a instalar y probar en la TV?** Ve directo a
+> "§0. Próxima sesión: instalar por adb y probar".
+
+## 0. Próxima sesión: instalar por adb y probar
+
+Todo lo de 2026-11-26..28 está en `main` de los dos repos (app: merge
+`df23f01`; backend: merge `d17366b`). Nada está probado aún en la tele.
+Orden:
+
+1. **Actualizar el código** en el PC: `git checkout main && git pull` en
+   `Hubplay_Demo_Android` (y en `HubPlay_demo` si se va a mirar algo).
+2. **Desplegar el backend primero** (sin él, lo nuevo da 404 o sale vacío):
+   - En GitHub Actions de `HubPlay_demo`, esperar a que el workflow
+     **Docker** de `main` termine en verde: publica
+     `ghcr.io/alexzafra13/hubplay_demo:latest`.
+   - En el servidor de la TV (`192.168.1.100`, puerto 8097), en la carpeta
+     de su compose: `docker compose pull && docker compose up -d`.
+     Al arrancar aplica la migración **059** (re-enlaza estudios) tras
+     hacer copia de la BD. Comprobar `http://192.168.1.100:8097/api/v1/health`
+     y que la ficha de un título de Lucasfilm enlaza a un estudio con títulos.
+   - Para probar **series de amigos**, el servidor del amigo también
+     necesita esta versión (si no, la app avisa de que no puede listar
+     los episodios).
+3. **Instalar la app** (Git Bash, ver CLAUDE.md § Entorno Windows):
+   ```bash
+   adb connect 192.168.1.132        # si falla: adb disconnect; adb connect …
+   JAVA_HOME=~/.jdks/jbr-21.0.7 ./gradlew :app:installDebug
+   adb -s 192.168.1.132:5555 shell cmd package compile -m speed -f com.alex.hubplay.debug
+   source tools/tvperf/tvkeys.sh && launch
+   ```
+   La debug es `com.alex.hubplay.debug` (convive con la release). El
+   `compile -m speed` evita medir 3-4 s de más en frío.
+4. **Moverse SOLO con `tools/tvperf/tvkeys.sh`** (`k KEYCODE_DPAD_DOWN`,
+   `k KEYCODE_DPAD_CENTER`, `k KEYCODE_BACK`…): comprueba que HubPlay está
+   en primer plano antes de mandar la tecla. Ver lo enfocado con
+   `tools/tvperf/dump.sh focus`; `screencap` sale blanco con vídeo.
+5. **Qué probar** (lo nuevo, de más a menos importante):
+   - **Inicio**: rails nuevos tras los del servidor (Porque viste X,
+     Recomendados para ti, Colecciones → abre la ficha de la saga,
+     Canales favoritos → reproduce); mantener OK en Continuar viendo →
+     Quitar; salir de Inicio después (crash arreglado).
+   - **Serie propia → Episodios**: el foco nace en la temporada, la
+     cabecera no queda bajo el menú y Atrás vuelve a la ficha.
+   - **Reproductor**: Opciones → Calidad (Auto / variantes) y Subtítulos
+     (tamaño, contorno/sombra/caja; se recuerdan). Cortar la red o abrir
+     algo roto: mensaje claro y OK reintenta. Pasar de episodio con un
+     fichero que transcodifique.
+   - **TV en directo**: zapear rápido (las sesiones bajan en el panel del
+     servidor); menú lateral → **Guía completa**: moverse por la rejilla
+     (←→ en el tiempo, ↑↓ entre canales sin saltar de hora), que no dé
+     tirones con muchos canales y que OK abra el canal. Un canal que no
+     arranque debe mostrar error (y el servidor lo marca en su salud).
+   - **Ajustes → Seguridad → Dispositivos conectados**: "Esta tele"
+     arriba y sin botón de cerrar; cerrar otra sesión.
+   - **Compartido** (con un amigo emparejado): película, y **serie**
+     (temporadas, episodios, "Seguir T1·E2" tras ver un rato, reanudar).
+   - **Estudios**: la ficha de un título enlaza a su estudio con títulos.
+6. **Rendimiento** (opcional): framestats de la guía y de Inicio con
+   `tools/tvperf/README.md`. El baseline profile solo actúa en release:
+   para medirlo hace falta una release firmada (sin keystore sale sin
+   firmar y no se instala).
+7. Apuntar lo que falle aquí (§6) y en el archivo de la sesión.
+
+Las capturas Robolectric (artefacto `screenshots` de cada run de CI, o
+`./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*screenshots*'`)
+enseñan cómo debería verse cada pantalla, para comparar con la tele.
 
 ## 1. Dónde estamos
 
-- Rama de trabajo `claude/stoic-feynman-pyojkw` (sin mergear a `main`),
-  CI verde (detekt + unitarios + **capturas como tests de UI** + APK).
-  Backend hermano `Alexzafra13/HubPlay_demo`, misma rama (federación con
-  DirectPlay, series de amigos, estudios, `/me/sessions` sin cookies).
-  **Ninguno de los dos está en la TV.**
+- Todo en `main` (2026-11-28), app y backend
+  (`Alexzafra13/HubPlay_demo`: federación con DirectPlay, series de
+  amigos, estudios, `/me/sessions` sin cookies). CI verde (detekt +
+  unitarios + **capturas como tests de UI** + APK). **Ni el backend está
+  desplegado en el servidor de la TV ni la app instalada**: ver §0.
 - Funciona en la Mi TV real (lo anterior al 2026-11-26): login/emparejado,
   Inicio, catálogo, ficha (película y serie), reproductor VOD con chrome
   propio, TV en directo, buscar, colecciones, salvapantallas, intro,
@@ -181,9 +248,8 @@ tests de UI en CI y baseline profile. Detalle, porqués y limitaciones:
 
 ## 6. Pendiente (orden sugerido)
 
-0. **Mergear las dos ramas** `claude/stoic-feynman-pyojkw` (app y
-   backend; la migración 059 del backend re-enlaza estudios),
-   **desplegar el backend** e instalar la app. Probar en la Mi TV:
+0. ~~Mergear~~ (hecho 2026-11-28). **Desplegar el backend e instalar la
+   app** siguiendo §0. Probar en la Mi TV:
    - Inicio: rails nuevos (Porque viste X, Colecciones → ficha, Canales
      favoritos → reproduce); mantener OK en Continuar viendo → Quitar.
    - Reproductor: pasar de episodio con un fichero que transcodifique;

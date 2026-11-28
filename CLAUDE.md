@@ -38,7 +38,8 @@ Versiones en `gradle/libs.versions.toml` con comentarios explicando el porqué. 
 ./gradlew :app:bundleRelease         # AAB firmado (necesita env vars de release)
 ```
 
-CI corre en cada push: `openApiGenerate → detekt → testDebugUnitTest → assembleDebug`.
+CI corre en cada push: `openApiGenerate → detekt → testDebugUnitTest →
+capturas Robolectric (-Pscreenshots, tests de UI) → assembleDebug`.
 
 ---
 
@@ -134,6 +135,7 @@ candente para la siguiente sesión:
 6. **Baseline Profile**: hay uno escrito a mano con comodines
    (`app/src/main/baseline-prof.txt`); generarlo en el aparato con
    Macrobenchmark sigue pendiente (necesita device real).
-7. **Probar en la TV todo lo de 2026-11-26..28** (ver project-status §6).
+7. **Desplegar el backend y probar en la TV todo lo de 2026-11-26..28**
+   — guía paso a paso en project-status §0.
 
 Descartados explícitamente: MediaSession (Android Auto), Cast.
