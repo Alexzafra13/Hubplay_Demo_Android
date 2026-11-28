@@ -404,6 +404,26 @@ class PlayerViewModel(
         progressReporter?.flush(positionSec = positionMs / 1000L, completed = false)
     }
 
+    /** Canales cuyo fallo ya se avisó al servidor (uno por canal y reproductor). */
+    private val reportedFailures = mutableSetOf<String>()
+
+    /**
+     * El canal en curso no arrancó: avisa una vez al servidor para su
+     * contador de salud. Fire-and-forget (un fallo del aviso no importa).
+     */
+    fun reportLiveFailure(errorCode: Int?, errorName: String?) {
+        val channelId = currentLiveChannelId ?: return
+        if (!reportedFailures.add(channelId)) return
+        val body = com.alex.hubplay.data.api.dto.PlaybackFailureRequest(
+            kind    = LiveFailure.kindOf(errorCode),
+            details = errorName?.take(FAILURE_DETAILS_MAX),
+        )
+        deps.backgroundScope.launch {
+            runCatching { api.reportChannelFailure(channelId, body) }
+                .onFailure { Log.d(TAG, "playback-failure beacon: ${it.message}") }
+        }
+    }
+
     /**
      * Toggle the live channel's favourite status. Optimistic — flips
      * the local set first, then calls the server; reverts on failure.
@@ -620,6 +640,7 @@ class PlayerViewModel(
         private const val TRICKPLAY_ATTEMPTS = 10
         private const val TRICKPLAY_RETRY_MS = 10_000L
         private const val HTTP_UNAVAILABLE = 503
+        private const val FAILURE_DETAILS_MAX = 200
 
         fun factory(deps: PlayerDeps, request: PlayerRequest) =
             object : ViewModelProvider.Factory {

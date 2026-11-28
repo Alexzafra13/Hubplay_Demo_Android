@@ -145,6 +145,9 @@
     <string name="livetv_filter_favorites">Favoritos</string>
     <string name="livetv_filter_favorites_count">Favoritos · %1$d</string>
     <string name="livetv_filter_recent">Vistos recientemente</string>
+    <string name="livetv_sidebar_guide">Guía completa</string>
+    <string name="livetv_guide_title">Guía de TV</string>
+    <string name="livetv_guide_no_info">Sin información de guía</string>
     <string name="livetv_sidebar_reorder">Reordenar canales</string>
     <string name="livetv_sidebar_settings">Ajustes</string>
     <string name="livetv_empty_favorites_title">Aún no tienes favoritos</string>
@@ -301,7 +304,8 @@
     <string name="shared_offline">%1$s no responde: se muestra lo último guardado</string>
     <string name="shared_library_error">No se pudo cargar esta biblioteca</string>
     <string name="shared_play_from_start">Desde el principio</string>
-    <string name="shared_series_unavailable">Las series compartidas aún no se pueden reproducir</string>
+    <string name="shared_series_unavailable">Este amigo no deja ver los episodios: puede que esté apagado o que su HubPlay sea anterior</string>
+    <string name="shared_series_loading">Cargando episodios…</string>
     <string name="shared_not_found">Este título ya no está disponible</string>
     <string name="shared_movie">Película</string>
     <string name="shared_series">Serie</string>
@@ -310,4 +314,27 @@
     <string name="continue_remove_title">¿Quitar de Continuar viendo?</string>
     <string name="continue_remove_body">«%1$s» dejará de salir en Continuar viendo. No se marca como visto.</string>
     <string name="continue_remove_confirm">Quitar</string>
+    <string name="player_live_unavailable">Este canal no está disponible ahora mismo</string>
+    <string name="player_live_retry_hint">OK para reintentar · ↑ ↓ para cambiar de canal</string>
+    <string name="player_vod_failed">No se pudo reproducir</string>
+    <string name="player_retry_hint">OK para reintentar · Atrás para salir</string>
+    <string name="player_section_quality">Calidad</string>
+    <string name="player_quality_auto">Automática</string>
+    <string name="player_sub_size_small">Pequeños</string>
+    <string name="player_sub_size_normal">Normales</string>
+    <string name="player_sub_size_large">Grandes</string>
+    <string name="player_sub_size_huge">Muy grandes</string>
+    <string name="player_sub_look_outline">Contorno</string>
+    <string name="player_sub_look_shadow">Sombra</string>
+    <string name="player_sub_look_box">Fondo negro</string>
+    <string name="devices_screen_title">Dispositivos conectados</string>
+    <string name="devices_help">Aparatos con tu cuenta abierta. Cierra la sesión de los que no reconozcas o ya no uses; para salir de esta tele usa "Cerrar sesión".</string>
+    <string name="devices_error">No se pudo cargar la lista de dispositivos</string>
+    <string name="devices_unnamed">Dispositivo sin nombre</string>
+    <string name="devices_current">Esta tele</string>
+    <string name="devices_method_linked">Vinculado con código</string>
+    <string name="devices_method_password">Usuario y contraseña</string>
+    <string name="devices_last_active">Activo: %1$s</string>
+    <string name="devices_action_revoke">Cerrar sesión</string>
+    <string name="settings_action_devices">Dispositivos conectados</string>
 </resources>

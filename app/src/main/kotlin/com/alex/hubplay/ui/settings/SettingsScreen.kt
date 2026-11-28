@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
@@ -76,8 +77,8 @@ fun SettingsScreen(
     val onForgetServer        = actions.onForgetServer
     val onChangeProfile       = actions.onChangeProfile
     val onReorderChannels     = actions.onReorderChannels
-    val onOpenHomeLayout      = actions.onOpenHomeLayout
-    val onOpenTrustedServers  = actions.onOpenTrustedServers
+    val onOpenHomeLayout      = { actions.onOpen(SettingsTarget.HomeLayout) }
+    val onOpenTrustedServers  = { actions.onOpen(SettingsTarget.TrustedServers) }
     val ui by viewModel.ui.collectAsState()
     var showCrashDialog by remember { mutableStateOf(false) }
 
@@ -199,11 +200,18 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(12.dp))
-                        SecondaryAction(
-                            label   = stringResource(R.string.settings_action_trusted_servers),
-                            icon    = Icons.Outlined.Shield,
-                            onClick = onOpenTrustedServers,
-                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            SecondaryAction(
+                                label   = stringResource(R.string.settings_action_devices),
+                                icon    = Icons.Outlined.Devices,
+                                onClick = { actions.onOpen(SettingsTarget.Devices) },
+                            )
+                            SecondaryAction(
+                                label   = stringResource(R.string.settings_action_trusted_servers),
+                                icon    = Icons.Outlined.Shield,
+                                onClick = onOpenTrustedServers,
+                            )
+                        }
                     }
 
                     SectionCard(title = stringResource(R.string.settings_section_diagnostics), icon = Icons.Outlined.BugReport) {
@@ -253,9 +261,12 @@ class SettingsActions(
     val onForgetServer:        () -> Unit,
     val onChangeProfile:       () -> Unit = {},
     val onReorderChannels:     () -> Unit = {},
-    val onOpenHomeLayout:      () -> Unit = {},
-    val onOpenTrustedServers:  () -> Unit = {},
+    /** Subpantallas de Ajustes (Inicio, servidores de confianza, dispositivos). */
+    val onOpen:                (SettingsTarget) -> Unit = {},
 )
+
+/** Subpantallas a las que se llega desde Ajustes. */
+enum class SettingsTarget { HomeLayout, TrustedServers, Devices }
 
 @Composable
 private fun SecondaryAction(

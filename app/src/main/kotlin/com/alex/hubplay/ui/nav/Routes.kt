@@ -18,8 +18,10 @@ sealed class Route(val path: String) {
     data object Search  : Route("search")
     data object Settings: Route("settings")
     data object ChannelOrder: Route("channel-order")
+    data object LiveGuide : Route("live-tv/guide")
     data object HomeLayout : Route("home-layout")
     data object TrustedServers: Route("trusted-servers")
+    data object Devices : Route("devices")
     data object Collections : Route("collections")
     data object Shared : Route("shared")
 

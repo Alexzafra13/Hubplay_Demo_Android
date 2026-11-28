@@ -31,6 +31,8 @@ import com.alex.hubplay.ui.home.HomeViewModel
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.livetv.ChannelOrderScreen
 import com.alex.hubplay.ui.livetv.ChannelOrderViewModel
+import com.alex.hubplay.ui.livetv.LiveGuideRoute
+import com.alex.hubplay.ui.livetv.LiveTvFooterActions
 import com.alex.hubplay.ui.livetv.LiveTvScreen
 import com.alex.hubplay.ui.livetv.LiveTvViewModel
 import com.alex.hubplay.ui.login.LoginScreen
@@ -44,10 +46,13 @@ import com.alex.hubplay.ui.search.SearchScreen
 import com.alex.hubplay.ui.search.SearchViewModel
 import com.alex.hubplay.ui.series.SeriesScreen
 import com.alex.hubplay.ui.series.SeriesViewModel
+import com.alex.hubplay.ui.settings.DevicesScreen
+import com.alex.hubplay.ui.settings.DevicesViewModel
 import com.alex.hubplay.ui.settings.HomeLayoutScreen
 import com.alex.hubplay.ui.settings.HomeLayoutViewModel
 import com.alex.hubplay.ui.settings.SettingsActions
 import com.alex.hubplay.ui.settings.SettingsScreen
+import com.alex.hubplay.ui.settings.SettingsTarget
 import com.alex.hubplay.ui.settings.SettingsViewModel
 import com.alex.hubplay.ui.settings.TrustedServersScreen
 import com.alex.hubplay.ui.settings.TrustedServersViewModel
@@ -137,11 +142,7 @@ fun HubplayNavGraph(
         // Helper closures shared between Home / Movies / Series / LiveTv
         // so each surface uses the same navigation rules.
         val openItem: (String, MediaKind) -> Unit = { itemId, kind ->
-            val route = if (kind == MediaKind.Series)
-                Route.Series.route(itemId)
-            else
-                Route.Detail.route(itemId)
-            navController.navigate(route)
+            navController.navigate(itemRoute(itemId, kind))
         }
         val playItem: (String, Long) -> Unit = { itemId, resumePosSec ->
             navController.navigate(Route.Player.route(itemId, resumePosSec))
@@ -231,12 +232,8 @@ fun HubplayNavGraph(
             val actions = remember(viewModel) {
                 HomeActions(
                     onOpenItem      = { itemId, kind ->
-                        if (kind == MediaKind.Series) {
-                            navController.navigate(Route.Series.route(itemId))
-                        } else {
-                            val resume = viewModel.trailerCurrentTimeSec.value
-                            navController.navigate(Route.Detail.route(itemId, resume))
-                        }
+                        // El tráiler que sonaba en Inicio sigue en la ficha.
+                        navController.navigate(itemRoute(itemId, kind, viewModel.trailerCurrentTimeSec.value))
                     },
                     onPlayItem      = playItem,
                     onPlayChannel   = playChannel,
@@ -315,9 +312,32 @@ fun HubplayNavGraph(
                 okHttpClient    = container.mainOkHttp,
                 onPlayChannel   = playChannel,
                 onTabSelected   = navigateToTab,
-                onSettings      = openSettings,
-                onReorderChannels = openChannelOrder,
+                footer          = LiveTvFooterActions(
+                    onOpenGuide       = { navController.navigate(Route.LiveGuide.path) },
+                    onReorderChannels = openChannelOrder,
+                    onOpenSettings    = openSettings,
+                ),
             )
+        }
+
+        // ── Guía completa (rejilla) ──────────────────────────────────
+        // Comparte el ViewModel de TV en directo (mismo filtro y la EPG ya
+        // descargada); si se restaura sin esa entrada, crea uno propio.
+        composable(Route.LiveGuide.path) { entry ->
+            val owner = remember(entry) {
+                runCatching { navController.getBackStackEntry(Route.LiveTv.path) }.getOrNull() ?: entry
+            }
+            val vm = viewModel<LiveTvViewModel>(
+                viewModelStoreOwner = owner,
+                factory = LiveTvViewModel.factory(
+                    container.liveTvRepository,
+                    container.channelOrderStore,
+                    container.meEventsStream,
+                ),
+            )
+            shell(Tab.LiveTv, true, false) {
+                LiveGuideRoute(viewModel = vm, onPlayChannel = playChannel)
+            }
         }
 
         // ── Channel order / hide ─────────────────────────────────────
@@ -383,8 +403,7 @@ fun HubplayNavGraph(
                         onForgetServer        = forgetServer,
                         onChangeProfile       = changeProfile,
                         onReorderChannels     = openChannelOrder,
-                        onOpenHomeLayout      = { navController.navigate(Route.HomeLayout.path) },
-                        onOpenTrustedServers  = { navController.navigate(Route.TrustedServers.path) },
+                        onOpen                = { target -> navController.navigate(target.route.path) },
                     ),
                 )
             }
@@ -400,6 +419,16 @@ fun HubplayNavGraph(
                     viewModel = vm,
                     onBack    = { navController.popBackStack() },
                 )
+            }
+        }
+
+        // ── Dispositivos conectados (/me/sessions) ───────────────────
+        composable(Route.Devices.path) {
+            val vm = viewModel<DevicesViewModel>(
+                factory = DevicesViewModel.factory(container.hubplayApi, container.tokenStore),
+            )
+            shell(null, true, true) {
+                DevicesScreen(viewModel = vm, onBack = { navController.popBackStack() })
             }
         }
 
@@ -639,4 +668,19 @@ private fun playerRequestOf(args: android.os.Bundle?): PlayerRequest? {
         live         = args.getBoolean(Route.Player.ARG_LIVE),
         peerId       = decodeArg(args.getString(Route.Player.ARG_PEER_ID)),
     )
+}
+
+/** Ruta de cada subpantalla de Ajustes. */
+private val SettingsTarget.route: Route
+    get() = when (this) {
+        SettingsTarget.HomeLayout     -> Route.HomeLayout
+        SettingsTarget.TrustedServers -> Route.TrustedServers
+        SettingsTarget.Devices        -> Route.Devices
+    }
+
+/** Ficha de un item según su tipo: serie, saga (colección) o película/episodio. */
+private fun itemRoute(itemId: String, kind: MediaKind, trailerResumeSec: Long = 0L): String = when (kind) {
+    MediaKind.Series     -> Route.Series.route(itemId)
+    MediaKind.Collection -> Route.CollectionDetail.route(itemId)
+    else                 -> Route.Detail.route(itemId, trailerResumeSec)
 }

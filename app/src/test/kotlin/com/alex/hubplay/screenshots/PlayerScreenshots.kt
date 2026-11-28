@@ -136,8 +136,10 @@ class PlayerScreenshots : ScreenshotTest() {
                             PlayerChapter(1_260_000, null),
                         ),
                         method = "direct_stream",
+                        hasSubtitles = true,
                     ),
                     onFit = {},
+                    onSubtitles = {},
                     onDismiss = {},
                 )
             }

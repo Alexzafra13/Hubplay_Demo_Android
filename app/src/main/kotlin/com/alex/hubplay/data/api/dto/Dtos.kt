@@ -765,3 +765,44 @@ data class IdentifyRequest(
     val provider:                               String = "tmdb",
     @Json(name = "external_id") val externalId: String,
 )
+
+/** Cuerpo de `POST /channels/{id}/playback-failure` (`details` ≤ 200 caracteres). */
+@JsonClass(generateAdapter = true)
+data class PlaybackFailureRequest(
+    val kind:    String,
+    val details: String? = null,
+)
+
+/** Una sesión (refresh token vivo) del usuario: `GET /me/sessions`. */
+@JsonClass(generateAdapter = true)
+data class MySessionDto(
+    val id: String,
+    @Json(name = "device_name")    val deviceName:   String? = null,
+    @Json(name = "ip_address")     val ipAddress:    String? = null,
+    @Json(name = "created_at")     val createdAt:    String? = null,
+    @Json(name = "last_active_at") val lastActiveAt: String? = null,
+    /** La del que pregunta (el servidor la reconoce por el refresh token). */
+    val current: Boolean = false,
+    /** device_link (emparejado con código/QR) | password. */
+    @Json(name = "auth_method")    val authMethod:   String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class MySessionsResponse(val data: List<MySessionDto>? = null)
+
+/** Título semilla de "Porque viste X". */
+@JsonClass(generateAdapter = true)
+data class BecauseSeedDto(
+    val id:    String,
+    val title: String? = null,
+)
+
+/** `GET /me/home/because-you-watched` → `{data:{seed, items}}` (seed null en frío). */
+@JsonClass(generateAdapter = true)
+data class BecauseYouWatchedPayload(
+    val seed:  BecauseSeedDto? = null,
+    val items: List<RecommendedItemDto> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class BecauseYouWatchedResponse(val data: BecauseYouWatchedPayload? = null)

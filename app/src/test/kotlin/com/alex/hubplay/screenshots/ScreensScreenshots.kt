@@ -1,5 +1,6 @@
 package com.alex.hubplay.screenshots
 
+import android.view.KeyEvent.KEYCODE_DPAD_CENTER
 import android.view.KeyEvent.KEYCODE_DPAD_DOWN
 import android.view.KeyEvent.KEYCODE_DPAD_RIGHT
 import androidx.compose.runtime.Composable
@@ -77,6 +78,19 @@ class ScreensScreenshots : ScreenshotTest() {
         snap("series_04_down3")
         press(KEYCODE_DPAD_DOWN, settleMs = 1500)
         snap("series_05_down4")
+    }
+
+    /** Panel de temporadas: el foco nace en la temporada abierta y nada queda bajo el menú lateral. */
+    @Test
+    fun seriesEpisodes() {
+        val vm = SeriesViewModel(repo, "s1")
+        setTvContent { inShell(Tab.Series) { SeriesScreen(viewModel = vm, onPlayEpisode = { _, _ -> }, onBack = {}) } }
+        settle(2500)
+        focusText("Episodios")
+        press(KEYCODE_DPAD_CENTER, settleMs = 1500)
+        snap("series_06_episodes")
+        press(KEYCODE_DPAD_RIGHT, settleMs = 1200)
+        snap("series_07_episode_focus")
     }
 
     @Test

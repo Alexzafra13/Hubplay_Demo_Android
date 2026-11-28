@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -13,6 +14,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -31,6 +36,7 @@ import com.alex.hubplay.ui.components.HeroMetaRow
 import com.alex.hubplay.ui.components.HeroNav
 import com.alex.hubplay.ui.components.HeroRails
 import com.alex.hubplay.ui.components.HeroToggles
+import com.alex.hubplay.ui.series.SeriesEpisodesPanel
 
 /**
  * Ficha de un título que comparte un amigo. Mismo hero que una película
@@ -61,44 +67,113 @@ fun SharedDetailScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        else -> SharedHero(item = item, resumeSec = ui.resumeSec, onPlay = onPlay, onBack = onBack)
+        item.remoteKind == MediaKind.Series -> SharedSeriesDetail(
+            item           = item,
+            series         = ui.series ?: SharedSeriesState(),
+            onSelectSeason = viewModel::selectSeason,
+            onPlay         = onPlay,
+            onBack         = onBack,
+        )
+        else -> SharedMovieHero(item = item, resumeSec = ui.resumeSec, onPlay = onPlay, onBack = onBack)
     }
 }
 
 @Composable
-private fun SharedHero(
+private fun SharedMovieHero(
     item:      Content.Shared,
     resumeSec: Long,
     onPlay:    (Content.Shared, Long) -> Unit,
     onBack:    () -> Unit,
 ) {
-    val context = LocalContext.current
-    val unavailable = stringResource(R.string.shared_series_unavailable)
     val playLabel = if (resumeSec > 0) {
         stringResource(R.string.detail_resume_format, resumeSec / SECONDS_PER_MINUTE, resumeSec % SECONDS_PER_MINUTE)
     } else {
         stringResource(R.string.detail_play)
-    }
-    val play: () -> Unit = {
-        if (item.isPlayable) {
-            onPlay(item, resumeSec)
-        } else {
-            Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show()
-        }
     }
     val fromStart = HeroCta(
         label   = stringResource(R.string.shared_play_from_start),
         icon    = Icons.Default.Replay,
         onClick = { onPlay(item, 0L) },
     )
+    SharedHero(
+        item   = item,
+        ctas   = HeroCtas(
+            play      = HeroCta(label = playLabel, icon = Icons.Default.PlayArrow, onClick = { onPlay(item, resumeSec) }),
+            secondary = fromStart.takeIf { resumeSec > 0 },
+        ),
+        onBack = onBack,
+    )
+}
+
+/**
+ * Serie de un amigo: el hero reproduce el episodio que toca (a medias, el
+ * siguiente al último visto o el primero) y "Episodios" abre el mismo
+ * panel de temporadas que una serie propia.
+ */
+@Composable
+private fun SharedSeriesDetail(
+    item:           Content.Shared,
+    series:         SharedSeriesState,
+    onSelectSeason: (String) -> Unit,
+    onPlay:         (Content.Shared, Long) -> Unit,
+    onBack:         () -> Unit,
+) {
+    var showEpisodes by rememberSaveable { mutableStateOf(false) }
+    val data = remember(item, series) { series.toSeriesData(item) }
+    val playEpisode: (String, Long) -> Unit = { id, resume -> series.episode(id)?.let { onPlay(it, resume) } }
+    if (showEpisodes) {
+        SeriesEpisodesPanel(
+            data           = data,
+            onSelectSeason = onSelectSeason,
+            onPlayEpisode  = playEpisode,
+            onBack         = { showEpisodes = false },
+        )
+        return
+    }
+    val context = LocalContext.current
+    val unavailable = stringResource(R.string.shared_series_unavailable)
+    val resume = data.resume
+    val playLabel = when {
+        resume.playLabel != null -> resume.playLabel
+        series.isLoading         -> stringResource(R.string.shared_series_loading)
+        else                     -> stringResource(R.string.series_play_empty)
+    }
+    SharedHero(
+        item   = item,
+        ctas   = HeroCtas(
+            play      = HeroCta(
+                label   = playLabel,
+                icon    = Icons.Default.PlayArrow,
+                enabled = resume.episodeId != null || series.unavailable,
+                onClick = {
+                    val id = resume.episodeId
+                    when {
+                        id != null         -> playEpisode(id, resume.resumeSec)
+                        series.unavailable -> Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show()
+                    }
+                },
+            ),
+            secondary = HeroCta(
+                label   = stringResource(R.string.series_episodes_action),
+                icon    = Icons.Default.VideoLibrary,
+                onClick = { showEpisodes = true },
+            ).takeIf { series.seasons.isNotEmpty() },
+        ),
+        onBack = onBack,
+    )
+}
+
+@Composable
+private fun SharedHero(
+    item:   Content.Shared,
+    ctas:   HeroCtas,
+    onBack: () -> Unit,
+) {
     val config = HeroDetailConfig(
         // Sin subtítulo: el amigo ya sale en la fila de metadatos.
         item    = item.copy(subtitle = null),
         header  = HeroHeader(meta = { SharedMetaRow(item) }),
-        ctas    = HeroCtas(
-            play      = HeroCta(label = playLabel, icon = Icons.Default.PlayArrow, onClick = play),
-            secondary = fromStart.takeIf { resumeSec > 0 && item.isPlayable },
-        ),
+        ctas    = ctas,
         toggles = HeroToggles(showWatched = false, canEditMetadata = false, showFavorite = false),
         actions = HeroActions(
             onBack           = onBack,

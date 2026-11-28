@@ -4,6 +4,10 @@ import android.view.KeyEvent.KEYCODE_DPAD_CENTER
 import android.view.KeyEvent.KEYCODE_DPAD_DOWN
 import android.view.KeyEvent.KEYCODE_DPAD_RIGHT
 import androidx.activity.compose.setContent
+import com.alex.hubplay.data.BecauseYouWatched
+import com.alex.hubplay.data.CollectionSummary
+import com.alex.hubplay.data.HomeRailConfig
+import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.ui.home.HomeActions
 import com.alex.hubplay.ui.home.HomeScreen
 import com.alex.hubplay.ui.home.HomeViewModel
@@ -12,8 +16,8 @@ import org.junit.Test
 
 class HomeScreenshots : ScreenshotTest() {
 
-    private fun showHome() {
-        val vm = HomeViewModel(SampleHomeRepository(), emptyFlow())
+    private fun showHome(repo: SampleHomeRepository = SampleHomeRepository()) {
+        val vm = HomeViewModel(repo, emptyFlow())
         setTvContent {
             HomeScreen(
                 viewModel = vm,
@@ -102,5 +106,30 @@ class HomeScreenshots : ScreenshotTest() {
         snap("home_09_latest")
         press(KEYCODE_DPAD_DOWN, settleMs = 1200)
         snap("home_10_last")
+    }
+
+    /** Rails que la app añade tras el layout, como la web: Porque viste X, Recomendados, Colecciones, Favoritos. */
+    @Test
+    fun discoveryRails() {
+        showHome(
+            object : SampleHomeRepository() {
+                override suspend fun fetchHomeLayout() =
+                    listOf(HomeRailConfig("cw", HomeRailType.ContinueWatching, null, "Continuar viendo"))
+                override suspend fun fetchBecauseYouWatched(limit: Int) =
+                    BecauseYouWatched("Arena Roja", SampleCatalog.movies.drop(2))
+                override suspend fun fetchCollections() = SampleCatalog.movies.take(4).mapIndexed { i, m ->
+                    CollectionSummary("col$i", "Saga ${m.title}", 3, m.posterUrl, m.backdropUrl)
+                }
+                override suspend fun fetchFavoriteChannels() = SampleCatalog.liveNow.take(2)
+            },
+        )
+        press(KEYCODE_DPAD_DOWN) // menú lateral
+        press(KEYCODE_DPAD_RIGHT) // hero
+        press(KEYCODE_DPAD_DOWN, times = 2, settleMs = 1200) // Porque viste X
+        snap("home_15_because_you_watched")
+        press(KEYCODE_DPAD_DOWN, times = 2, settleMs = 1200) // Colecciones
+        snap("home_16_collections")
+        press(KEYCODE_DPAD_DOWN, settleMs = 1200) // Canales favoritos
+        snap("home_17_favorite_channels")
     }
 }

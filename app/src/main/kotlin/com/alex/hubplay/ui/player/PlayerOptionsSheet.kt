@@ -50,10 +50,11 @@ import java.util.Locale
 @kotlin.OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerOptionsSheet(
-    player:    ExoPlayer,
-    state:     PlayerOptionsState,
-    onFit:     (VideoFit) -> Unit,
-    onDismiss: () -> Unit,
+    player:      ExoPlayer,
+    state:       PlayerOptionsState,
+    onFit:       (VideoFit) -> Unit,
+    onSubtitles: (SubtitleAppearance) -> Unit,
+    onDismiss:   () -> Unit,
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var speed by remember { mutableFloatStateOf(player.playbackParameters.speed) }
@@ -78,6 +79,10 @@ fun PlayerOptionsSheet(
                     }
                 }
             }
+
+            QualitySection(player)
+
+            if (state.hasSubtitles) SubtitleSection(state.subtitles, onSubtitles)
 
             Spacer(Modifier.height(12.dp))
             SectionHeader(stringResource(R.string.player_section_fit))
@@ -104,6 +109,60 @@ fun PlayerOptionsSheet(
             SectionHeader(stringResource(R.string.player_section_info))
             PlaybackInfo(player = player, method = state.method)
             Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+/**
+ * Calidad del HLS con variantes (Automática + 1080p/720p/…). En direct play
+ * o con una sola variante no hay nada que elegir y no sale.
+ */
+@Composable
+private fun QualitySection(player: ExoPlayer) {
+    val options = remember(player.currentTracks) { QualityOptions.of(player.currentTracks) }
+    if (options.isEmpty()) return
+    var selected by remember { mutableStateOf(QualityOptions.selected(player)) }
+    Spacer(Modifier.height(12.dp))
+    SectionHeader(stringResource(R.string.player_section_quality))
+    ChipRow {
+        OptionChip(label = stringResource(R.string.player_quality_auto), selected = selected == null) {
+            QualityOptions.select(player, null)
+            selected = null
+        }
+        options.forEach { option ->
+            OptionChip(label = qualityLabel(option), selected = selected == option.trackIndex) {
+                QualityOptions.select(player, option)
+                selected = option.trackIndex
+            }
+        }
+    }
+}
+
+private fun qualityLabel(option: QualityOption): String = when {
+    option.height > 0  -> "${option.height}p"
+    option.bitrate > 0 -> "${option.bitrate / BITS_PER_KBIT} kbps"
+    else               -> "#${option.trackIndex + 1}"
+}
+
+private const val BITS_PER_KBIT = 1000
+
+/** Tamaño y estilo de los subtítulos de texto (se guardan en el aparato). */
+@Composable
+private fun SubtitleSection(appearance: SubtitleAppearance, onChange: (SubtitleAppearance) -> Unit) {
+    Spacer(Modifier.height(12.dp))
+    SectionHeader(stringResource(R.string.player_section_subtitles))
+    ChipRow {
+        SubtitleSize.entries.forEach { size ->
+            OptionChip(label = stringResource(size.labelRes), selected = size == appearance.size) {
+                onChange(appearance.copy(size = size))
+            }
+        }
+    }
+    ChipRow {
+        SubtitleLook.entries.forEach { look ->
+            OptionChip(label = stringResource(look.labelRes), selected = look == appearance.look) {
+                onChange(appearance.copy(look = look))
+            }
         }
     }
 }

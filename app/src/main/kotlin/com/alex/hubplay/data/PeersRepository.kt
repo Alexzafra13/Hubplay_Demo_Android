@@ -56,6 +56,20 @@ class PeersRepository(
         return items
     }
 
+    /**
+     * Temporadas de una serie de un amigo, o episodios de una temporada.
+     * Se recuerdan como el resto de listados: el reproductor saca de ahí
+     * título y carátula del episodio.
+     */
+    suspend fun children(parent: Content.Shared): List<Content.Shared> {
+        val server = serverUrl()
+        return remember(
+            api.children(parent.peerId, parent.id).data?.items.orEmpty().map {
+                it.toShared(server, peerId = parent.peerId, peerName = parent.peerName, libraryId = parent.libraryId)
+            },
+        )
+    }
+
     /** ¿Hay algún amigo emparejado? Decide si se enseña la sección. */
     suspend fun hasPeers(): Boolean = api.listPeers().data.orEmpty().isNotEmpty()
 
@@ -164,6 +178,9 @@ class PeersRepository(
             peerName    = peerName,
             libraryId   = libraryId,
             remoteKind  = MediaKind.from(type),
+            durationSec = durationTicks / TICKS_PER_SECOND,
+            seasonNumber  = seasonNumber,
+            episodeNumber = episodeNumber,
         )
 
     private fun PeerContinueDto.toShared(server: String): Content.Shared {

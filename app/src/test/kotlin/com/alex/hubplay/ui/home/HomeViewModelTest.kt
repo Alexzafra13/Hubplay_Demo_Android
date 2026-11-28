@@ -1,5 +1,6 @@
 package com.alex.hubplay.ui.home
 
+import com.alex.hubplay.data.BecauseYouWatched
 import com.alex.hubplay.data.CollectionDetail
 import com.alex.hubplay.data.CollectionSummary
 import com.alex.hubplay.data.Content
@@ -9,6 +10,7 @@ import com.alex.hubplay.data.HomeRailType
 import com.alex.hubplay.data.HomeRepository
 import com.alex.hubplay.data.IdentifyCandidate
 import com.alex.hubplay.data.MeEvent
+import com.alex.hubplay.data.MediaKind
 import com.alex.hubplay.data.PeersRepository
 import com.alex.hubplay.data.PersonDetail
 import com.alex.hubplay.data.StudioDetail
@@ -265,6 +267,49 @@ class HomeViewModelTest {
         assertThat(vm.ui.value.data.continueWatching.map { it.id }).containsExactly("cw2")
     }
 
+    @Test
+    fun `discovery rails follow the server layout in the web order and skip the empty ones`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val layout = listOf(HomeRailConfig("cw", HomeRailType.ContinueWatching, null, "Continuar viendo"))
+        val vm = viewModel(
+            FakeHomeRepository(trending = listOf(movie("t1")), layout = layout).apply {
+                because     = BecauseYouWatched(seedTitle = "Dune", items = listOf(movie("b1"), movie("b2")))
+                recommended = listOf(movie("r1"))
+                collections = listOf(CollectionSummary("c1", "Saga Dune", 2, posterUrl = null, backdropUrl = null))
+            },
+        )
+        advanceUntilIdle()
+
+        val data = vm.ui.value.data
+        // Sin canales favoritos: ese rail no sale.
+        assertThat(data.rails.map { it.type }).containsExactly(
+            HomeRailType.ContinueWatching,
+            HomeRailType.BecauseYouWatched,
+            HomeRailType.Recommended,
+            HomeRailType.Collections,
+        ).inOrder()
+        assertThat(data.rails[1].title).isEqualTo("Porque viste Dune")
+        assertThat(data.becauseYouWatched.map { it.id }).containsExactly("b1", "b2").inOrder()
+        assertThat(data.collections.single().kind).isEqualTo(MediaKind.Collection)
+    }
+
+    @Test
+    fun `a failing discovery rail does not take the rest of home down`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val vm = viewModel(
+            FakeHomeRepository(trending = listOf(movie("t1"))).apply {
+                favorites      = listOf(Content.LiveChannel(id = "ch1", title = "La 1"))
+                throwOnBecause = true
+            },
+        )
+        advanceUntilIdle()
+
+        val ui = vm.ui.value
+        assertThat(ui.error).isNull()
+        assertThat(ui.data.trending).hasSize(1)
+        assertThat(ui.data.rails.map { it.type }).containsExactly(HomeRailType.FavoriteChannels)
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────
 
     private fun viewModel(repo: HomeRepository) =
@@ -284,6 +329,14 @@ class HomeViewModelTest {
         private val throwOnContinueWatching: Boolean = false,
     ) : HomeRepository {
 
+        // Rails de descubrimiento: propiedades y no parámetros, para no
+        // estirar más el constructor (ya está en el baseline de detekt).
+        var because: BecauseYouWatched? = null
+        var recommended: List<Content> = emptyList()
+        var collections: List<CollectionSummary> = emptyList()
+        var favorites: List<Content.LiveChannel> = emptyList()
+        var throwOnBecause = false
+
         /** Permite cambiar el rail de Continuar viendo tras construir el
          *  fake, para verificar el refresco selectivo por SSE. */
         var continueWatchingOverride: List<Content.Resumable>? = null
@@ -294,7 +347,15 @@ class HomeViewModelTest {
         }
         override suspend fun fetchRecommended(limit: Int): List<Content> {
             if (throwOnAll) throw RuntimeException("network")
-            return emptyList()
+            return recommended
+        }
+        override suspend fun fetchBecauseYouWatched(limit: Int): BecauseYouWatched? {
+            if (throwOnAll || throwOnBecause) throw RuntimeException("network")
+            return because
+        }
+        override suspend fun fetchFavoriteChannels(): List<Content.LiveChannel> {
+            if (throwOnAll) throw RuntimeException("network")
+            return favorites
         }
         override suspend fun fetchContinueWatching(): List<Content.Resumable> {
             if (throwOnAll || throwOnContinueWatching) throw RuntimeException("network")
@@ -340,7 +401,7 @@ class HomeViewModelTest {
         }
         override suspend fun fetchChildren(parentId: String) = emptyList<Content>()
         override suspend fun fetchCatalogue(type: String, limit: Int, offset: Int, sortBy: String, sortOrder: String) = emptyList<Content>()
-        override suspend fun fetchCollections() = emptyList<CollectionSummary>()
+        override suspend fun fetchCollections() = collections
         override suspend fun fetchCollectionDetail(id: String): CollectionDetail = throw RuntimeException("unused")
         override suspend fun toggleItemFavorite(itemId: String) = false
         override suspend fun setItemWatched(itemId: String, watched: Boolean) {}

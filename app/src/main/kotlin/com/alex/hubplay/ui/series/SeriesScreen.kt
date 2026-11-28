@@ -1,6 +1,7 @@
 package com.alex.hubplay.ui.series
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -41,11 +42,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -76,6 +80,7 @@ import com.alex.hubplay.ui.components.HeroNav
 import com.alex.hubplay.ui.components.HeroRails
 import com.alex.hubplay.ui.components.HeroToggles
 import com.alex.hubplay.ui.components.IdentifyOverlay
+import com.alex.hubplay.ui.components.SIDEBAR_WIDTH
 import com.alex.hubplay.ui.metadata.MetadataToolsState
 import com.alex.hubplay.ui.theme.Accent
 import com.alex.hubplay.ui.theme.AccentSoft
@@ -278,14 +283,29 @@ private const val MAX_META_GENRES = 2
 
 // ─── Episodes panel (split view) ────────────────────────────────────────────
 
+/**
+ * Temporadas a la izquierda y episodios de la elegida a la derecha. Lo usa
+ * también la ficha de una serie de un amigo. Atrás vuelve al hero (antes
+ * se salía de la ficha entera).
+ */
 @Composable
-private fun SeriesEpisodesPanel(
+internal fun SeriesEpisodesPanel(
     data:           SeriesData,
     onSelectSeason: (String) -> Unit,
     onPlayEpisode:  (itemId: String, resumePosSec: Long) -> Unit,
     onBack:         () -> Unit,
 ) {
+    BackHandler(onBack = onBack)
     val series = data.series
+    // El botón "Episodios" que tenía el foco desaparece al abrir el panel:
+    // sin pedirlo, el foco caía en el menú lateral y lo desplegaba.
+    val seasonFocus = remember { FocusRequester() }
+    val hasSeasons = data.seasons.isNotEmpty()
+    LaunchedEffect(hasSeasons) {
+        if (!hasSeasons) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { seasonFocus.requestFocus() }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Soft backdrop behind the panel — same backdrop, heavily faded
@@ -306,86 +326,12 @@ private fun SeriesEpisodesPanel(
 
         // Back + brand together top-left, same pattern as the Hero so
         // the user sees a consistent header across both views.
-        Row(
-            modifier            = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 24.dp, top = 20.dp)
-                .zIndex(10f),
-            verticalAlignment   = Alignment.CenterVertically,
-        ) {
-            BackPill(onBack = onBack)
-            Spacer(Modifier.width(16.dp))
-            Image(
-                painter            = painterResource(R.drawable.brand_wordmark),
-                contentDescription = stringResource(R.string.brand_hubplay),
-                modifier           = Modifier.height(28.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text          = stringResource(R.string.series_section_label),
-                style         = MaterialTheme.typography.labelMedium,
-                color         = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
-                fontWeight    = FontWeight.SemiBold,
-                letterSpacing = 2.sp,
-            )
-        }
+        PanelHeader(onBack = onBack, modifier = Modifier.align(Alignment.TopStart).padding(start = SIDEBAR_WIDTH))
 
-        Row(modifier = Modifier.fillMaxSize().padding(top = 90.dp)) {
+        // La franja del menú lateral (TvShell) queda por encima: nada debajo.
+        Row(modifier = Modifier.fillMaxSize().padding(start = SIDEBAR_WIDTH, top = 90.dp)) {
             // ── Left rail: series logo/title + meta + season selector ────
-            Column(
-                modifier = Modifier
-                    .width(360.dp)
-                    .fillMaxHeight()
-                    .padding(horizontal = 40.dp),
-                verticalArrangement = Arrangement.Top,
-            ) {
-                if (!series?.logoUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model              = series.logoUrl,
-                        contentDescription = series.title,
-                        contentScale       = ContentScale.Fit,
-                        modifier           = Modifier
-                            .heightIn(min = 60.dp, max = 100.dp)
-                            .widthIn(max = 280.dp),
-                    )
-                } else {
-                    Text(
-                        text       = series?.title.orEmpty(),
-                        style      = MaterialTheme.typography.headlineMedium,
-                        color      = MaterialTheme.colorScheme.onBackground,
-                        fontWeight = FontWeight.Bold,
-                        maxLines   = 2,
-                        overflow   = TextOverflow.Ellipsis,
-                    )
-                }
-
-                Spacer(Modifier.height(10.dp))
-                MetaRow(
-                    item         = series,
-                    seasonsCount = data.seasons.size,
-                    episodeCount = data.episodesBySeasonId.values.sumOf { it.size },
-                    compact      = true,  // narrow 360dp panel — drop genres
-                )
-
-                Spacer(Modifier.height(28.dp))
-
-                // Season selector — render even when there's a single
-                // season so the "current selection" feels deliberate
-                // and the focus has somewhere to land on first arrival.
-                if (data.seasons.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        data.seasons.forEach { season ->
-                            val epCount = data.episodesBySeasonId[season.id]?.size
-                            SeasonRow(
-                                season    = season,
-                                episodeCount = epCount,
-                                selected  = data.selectedSeasonId == season.id,
-                                onClick   = { onSelectSeason(season.id) },
-                            )
-                        }
-                    }
-                }
-            }
+            SeasonsRail(data = data, onSelectSeason = onSelectSeason, focus = seasonFocus)
 
             // ── Right rail: episode list ─────────────────────────────────
             val episodes = data.selectedSeasonId
@@ -418,12 +364,103 @@ private fun SeriesEpisodesPanel(
     }
 }
 
+/** Atrás + marca + "SERIES", arriba a la izquierda como en el hero. */
+@Composable
+private fun PanelHeader(onBack: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier          = modifier
+            .padding(start = 24.dp, top = 20.dp)
+            .zIndex(10f),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BackPill(onBack = onBack)
+        Spacer(Modifier.width(16.dp))
+        Image(
+            painter            = painterResource(R.drawable.brand_wordmark),
+            contentDescription = stringResource(R.string.brand_hubplay),
+            modifier           = Modifier.height(28.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text          = stringResource(R.string.series_section_label),
+            style         = MaterialTheme.typography.labelMedium,
+            color         = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+            fontWeight    = FontWeight.SemiBold,
+            letterSpacing = 2.sp,
+        )
+    }
+}
+
+/** Columna izquierda: logo o título, metadatos y selector de temporada. */
+@Composable
+private fun SeasonsRail(data: SeriesData, onSelectSeason: (String) -> Unit, focus: FocusRequester) {
+    val series = data.series
+    // El foco inicial va a la temporada abierta (o a la primera).
+    val focusedSeasonId = data.selectedSeasonId ?: data.seasons.firstOrNull()?.id
+    Column(
+        modifier = Modifier
+            .width(360.dp)
+            .fillMaxHeight()
+            .padding(horizontal = 40.dp),
+        verticalArrangement = Arrangement.Top,
+    ) {
+        if (!series?.logoUrl.isNullOrBlank()) {
+            AsyncImage(
+                model              = series.logoUrl,
+                contentDescription = series.title,
+                contentScale       = ContentScale.Fit,
+                modifier           = Modifier
+                    .heightIn(min = 60.dp, max = 100.dp)
+                    .widthIn(max = 280.dp),
+            )
+        } else {
+            Text(
+                text       = series?.title.orEmpty(),
+                style      = MaterialTheme.typography.headlineMedium,
+                color      = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+                maxLines   = 2,
+                overflow   = TextOverflow.Ellipsis,
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        MetaRow(
+            item         = series,
+            seasonsCount = data.seasons.size,
+            episodeCount = data.episodesBySeasonId.values.sumOf { it.size },
+            compact      = true,  // narrow 360dp panel — drop genres
+        )
+
+        Spacer(Modifier.height(28.dp))
+
+        // Season selector — render even when there's a single
+        // season so the "current selection" feels deliberate
+        // and the focus has somewhere to land on first arrival.
+        if (data.seasons.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                data.seasons.forEach { season ->
+                    val epCount = data.episodesBySeasonId[season.id]?.size
+                    SeasonRow(
+                        season       = season,
+                        episodeCount = epCount,
+                        selected     = data.selectedSeasonId == season.id,
+                        onClick      = { onSelectSeason(season.id) },
+                        modifier     = if (season.id == focusedSeasonId) Modifier.focusRequester(focus) else Modifier,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun SeasonRow(
     season:       Content.Season,
     episodeCount: Int?,
     selected:     Boolean,
     onClick:      () -> Unit,
+    modifier:     Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -435,7 +472,7 @@ private fun SeasonRow(
     val sublabel = episodeCount?.takeIf { it > 0 }?.let { stringResource(R.string.series_episodes_count, it) }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .scale(scale)
             .clip(RoundedCornerShape(8.dp))

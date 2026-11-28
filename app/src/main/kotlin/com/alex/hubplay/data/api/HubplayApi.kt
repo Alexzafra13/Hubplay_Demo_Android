@@ -84,6 +84,16 @@ interface HubplayApi {
     @GET("me/home/recommended")
     suspend fun getRecommended(@Query("limit") limit: Int = 5): RecommendedResponse
 
+    /** GET /api/v1/me/home/because-you-watched — "Porque viste X" (máx. 30). */
+    @GET("me/home/because-you-watched")
+    suspend fun getBecauseYouWatched(
+        @Query("limit") limit: Int = 12,
+    ): com.alex.hubplay.data.api.dto.BecauseYouWatchedResponse
+
+    /** GET /api/v1/favorites/channels — canales con estrella, completos (rail de Inicio). */
+    @GET("favorites/channels")
+    suspend fun listFavoriteChannels(): ChannelsResponse
+
     /**
      * GET /api/v1/items/latest — newest items in a library.
      *
@@ -285,6 +295,17 @@ interface HubplayApi {
     @DELETE("favorites/channels/{channelId}")
     suspend fun removeFavoriteChannel(@Path("channelId") channelId: String): FavoriteToggleResponse
 
+    /**
+     * POST /api/v1/channels/{channelId}/playback-failure — el canal no
+     * arrancó en este reproductor. Suma al contador de salud del canal en
+     * el servidor (`kind`: manifest|network|media|timeout|unknown).
+     */
+    @POST("channels/{channelId}/playback-failure")
+    suspend fun reportChannelFailure(
+        @Path("channelId") channelId: String,
+        @Body body: com.alex.hubplay.data.api.dto.PlaybackFailureRequest,
+    )
+
     /** POST /api/v1/channels/{channelId}/watch — beacon (records last-watched). */
     @POST("channels/{channelId}/watch")
     suspend fun recordChannelWatch(@Path("channelId") channelId: String): WatchBeaconResponse
@@ -346,6 +367,22 @@ interface HubplayApi {
      */
     @POST("me/progress/{itemId}/favorite")
     suspend fun toggleItemFavorite(@Path("itemId") itemId: String): ItemFavoriteToggleResponse
+
+    // ─── Dispositivos (sesiones del usuario) ────────────────────────────────
+
+    /**
+     * GET /api/v1/me/sessions — sesiones vivas del usuario. Sin cookies, el
+     * servidor reconoce la nuestra (`current`) por el refresh token en
+     * `X-Hubplay-Refresh-Token` (solo identifica; autentica el Bearer).
+     */
+    @GET("me/sessions")
+    suspend fun listMySessions(
+        @Header("X-Hubplay-Refresh-Token") refreshToken: String?,
+    ): com.alex.hubplay.data.api.dto.MySessionsResponse
+
+    /** DELETE /api/v1/me/sessions/{id} — cierra esa sesión (204). */
+    @DELETE("me/sessions/{id}")
+    suspend fun revokeMySession(@Path("id") sessionId: String)
 
     // ─── Search ─────────────────────────────────────────────────────────────
 
