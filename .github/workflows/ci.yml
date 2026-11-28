@@ -24,7 +24,12 @@ jobs:
   build:
     name: Build & unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
+    env:
+      # Robolectric baja android-all de Maven Central en cada run y
+      # Central responde 429 a ratos (ya tumbó algún CI). El espejo de
+      # Google sirve los mismos artefactos.
+      ROBOLECTRIC_REPO_URL: https://maven-central.storage-download.googleapis.com/maven2/
 
     steps:
       - name: Checkout
@@ -67,6 +72,23 @@ jobs:
       - name: Run unit tests
         run: gradle :app:testDebugUnitTest --no-daemon --stacktrace
 
+      # ── 3b. UI de Compose (Robolectric, sin emulador) ─────────────────
+      # Las pruebas de capturas montan pantallas reales (Inicio, fichas,
+      # series, Compartido, reproductor…), las recorren con el D-pad y
+      # fallan si algo peta o si falta un botón esperado. Los PNG se
+      # suben para revisar a ojo lo que cambió.
+      - name: Compose UI (capturas Robolectric)
+        run: gradle :app:testDebugUnitTest -Pscreenshots --tests '*screenshots*' --no-daemon --stacktrace
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: app/build/screenshots/
+          if-no-files-found: ignore
+          retention-days: 7
+
       # ── 4. Debug APK build ────────────────────────────────────────────
       # `assembleDebug` exercises the full Kotlin/Compose/AGP toolchain
       # plus resource processing and DEX — anything compile-error-ish
@@ -74,7 +96,7 @@ jobs:
       - name: Assemble debug APK
         run: gradle :app:assembleDebug --no-daemon --stacktrace
 
-      # ── 4. Artifacts ─────────────────────────────────────────────────
+      # ── 5. Artifacts ─────────────────────────────────────────────────
       # Always upload the test reports so a red build is debuggable
       # without re-running locally. APK only on success — saves
       # storage when something's broken anyway.
