@@ -301,7 +301,8 @@
     <string name="shared_offline">%1$s is not responding: showing the last saved list</string>
     <string name="shared_library_error">Could not load this library</string>
     <string name="shared_play_from_start">From the beginning</string>
-    <string name="shared_series_unavailable">Shared series can\'t be played yet</string>
+    <string name="shared_series_unavailable">This friend\'s episodes aren\'t available: their server may be off or running an older HubPlay</string>
+    <string name="shared_series_loading">Loading episodes…</string>
     <string name="shared_not_found">This title is no longer available</string>
     <string name="shared_movie">Movie</string>
     <string name="shared_series">Series</string>

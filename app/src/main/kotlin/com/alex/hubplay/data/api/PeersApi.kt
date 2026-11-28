@@ -76,6 +76,17 @@ interface PeersApi {
         @Path("sessionId") sessionId: String,
     ): PeerSubtitlesResponse
 
+    /**
+     * Temporadas de una serie de un amigo, o episodios de una temporada, en
+     * orden. Llamada en vivo al amigo (sin caché); uno con un HubPlay
+     * anterior a este endpoint da 502.
+     */
+    @GET("me/peers/{peerId}/items/{itemId}/children")
+    suspend fun children(
+        @Path("peerId") peerId: String,
+        @Path("itemId") itemId: String,
+    ): PeerItemsResponse
+
     @GET("me/peers/{peerId}/items/{itemId}/progress")
     suspend fun getProgress(
         @Path("peerId") peerId: String,

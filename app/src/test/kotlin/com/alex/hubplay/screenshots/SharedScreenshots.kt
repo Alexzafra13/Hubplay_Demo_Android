@@ -1,5 +1,6 @@
 package com.alex.hubplay.screenshots
 
+import android.view.KeyEvent.KEYCODE_DPAD_CENTER
 import android.view.KeyEvent.KEYCODE_DPAD_DOWN
 import android.view.KeyEvent.KEYCODE_DPAD_RIGHT
 import com.alex.hubplay.data.FakePeersApi
@@ -9,6 +10,7 @@ import com.alex.hubplay.data.TICKS_PER_SECOND
 import com.alex.hubplay.data.api.dto.PeerContinueDto
 import com.alex.hubplay.data.api.dto.PeerItemDto
 import com.alex.hubplay.data.api.dto.PeerLibraryDto
+import com.alex.hubplay.data.api.dto.PeerProgressDto
 import com.alex.hubplay.ui.components.TvShell
 import com.alex.hubplay.ui.home.HomeActions
 import com.alex.hubplay.ui.home.HomeScreen
@@ -93,6 +95,41 @@ class SharedScreenshots : ScreenshotTest() {
         settle(2500)
         focusText("Reproducir")
         snap("shared_04_detail")
+    }
+
+    /** Serie de un amigo: Reproducir el episodio que toca y el panel de temporadas. */
+    @Test
+    fun seriesDetail() {
+        val seasons = (1..3).map {
+            PeerItemDto(id = "ls1-s$it", type = "season", title = "Temporada $it", seasonNumber = it)
+        }
+        val titles = listOf("Secretos", "Mentiras", "Pasado y presente", "Doble vida", "Verdades", "Sic mundus")
+        val episodes = titles.mapIndexed { i, title ->
+            PeerItemDto(
+                id = "ls1-e${i + 1}", type = "episode", title = title,
+                seasonNumber = 1, episodeNumber = i + 1, durationTicks = 3000 * TICKS_PER_SECOND,
+                posterUrl = FakeArtwork.still("ls1-e${i + 1}"),
+            )
+        }
+        api.children = mapOf("ls1" to seasons, "ls1-s1" to episodes)
+        api.progress = mapOf(
+            "ls1-e1" to PeerProgressDto(3000 * TICKS_PER_SECOND, 3000 * TICKS_PER_SECOND, completed = true),
+            "ls1-e2" to PeerProgressDto(1250 * TICKS_PER_SECOND, 3000 * TICKS_PER_SECOND),
+        )
+        val library = SharedLibrary("p2", "Lucía", "lib-p2", "Series", "shows", canPlay = true)
+        runBlocking { repo.libraryItems(library) }
+        val vm = SharedDetailViewModel(repo, SharedTarget(peerId = "p2", itemId = "ls1", libraryId = "lib-p2"))
+        setTvContent {
+            TvShell(selectedTab = Tab.Shared, onNavigateToTab = {}, onOpenSettings = {}, padContent = false) {
+                SharedDetailScreen(viewModel = vm, onPlay = { _, _ -> }, onBack = {})
+            }
+        }
+        settle(2500)
+        focusText("Seguir T1·E2")
+        snap("shared_07_series_hero")
+        focusText("Episodios")
+        press(KEYCODE_DPAD_CENTER, settleMs = 1500)
+        snap("shared_08_series_episodes")
     }
 
     @Test

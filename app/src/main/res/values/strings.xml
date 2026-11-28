@@ -301,7 +301,8 @@
     <string name="shared_offline">%1$s no responde: se muestra lo último guardado</string>
     <string name="shared_library_error">No se pudo cargar esta biblioteca</string>
     <string name="shared_play_from_start">Desde el principio</string>
-    <string name="shared_series_unavailable">Las series compartidas aún no se pueden reproducir</string>
+    <string name="shared_series_unavailable">Este amigo no deja ver los episodios: puede que esté apagado o que su HubPlay sea anterior</string>
+    <string name="shared_series_loading">Cargando episodios…</string>
     <string name="shared_not_found">Este título ya no está disponible</string>
     <string name="shared_movie">Película</string>
     <string name="shared_series">Serie</string>

@@ -53,6 +53,10 @@ data class PeerItemDto(
     @Json(name = "peer_id")    val peerId:    String? = null,
     @Json(name = "peer_name")  val peerName:  String? = null,
     @Json(name = "library_id") val libraryId: String? = null,
+    /** Solo en temporadas y episodios (`/me/peers/{peer}/items/{id}/children`). */
+    @Json(name = "season_number")  val seasonNumber:  Int?  = null,
+    @Json(name = "episode_number") val episodeNumber: Int?  = null,
+    @Json(name = "duration_ticks") val durationTicks: Long  = 0L,
 )
 
 /** `GET /me/peers/{peer}/libraries/{lib}/items` → `{data:{items,total,from_cache}}`. */

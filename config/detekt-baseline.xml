@@ -50,7 +50,6 @@
     <ID>LongMethod:MiniEpgRail.kt$@Composable private fun MiniEpgCard( channel: LiveChannel, nowProgram: EpgProgram?, nowInstant: Instant, isCurrent: Boolean, onClick: () -&gt; Unit, listState: LazyListState, indexInRail: Int, focusRequester: FocusRequester?, )</ID>
     <ID>LongMethod:PlayerScreen.kt$@OptIn(UnstableApi::class) @Composable fun PlayerScreen( viewModel: PlayerViewModel, authState: AuthState, okHttpClient: OkHttpClient, idleController: com.alex.hubplay.data.IdleController, onBack: () -&gt; Unit, )</ID>
     <ID>LongMethod:SeriesScreen.kt$@Composable private fun EpisodeRow( episode: Content.Episode, onClick: () -&gt; Unit, )</ID>
-    <ID>LongMethod:SeriesScreen.kt$@Composable private fun SeriesEpisodesPanel( data: SeriesData, onSelectSeason: (String) -&gt; Unit, onPlayEpisode: (itemId: String, resumePosSec: Long) -&gt; Unit, onBack: () -&gt; Unit, )</ID>
     <ID>LongMethod:SettingsScreen.kt$@Composable fun SettingsScreen( viewModel: SettingsViewModel, actions: SettingsActions, )</ID>
     <ID>LongMethod:TrailerHostOverlay.kt$@Composable fun TrailerHostOverlay(modifier: Modifier = Modifier)</ID>
     <ID>LongMethod:TrailerHostOverlay.kt$private fun buildIframeHtml(videoKey: String, startAtSec: Long): String</ID>

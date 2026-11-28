@@ -185,13 +185,16 @@ sealed interface Content {
         val peerId:                String,
         val peerName:              String,
         val libraryId:             String?      = null,
-        /** Movie o Series en el servidor del amigo. */
+        /** Movie, Series, Season o Episode en el servidor del amigo. */
         val remoteKind:            MediaKind    = MediaKind.Movie,
+        /** Temporadas y episodios (hijos de una serie de un amigo). */
+        val seasonNumber:          Int?         = null,
+        val episodeNumber:         Int?         = null,
     ) : Resumable {
         override val kind: MediaKind get() = MediaKind.Shared
 
-        /** Las series compartidas no traen episodios: no se pueden reproducir. */
-        val isPlayable: Boolean get() = remoteKind != MediaKind.Series
+        /** Una serie o una temporada se abren (episodios); lo demás se reproduce. */
+        val isPlayable: Boolean get() = remoteKind != MediaKind.Series && remoteKind != MediaKind.Season
 
         /** Clave única entre amigos (dos servidores podrían repetir id). */
         val key: String get() = "$peerId:$id"

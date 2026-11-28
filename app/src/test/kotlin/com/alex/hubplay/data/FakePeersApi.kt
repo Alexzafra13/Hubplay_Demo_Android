@@ -35,6 +35,12 @@ internal class FakePeersApi(
     var pages: Map<String, List<PeerItemDto>> = emptyMap()
     var subtitles: List<PeerSubtitleDto> = emptyList()
 
+    /** Hijos por item (`itemId` → temporadas o episodios); null = el amigo falla. */
+    var children: Map<String, List<PeerItemDto>>? = emptyMap()
+
+    /** Progreso guardado por item. */
+    var progress: Map<String, PeerProgressDto> = emptyMap()
+
     override suspend fun listPeers() = PeersResponse(peers)
     override suspend fun listLibraries() = PeerLibrariesResponse(libraries)
     override suspend fun listItems(peerId: String, libraryId: String, offset: Int, limit: Int): PeerItemsResponse {
@@ -47,7 +53,13 @@ internal class FakePeersApi(
     override suspend fun startStream(peerId: String, itemId: String, capabilities: String) =
         PeerStreamSessionResponse(stream)
     override suspend fun subtitles(peerId: String, sessionId: String) = PeerSubtitlesResponse(subtitles)
-    override suspend fun getProgress(peerId: String, itemId: String) = PeerProgressResponse(PeerProgressDto())
+    override suspend fun children(peerId: String, itemId: String): PeerItemsResponse {
+        val all = children ?: error("502 PEER_UNREACHABLE")
+        val items = all[itemId].orEmpty()
+        return PeerItemsResponse(PeerItemsPage(items = items, total = items.size))
+    }
+    override suspend fun getProgress(peerId: String, itemId: String) =
+        PeerProgressResponse(progress[itemId] ?: PeerProgressDto())
     override suspend fun saveProgress(peerId: String, itemId: String, body: PeerProgressRequest) {
         saved += body
     }
