@@ -127,9 +127,13 @@ candente para la siguiente sesión:
    (2026-06-10, server-backed vía `/me/channels/continue-watching`).
 3. ~~**"Compartido contigo"** (federación `/me/peers/*`)~~ — HECHO
    2026-11-26 (pestaña, ficha, reproducción, rails, búsqueda).
-4. **Vista EPG grid completa** como pantalla alternativa (NO tocar
-   el inicio actual de Live TV).
-5. **Tests de Compose UI** + emulator en CI.
-6. **Baseline Profile** (necesita device real).
+4. ~~**Vista EPG grid completa**~~ — HECHO 2026-11-28 ("Guía completa"
+   en el pie del menú de TV en directo; la portada no cambia).
+5. ~~**Tests de Compose UI** en CI~~ — HECHO 2026-11-28 con las capturas
+   Robolectric (sin emulador); siguen sin tests instrumentados.
+6. **Baseline Profile**: hay uno escrito a mano con comodines
+   (`app/src/main/baseline-prof.txt`); generarlo en el aparato con
+   Macrobenchmark sigue pendiente (necesita device real).
+7. **Probar en la TV todo lo de 2026-11-26..28** (ver project-status §6).
 
 Descartados explícitamente: MediaSession (Android Auto), Cast.

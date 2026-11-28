@@ -1,26 +1,30 @@
 # Estado del proyecto — HubPlay Android (TV)
 
 > Entrypoint de cada sesión. Corto a propósito. El detalle de cada
-> sesión (medidas, por qué de cada decisión) está en `archive/`; el último
-> volcado largo es `archive/project-status-detalle-2026-11-26.md`.
-> Última actualización: **2026-11-26** (tarde).
+> sesión (medidas, por qué de cada decisión) está en `archive/`; los
+> últimos volcados son `archive/project-status-detalle-2026-11-26.md` y
+> `archive/project-status-detalle-2026-11-28.md`.
+> Última actualización: **2026-11-28**.
 
 ## 1. Dónde estamos
 
-- Rama de trabajo `claude/stoic-feynman-pyojkw` (sin mergear a `main`):
-  federación, sesiones del servidor, quitar de Continuar viendo y el crash
-  de rails. CI local verde (detekt + 136 unitarios + APK + 14 capturas).
-  Backend hermano: `Alexzafra13/HubPlay_demo`, misma rama (federación con
-  DirectPlay y pósters en miniatura). **Ninguno de los dos está en la TV.**
-- Funciona en la Mi TV real (lo de antes de hoy): login/emparejado, Inicio,
-  catálogo, ficha (película y serie), reproductor VOD con chrome propio
-  (audio, subtítulos, saltar intro, opciones, miniaturas), TV en directo,
-  buscar, colecciones, salvapantallas, intro, Ajustes → Inicio.
-- **Hecho hoy y sin probar en la TV**: "Compartido contigo" (pestaña,
-  ficha, reproducción, rails en Inicio, búsqueda), liberar sesiones al
-  salir/zapear, quitar de Continuar viendo (mantener OK), logout en el
-  servidor. Detalle en el archivo del 2026-11-26.
-- Sin probar: móvil/tablet, release firmada real, tests de Compose UI.
+- Rama de trabajo `claude/stoic-feynman-pyojkw` (sin mergear a `main`),
+  CI verde (detekt + unitarios + **capturas como tests de UI** + APK).
+  Backend hermano `Alexzafra13/HubPlay_demo`, misma rama (federación con
+  DirectPlay, series de amigos, estudios, `/me/sessions` sin cookies).
+  **Ninguno de los dos está en la TV.**
+- Funciona en la Mi TV real (lo anterior al 2026-11-26): login/emparejado,
+  Inicio, catálogo, ficha (película y serie), reproductor VOD con chrome
+  propio, TV en directo, buscar, colecciones, salvapantallas, intro,
+  Ajustes → Inicio.
+- **Hecho y sin probar en la TV** (2026-11-26 a 28): "Compartido contigo"
+  completo (también series con temporadas y episodios), liberar sesiones,
+  quitar de Continuar viendo, logout real; errores de reproducción con
+  reintento y aviso al servidor de canales caídos; tamaño/estilo de
+  subtítulos y calidad; dispositivos conectados; rails Porque viste X,
+  Recomendados, Colecciones y Canales favoritos; guía completa en rejilla;
+  panel de episodios arreglado; baseline profile. Detalle en los archivos.
+- Sin probar: móvil/tablet, release firmada real.
 
 ## 2. Cómo se prueba
 
@@ -52,7 +56,8 @@
   INICIAL de cada pantalla no es fiable (lo fija la primera pulsación), ni
   vídeo, ni tráiler, ni rendimiento, y las ventanas `Dialog` quedan en modo
   táctil (otra razón para usar overlays). Detecta crashes de composición
-  al desmontar (así salió el de `focusRestorer`).
+  al desmontar (así salió el de `focusRestorer`). **Corren en CI** (paso
+  "Compose UI") y los PNG quedan en el artefacto `screenshots` del run.
 - **Sesión en la nube (sin Android Studio)**: SDK con
   `commandlinetools-linux-*` → `sdkmanager "platforms;android-35"
   "build-tools;35.0.0"` y `local.properties` con `sdk.dir`; Gradle 8.14
@@ -120,8 +125,19 @@
   por rails, tarjetas (píldora "● Pedro", `LocalSharedBadge`) y
   `HomeActions.play/open`, que deciden canal / amigo / catálogo propio en
   un solo sitio. `PeersRepository.cached()` (LRU) da título y póster a la
-  ficha y al reproductor. Las series de amigos no se reproducen (sin
-  episodios). La pestaña sale con `SharedAvailability.hasPeers`.
+  ficha y al reproductor. Series de amigos: `children()` →
+  `SharedSeriesState` → mismo `SeriesEpisodesPanel` que las propias. La
+  pestaña sale con `SharedAvailability.hasPeers`.
+- **Inicio, rails del cliente**: tras el layout del servidor,
+  `HomeViewModel.withExtras` añade Porque viste X, Recomendados,
+  Colecciones, Canales favoritos y luego los de amigos (orden de la web;
+  `CLIENT_RAILS`). No son configurables en Ajustes → Inicio.
+- **Guía en rejilla** (`ui/livetv/LiveGuideScreen.kt`, `GuideWindow.kt`):
+  un `ScrollState` horizontal compartido por regla y filas; título pegado
+  al borde visible en layout (no recompone); `GuideBringIntoViewSpec`
+  evita saltos en el tiempo al moverse. Comparte el ViewModel de TV en
+  directo (`getBackStackEntry`). El pie del menú de TV en directo va en
+  `LiveTvFooterActions`.
 - **Reproductor y servidor** (`data/StreamSessions`, `PlayerRequest`,
   `PlayerDeps`): al salir/pasar de episodio `DELETE /stream/{id}/session`;
   en directo `?v=<viewer>` y baja al zapear (y a los 4 s al salir, para
@@ -139,6 +155,8 @@
   inicial en la acción segura, Atrás cierra y el foco vuelve al rail. Una
   ventana nueva costaba 0,5-0,9 s en el TV box. Pulsación larga de OK:
   `Modifier.onLongSelect` en el rail (fase preview, se traga el KeyUp).
+- **Baseline profile**: `app/src/main/baseline-prof.txt` escrito a mano
+  con comodines (app + OkHttp/Retrofit/Moshi). Solo afecta a release.
 - **API < 33**: `URLEncoder.encode(x, "UTF-8")` (la sobrecarga con
   `Charset` no existe en la Mi TV). minSdk 26.
 - **Detekt estricto**: `LongMethod` ≤ 80, `LongParameterList` ≤ 7,
@@ -153,41 +171,37 @@
   Inicio: ~300 ms de UI en caliente, el doble en frío (clases + JIT; solo
   lo arregla un Baseline Profile en release).
 
-## 5. Última sesión (2026-11-26, dos tandas)
+## 5. Última sesión (2026-11-26 noche a 2026-11-28)
 
-Mañana: revisión visual con el banco de capturas (A continuación con
-artwork, Inicio estilo Netflix, menú en todas las pantallas, saltar
-intro, opciones y miniaturas en el reproductor). Tarde: todo lo que el
-backend daba y la app no usaba (federación, sesiones, quitar de
-Continuar viendo, logout real), arranques más rápidos y un crash latente
-de rails. Detalle y porqués: `archive/project-status-detalle-2026-11-26.md`.
+"Que tenga todo lo que da el backend": errores de reproducción y salud
+de canales, subtítulos/calidad, dispositivos, rails de descubrimiento,
+series de amigos (con endpoint nuevo en el backend), guía en rejilla,
+tests de UI en CI y baseline profile. Detalle, porqués y limitaciones:
+`archive/project-status-detalle-2026-11-28.md`.
 
 ## 6. Pendiente (orden sugerido)
 
 0. **Mergear las dos ramas** `claude/stoic-feynman-pyojkw` (app y
-   backend) con el CI terminado en verde, **desplegar el backend** en el
-   servidor de la TV e instalar la app. Probar en la Mi TV, por este orden:
-   - Inicio: "A continuación" con imágenes; mantener OK en Continuar
-     viendo → Quitar; salir de Inicio tras quitar (el crash arreglado).
-   - Reproductor: pasar de episodio con un fichero que transcodifique (ya
-     no debe dar 503); salir y volver a entrar.
-   - TV en directo: zapear rápido por varios canales y comprobar en el
-     panel del servidor que las sesiones de transmux bajan al momento;
-     abrir un canal desde la vista previa (debe salir al instante).
-   - Federación (con un segundo servidor emparejado): pestaña Compartido,
-     ficha, reproducir un MP4 y un MKV, subtítulos, reanudar, Inicio y
-     Buscar. Cerrar sesión y ver que desaparece de "Tus dispositivos".
-1. Rails nuevos para Ajustes → Inicio (backend + app): canales favoritos,
-   colecciones, recomendado, estrenos, por género, "porque viste X"
-   (`/me/home/because-you-watched` ya existe en el backend y la app no lo
-   usa). Ideas propuestas el 2026-09-16, sin decidir. Los rails de amigos
-   tampoco son configurables todavía.
-2. Reproductor: calidad/bitrate; tamaño/estilo/retardo de subtítulos;
-   `POST /channels/{id}/playback-failure` cuando un canal no arranca (el
-   backend lo usa para la salud de canales y la app no lo manda).
-3. Federación: series de amigos (el backend solo comparte items de primer
-   nivel) y quitar de "Seguir viendo de tus amigos" (no hay endpoint).
-4. Estudio Lucasfilm devuelve 0 títulos (backend). Detalle sin artwork,
-   `CollectionDetailScreen`, probar en móvil.
-5. Largo plazo: Baseline Profile (necesita el aparato), EPG grid, tests de
-   Compose UI en CI, gestión de dispositivos (`/me/sessions`) en Ajustes.
+   backend; la migración 059 del backend re-enlaza estudios),
+   **desplegar el backend** e instalar la app. Probar en la Mi TV:
+   - Inicio: rails nuevos (Porque viste X, Colecciones → ficha, Canales
+     favoritos → reproduce); mantener OK en Continuar viendo → Quitar.
+   - Reproductor: pasar de episodio con un fichero que transcodifique;
+     Opciones → tamaño/estilo de subtítulos y calidad; cortar la red para
+     ver el mensaje de error y reintentar con OK.
+   - TV en directo: zapear rápido (las sesiones bajan en el panel del
+     servidor); **Guía completa**: moverse por la rejilla, que no dé
+     tirones y que OK abra el canal.
+   - Serie propia → Episodios: el foco nace en la temporada y Atrás
+     vuelve al hero.
+   - Federación (segundo servidor emparejado, con el backend nuevo en los
+     dos): película y **serie** de un amigo (temporadas, episodio, reanudar).
+   - Ajustes → Dispositivos conectados: cerrar otra sesión.
+   - Medir el arranque en frío de una build release (baseline profile).
+1. Episodios de amigos en "Seguir viendo de tus amigos" (backend: cachear
+   hijos o guardar título en `federation_progress`); la web tampoco usa
+   aún el endpoint de hijos.
+2. Retardo de subtítulos (Media3 no lo da: desplazar cues a mano).
+3. Rails del cliente configurables en Ajustes → Inicio (backend + app).
+4. Baseline profile generado en el aparato (Macrobenchmark) si el de
+   comodines se queda corto. Probar en móvil.
