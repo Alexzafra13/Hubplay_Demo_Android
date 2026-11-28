@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,11 +14,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarViewWeek
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapVert
@@ -69,8 +70,7 @@ fun LiveTvSidebar(
     /** Recently-watched channels available. 0 hides the auto filter. */
     recentCount:      Int = 0,
     onFilterChanged:  (ChannelFilter) -> Unit,
-    onReorderChannels: () -> Unit = {},
-    onOpenSettings:    () -> Unit = {},
+    footer:           LiveTvFooterActions = LiveTvFooterActions(),
     modifier:         Modifier = Modifier,
 ) {
     val allLabel        = stringResource(R.string.livetv_filter_all)
@@ -136,18 +136,25 @@ fun LiveTvSidebar(
                 modifier = Modifier.padding(vertical = 6.dp),
             )
             SidebarRow(
+                label       = stringResource(R.string.livetv_sidebar_guide),
+                isStar      = false,
+                selected    = false,
+                leadingIcon = Icons.Filled.CalendarViewWeek,
+                onClick     = footer.onOpenGuide,
+            )
+            SidebarRow(
                 label       = stringResource(R.string.livetv_sidebar_reorder),
                 isStar      = false,
                 selected    = false,
                 leadingIcon = Icons.Filled.SwapVert,
-                onClick     = onReorderChannels,
+                onClick     = footer.onReorderChannels,
             )
             SidebarRow(
                 label       = stringResource(R.string.livetv_sidebar_settings),
                 isStar      = false,
                 selected    = false,
                 leadingIcon = Icons.Filled.Settings,
-                onClick     = onOpenSettings,
+                onClick     = footer.onOpenSettings,
             )
         }
     }
@@ -236,5 +243,13 @@ private sealed class SidebarItem {
         override val key = "group:$name"
     }
 }
+
+/** Accesos fijos al pie del menú de TV en directo. */
+@androidx.compose.runtime.Immutable
+class LiveTvFooterActions(
+    val onOpenGuide:       () -> Unit = {},
+    val onReorderChannels: () -> Unit = {},
+    val onOpenSettings:    () -> Unit = {},
+)
 
 internal val SIDEBAR_WIDTH = 220.dp

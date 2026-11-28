@@ -81,8 +81,8 @@ fun LiveTvScreen(
     okHttpClient:      okhttp3.OkHttpClient,
     onPlayChannel:     (String) -> Unit,
     onTabSelected:     (Tab) -> Unit,
-    onSettings:        () -> Unit = {},
-    onReorderChannels: () -> Unit = {},
+    /** Guía completa, reordenar canales y ajustes (pie del menú). */
+    footer:            LiveTvFooterActions = LiveTvFooterActions(),
 ) {
     val ui by viewModel.ui.collectAsState()
     val now = Instant.ofEpochMilli(ui.nowEpoch)
@@ -90,7 +90,7 @@ fun LiveTvScreen(
     TvShell(
         selectedTab     = Tab.LiveTv,
         onNavigateToTab = onTabSelected,
-        onOpenSettings  = onSettings,
+        onOpenSettings  = footer.onOpenSettings,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             when {
@@ -113,8 +113,7 @@ fun LiveTvScreen(
                         onPlayChannel(ch.id)
                     },
                     onToggleFav       = { ch -> viewModel.toggleFavorite(ch.id) },
-                    onOpenSettings    = onSettings,
-                    onReorderChannels = onReorderChannels,
+                    footer            = footer,
                 )
             }
         }
@@ -131,8 +130,7 @@ private fun MainLayout(
     onFocused:         (LiveChannel) -> Unit,
     onPlay:            (LiveChannel) -> Unit,
     onToggleFav:       (LiveChannel) -> Unit,
-    onOpenSettings:    () -> Unit,
-    onReorderChannels: () -> Unit,
+    footer:            LiveTvFooterActions,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // ── Hero spans the full width above everything ──────────────
@@ -162,8 +160,7 @@ private fun MainLayout(
                 favoritesCount    = ui.favorites.size,
                 recentCount       = ui.recentChannels.size,
                 onFilterChanged   = onFilter,
-                onReorderChannels = onReorderChannels,
-                onOpenSettings    = onOpenSettings,
+                footer            = footer,
                 modifier          = Modifier.fillMaxHeight(),
             )
 

@@ -31,6 +31,8 @@ import com.alex.hubplay.ui.home.HomeViewModel
 import com.alex.hubplay.ui.home.components.Tab
 import com.alex.hubplay.ui.livetv.ChannelOrderScreen
 import com.alex.hubplay.ui.livetv.ChannelOrderViewModel
+import com.alex.hubplay.ui.livetv.LiveGuideRoute
+import com.alex.hubplay.ui.livetv.LiveTvFooterActions
 import com.alex.hubplay.ui.livetv.LiveTvScreen
 import com.alex.hubplay.ui.livetv.LiveTvViewModel
 import com.alex.hubplay.ui.login.LoginScreen
@@ -310,9 +312,32 @@ fun HubplayNavGraph(
                 okHttpClient    = container.mainOkHttp,
                 onPlayChannel   = playChannel,
                 onTabSelected   = navigateToTab,
-                onSettings      = openSettings,
-                onReorderChannels = openChannelOrder,
+                footer          = LiveTvFooterActions(
+                    onOpenGuide       = { navController.navigate(Route.LiveGuide.path) },
+                    onReorderChannels = openChannelOrder,
+                    onOpenSettings    = openSettings,
+                ),
             )
+        }
+
+        // ── Guía completa (rejilla) ──────────────────────────────────
+        // Comparte el ViewModel de TV en directo (mismo filtro y la EPG ya
+        // descargada); si se restaura sin esa entrada, crea uno propio.
+        composable(Route.LiveGuide.path) { entry ->
+            val owner = remember(entry) {
+                runCatching { navController.getBackStackEntry(Route.LiveTv.path) }.getOrNull() ?: entry
+            }
+            val vm = viewModel<LiveTvViewModel>(
+                viewModelStoreOwner = owner,
+                factory = LiveTvViewModel.factory(
+                    container.liveTvRepository,
+                    container.channelOrderStore,
+                    container.meEventsStream,
+                ),
+            )
+            shell(Tab.LiveTv, true, false) {
+                LiveGuideRoute(viewModel = vm, onPlayChannel = playChannel)
+            }
         }
 
         // ── Channel order / hide ─────────────────────────────────────

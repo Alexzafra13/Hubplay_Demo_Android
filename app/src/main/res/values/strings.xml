@@ -145,6 +145,9 @@
     <string name="livetv_filter_favorites">Favoritos</string>
     <string name="livetv_filter_favorites_count">Favoritos · %1$d</string>
     <string name="livetv_filter_recent">Vistos recientemente</string>
+    <string name="livetv_sidebar_guide">Guía completa</string>
+    <string name="livetv_guide_title">Guía de TV</string>
+    <string name="livetv_guide_no_info">Sin información de guía</string>
     <string name="livetv_sidebar_reorder">Reordenar canales</string>
     <string name="livetv_sidebar_settings">Ajustes</string>
     <string name="livetv_empty_favorites_title">Aún no tienes favoritos</string>
